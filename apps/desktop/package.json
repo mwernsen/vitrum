@@ -1,0 +1,27 @@
+{
+  "name": "@vitrum/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "check": "tsc --noEmit",
+    "test:e2e": "electron-vite build && playwright test"
+  },
+  "dependencies": {
+    "@vitrum/core": "workspace:*",
+    "@vitrum/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@types/node": "^26.1.1",
+    "electron": "^43.1.1",
+    "electron-vite": "^5.0.0",
+    "svelte": "^5.56.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
+  }
+}
