@@ -113,3 +113,16 @@ this file steers every future feature.
 - (F-012, 2026-07-18) Infinite/very-large geometry (guides) must go in the spatial index's
   oversized always-checked list, or a single 45° guide bbox smears across ~1e8 cells; median-extent
   cell sizing plus an oversized cap keeps queries O(local).
+- (F-013, 2026-07-18) Node/document refs live on the model `Segment` (`endpoints`), never inside
+  `@vitrum/geometry` primitives — the kernel stays document-free. Build structural edits as one
+  `patchNetwork` (generic set/delete of nodes+segments, self-inverting from the pre-state); mergeable
+  commands recompute their patch from the pre-apply doc in both `apply` and `invert`, and any
+  generated ids must be deterministic so redo reproduces a coalesced drag.
+- (F-013, 2026-07-18) Arc demotion (endpoint-edit / mirror) uses adaptive multi-cubic
+  (`ceil(sweep/90°)` welded spans, deterministic ids) so arched/circular motifs stay faithful and
+  undo restores the original Arc.
+- (F-013, 2026-07-18) `svelte/prefer-svelte-reactivity` lint flags every `new Set`/`new Map` in
+  `.svelte`/`.svelte.ts` — use `SvelteSet` for reactive selection state, plain `Record`/arrays for
+  transient locals.
+- (F-013, 2026-07-18) macOS turns Control+click into a right-click; never hold Ctrl to suppress
+  snapping in Playwright — toggle the snap master, or drive via stable button/keyboard locators.
