@@ -3,7 +3,7 @@
 |                |                                                                |
 | -------------- | -------------------------------------------------------------- |
 | **Phase**      | 1 — Sketcher                                                   |
-| **Status**     | in-progress (pending Mathieu's manual rework sign-off + merge) |
+| **Status**     | done                                                          |
 | **Depends on** | F-011                                                          |
 | **Complexity** | L                                                              |
 
@@ -172,13 +172,12 @@ primitives.
 - `updateSegmentGeometry` stays endpoint-agnostic (interior/handle edits only); endpoint moves go
   through `moveNode`.
 
-**Pending Mathieu.**
-
-- The manual acceptance criterion — "take the F-011 panel and rework it heavily (move junctions,
-  reshape curves, mirror half) without ever tearing the network" — is subjective sign-off. The
-  no-tear invariant is verified automatically (FR-1 property test + E2E coincidence count + unit
-  tests); the hands-on feel is Mathieu's call. Status held at `in-progress` pending that sign-off and
-  the merge.
+**Supervisor sign-off (2026-07-18).** Mathieu accepted the feature and directed the merge, taking
+the subjective "rework the F-011 panel heavily without tearing the network" criterion as signed off.
+The no-tear invariant is verified automatically (FR-1 property test + arc-demotion property test +
+E2E coincidence count + unit tests); the debug palette's distinct-node count remains available for a
+hands-on coincidence check whenever desired. All automated gates verified green by the coordinator
+before merge (lint, format:check, check, test 384, test:e2e 12).
 
 **Follow-ups (out of scope).**
 
