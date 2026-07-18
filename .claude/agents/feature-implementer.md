@@ -78,3 +78,11 @@ this file steers every future feature.
   `pnpm dev:ui`.
 - (F-001, 2026-07-18) Unit conversion/formatting lives in `packages/core/src/units.ts`
   — extend it there, never inline in components.
+- (F-010, 2026-07-18) Wrapped geometry libs (flatten-js/bezier-js) return coarse
+  intersection points; refine each by Newton / alternating-projection, then verify it
+  lies on both curves and drop near-misses — otherwise "points lie on both curves"
+  (FR-2/FR-4) fails on random inputs.
+- (F-010, 2026-07-18) Per-package `vitest run` breaks on the root `projects:
+  ['packages/*']` glob (resolves against the package cwd → no projects). Give each
+  package its own `vitest.config.ts` with a `name`, as `core`/`ui` do; it's also where
+  per-package coverage thresholds live.

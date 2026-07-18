@@ -1,0 +1,23 @@
+{
+  "name": "@vitrum/geometry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "bench": "vitest bench --run"
+  },
+  "dependencies": {
+    "@flatten-js/core": "^1.6.4",
+    "bezier-js": "^6.1.4"
+  },
+  "devDependencies": {
+    "@types/bezier-js": "^4.1.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

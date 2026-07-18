@@ -6,7 +6,15 @@ import ts from 'typescript-eslint'
 
 export default ts.config(
   {
-    ignores: ['**/dist/', '**/out/', '**/coverage/', '**/playwright-report/', '**/test-results/'],
+    ignores: [
+      '**/dist/',
+      '**/out/',
+      '**/coverage/',
+      '**/playwright-report/',
+      '**/test-results/',
+      // Transient agent git worktrees/scratch — not project source, and gitignored.
+      '**/.claude/',
+    ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,

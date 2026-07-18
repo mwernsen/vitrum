@@ -35,6 +35,9 @@ jobs:
       - name: Unit and component tests
         run: pnpm test
 
+      - name: Geometry kernel coverage (F-010, ≥95%)
+        run: pnpm --filter @vitrum/geometry exec vitest run --coverage
+
       - name: E2E tests (Electron)
         run: xvfb-run --auto-servernum pnpm test:e2e
 
