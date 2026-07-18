@@ -1,5 +1,5 @@
 import type { Project, Segment, SegmentGeometry } from '@vitrum/model'
-import { createEmptyProject, createSegment } from '@vitrum/model'
+import { createEmptyProject, createSegment, reconcileProjectNodes } from '@vitrum/model'
 import type { BBox, Vec2 } from '@vitrum/geometry'
 import { bboxOf, bboxUnion, line, pointAt, vec2 } from '@vitrum/geometry'
 
@@ -62,5 +62,5 @@ export function stressScene(count = 5000): Project {
     segments[segment.id] = segment
   }
 
-  return { ...createEmptyProject({ name: 'Stress test' }), segments }
+  return reconcileProjectNodes({ ...createEmptyProject({ name: 'Stress test' }), segments })
 }

@@ -3,12 +3,14 @@ import {
   buildSnapScene,
   resolveSnap,
   type PointerResolver,
+  type ResolvedPoint,
   type SnapHit,
   type SnapKind,
   type SnapScene,
   type SnapToggles,
 } from '@vitrum/core'
 import type { Segment } from '@vitrum/model'
+import type { Vec2 } from '@vitrum/geometry'
 
 import type { ViewportController } from '../canvas/viewport.svelte'
 
@@ -46,6 +48,7 @@ export class SnapController {
   #snapOff = false
 
   #scene: SnapScene = buildSnapScene([])
+  #segments: readonly Segment[] = []
 
   constructor(viewport: ViewportController) {
     this.#viewport = viewport
@@ -53,7 +56,39 @@ export class SnapController {
 
   /** Rebuild the spatial index for a new set of snap targets (call when segments change). */
   updateScene(segments: readonly Segment[]): void {
+    this.#segments = segments
     this.#scene = buildSnapScene(segments.map((s) => ({ geometry: s.geometry })))
+  }
+
+  /**
+   * A resolver for **editing** drags (F-013): snaps to grid, nodes and intersections like the
+   * drawing resolver, but over a scene that excludes the segments being dragged — so a node
+   * never snaps to its own moving endpoints. Built once per drag (over the current network minus
+   * `excludeIds`); it updates {@link hit} so the overlay marker shows during the edit.
+   */
+  buildEditResolver(excludeIds: readonly string[]): (world: Vec2) => ResolvedPoint {
+    const scene = buildSnapScene(
+      this.#segments
+        .filter((s) => !excludeIds.includes(s.id))
+        .map((s) => ({ geometry: s.geometry })),
+    )
+    return (world) => {
+      const scale = this.#viewport.transform.scale
+      const hit = resolveSnap(scene, {
+        world,
+        radiusMm: this.radiusPx / scale,
+        gridMm: this.toggles.grid ? this.#viewport.grid.minor : null,
+        anchors: [],
+        settings: {
+          toggles: this.toggles,
+          master: this.master && !this.#snapOff,
+          radiusMousePx: this.radiusMousePx,
+          radiusPenPx: this.radiusPenPx,
+        },
+      })
+      this.hit = hit
+      return hit ? { world: hit.world, snap: { kind: hit.kind, world: hit.world } } : { world }
+    }
   }
 
   /** Record the pointer device and whether the temporary-disable modifier is held. */

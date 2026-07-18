@@ -21,6 +21,7 @@ function setup() {
     viewport,
     execute: (c) => commands.push(c),
     getSegments: () => Object.values(project().segments),
+    getNodes: () => project().nodes,
   })
   return { tools, viewport, commands, project }
 }

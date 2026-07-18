@@ -75,6 +75,18 @@ export function determinant(t: Transform2D): number {
 }
 
 /**
+ * True when `t`'s linear part is an orientation-preserving similarity — uniform scale +
+ * rotation, no reflection or shear. This is exactly the class under which a circular arc
+ * stays a circular arc ({@link transformShape} keeps it; otherwise it must be demoted to
+ * cubics, F-013). Translation is irrelevant to the test.
+ */
+export function isSimilarity(t: Transform2D): boolean {
+  const col1Sq = t.a * t.a + t.b * t.b
+  const col2Sq = t.c * t.c + t.d * t.d
+  return isZero(col1Sq - col2Sq, 1e-9) && isZero(t.a * t.c + t.b * t.d, 1e-9) && determinant(t) > 0
+}
+
+/**
  * Transform any shape, preserving its kind. Circular arcs are only closed under
  * orientation-preserving **similarities** (uniform scale + rotation + translation); a
  * non-uniform scale would turn an arc elliptical, which v1 does not represent, and a

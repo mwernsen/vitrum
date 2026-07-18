@@ -60,6 +60,19 @@ export {
   type ToolStep,
 } from './tools'
 export {
+  buildPickScene,
+  marqueeMode,
+  marqueeSelect,
+  pickNode,
+  pickSegment,
+  pickSegments,
+  type MarqueeMode,
+  type NodeTarget,
+  type PickHit,
+  type PickScene,
+  type PickTarget,
+} from './select'
+export {
   DEFAULT_SNAP_SETTINGS,
   GridIndex,
   SNAP_KINDS,

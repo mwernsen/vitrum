@@ -1,11 +1,14 @@
 <script lang="ts">
   import type { Panel } from '@vitrum/core'
+  import { createEmptyProject } from '@vitrum/model'
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
   import { ToolController } from '../tools/controller.svelte'
+  import { EditController } from '../tools/edit.svelte'
+  import { SelectionController } from '../tools/selection.svelte'
   import { SnapController } from '../tools/snap.svelte'
 
   import Canvas from './Canvas.svelte'
@@ -32,12 +35,24 @@
     viewport,
     execute: (command) => controller?.execute(command),
     getSegments: () => (controller ? Object.values(controller.doc.segments) : []),
+    getNodes: () => (controller ? controller.doc.nodes : {}),
   })
 
   // The snapping controller (F-012) replaces the tool controller's identity resolver with
   // one that snaps to nodes, intersections, the grid and construction guides.
   const snap = new SnapController(viewport)
   tools.resolver = snap.resolver
+
+  // Selection + editing (F-013). Selection lives outside the document; the edit controller
+  // drives the inert `select` tool (click/marquee, node & handle drag, transforms).
+  const selection = new SelectionController()
+  const edit = new EditController({
+    viewport,
+    selection,
+    snap,
+    getDoc: () => controller?.doc ?? createEmptyProject(),
+    execute: (command, options) => controller?.execute(command, options),
+  })
 
   const segments = $derived(controller ? Object.values(controller.doc.segments) : [])
   // Hidden guides drop out of both rendering and snapping (F-012 visibility toggle).
@@ -55,8 +70,8 @@
 <div class="shell">
   <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
   <Toolbar {tools} />
-  <Canvas {viewport} segments={shownSegments} {bounds} {tools} {snap} />
-  <Inspector {panel} unit={viewport.unit} />
+  <Canvas {viewport} segments={shownSegments} {bounds} {tools} {snap} {edit} {selection} />
+  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} />
   <StatusBar
     {viewport}
     {snap}

@@ -16,8 +16,11 @@
     readCanvasPalette,
     type CanvasPalette,
   } from '../canvas/render'
+  import { drawEditLayer } from '../canvas/selectionRender'
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ToolController } from '../tools/controller.svelte'
+  import type { EditController } from '../tools/edit.svelte'
+  import type { SelectionController } from '../tools/selection.svelte'
   import type { SnapController } from '../tools/snap.svelte'
 
   interface Props {
@@ -30,9 +33,18 @@
     tools?: ToolController
     /** The snapping controller (F-012). Absent ⇒ no snap markers. */
     snap?: SnapController
+    /** The selection/editing controller (F-013). Drives the inert `select` tool. */
+    edit?: EditController
+    /** The selection model (F-013), for highlighting selected segments. */
+    selection?: SelectionController
   }
 
-  let { viewport, segments = [], bounds = null, tools, snap }: Props = $props()
+  let { viewport, segments = [], bounds = null, tools, snap, edit, selection }: Props = $props()
+
+  /** True when the inert select tool is active and editing is wired in. */
+  function editing(): boolean {
+    return !!edit && !!selection && (!tools || tools.activeId === 'select')
+  }
 
   let stackEl: HTMLDivElement
   let gridCanvas: HTMLCanvasElement
@@ -76,6 +88,29 @@
       drawOverlay(ctx, size, viewport.cursorScreen, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
+      if (edit && selection && editing()) {
+        const selected = segments.filter((s) => selection!.has(s.id))
+        const preview = edit.preview
+        drawEditLayer(
+          ctx,
+          viewport.transform,
+          {
+            selected,
+            nodeMarkers: edit.nodeMarkers,
+            bezierHandles: edit.bezierHandles,
+            handles: edit.handles,
+            bbox: edit.selectionBBox,
+            marquee: edit.marquee,
+            preview: preview
+              ? {
+                  transform: preview.transform,
+                  segments: segments.filter((s) => preview.ids.includes(s.id)),
+                }
+              : null,
+          },
+          palette,
+        )
+      }
       dirty.overlay = false
     }
     if (dirty.rulers) {
@@ -119,7 +154,16 @@
     void viewport.unit
     void viewport.transform
     void tools?.previewShapes
+    void tools?.activeId
     void snap?.hit
+    void selection?.selected
+    void edit?.marquee
+    void edit?.preview
+    void edit?.selectionBBox
+    void edit?.handles
+    void edit?.nodeMarkers
+    void edit?.bezierHandles
+    void segments
     schedule('overlay', 'rulers')
   })
 
@@ -153,7 +197,7 @@
   let spaceDown = $state(false)
   let lastPointer: { x: number; y: number } | null = null
 
-  function localPoint(event: PointerEvent) {
+  function localPoint(event: PointerEvent | MouseEvent) {
     const rect = stackEl.getBoundingClientRect()
     return vec2(event.clientX - rect.left, event.clientY - rect.top)
   }
@@ -176,10 +220,17 @@
       event.preventDefault()
       return
     }
-    // Left button with a tool active starts/continues a drawing gesture.
+    // Left button with a drawing tool active starts/continues a drawing gesture.
     if (event.button === 0 && tools && tools.activeId !== 'select') {
       updateSnap(event)
       tools.pointerDown(localPoint(event), mods(event))
+      event.preventDefault()
+      return
+    }
+    // Left button in select mode drives selection / editing (F-013).
+    if (event.button === 0 && editing()) {
+      updateSnap(event)
+      edit!.pointerDown(localPoint(event), mods(event))
       event.preventDefault()
     }
   }
@@ -195,13 +246,21 @@
     if (tools && tools.activeId !== 'select') {
       updateSnap(event)
       tools.pointerMove(point, mods(event))
+    } else if (editing()) {
+      updateSnap(event)
+      edit!.pointerMove(point, mods(event))
     }
   }
 
   function handlePointerUp(event: PointerEvent) {
-    if (!panning && tools && tools.activeId !== 'select' && event.button === 0) {
-      updateSnap(event)
-      tools.pointerUp(localPoint(event), mods(event))
+    if (!panning && event.button === 0) {
+      if (tools && tools.activeId !== 'select') {
+        updateSnap(event)
+        tools.pointerUp(localPoint(event), mods(event))
+      } else if (editing()) {
+        updateSnap(event)
+        edit!.pointerUp(localPoint(event), mods(event))
+      }
     }
     endPan(event)
   }
@@ -248,6 +307,12 @@
     if (tools && tools.activeId !== 'select') {
       tools.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
       event.preventDefault()
+      return
+    }
+    // In select mode, double-click a segment to insert a node (split, F-013).
+    if (editing()) {
+      edit!.doubleClick(localPoint(event))
+      event.preventDefault()
     }
   }
 
@@ -255,6 +320,11 @@
     if (isTyping(event.target)) return
     // The tool layer gets first refusal (single-key activation, numeric entry, Esc/Enter).
     if (tools && tools.handleKeyDown(event)) {
+      event.preventDefault()
+      return
+    }
+    // In select mode, the edit layer handles delete / nudge / duplicate / select-all / Esc.
+    if (editing() && edit!.handleKeyDown(event)) {
       event.preventDefault()
       return
     }

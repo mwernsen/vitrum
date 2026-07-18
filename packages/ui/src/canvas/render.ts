@@ -29,6 +29,8 @@ export interface CanvasPalette {
   readonly content: string
   readonly construction: string
   readonly snap: string
+  readonly selection: string
+  readonly handle: string
   readonly rulerBg: string
   readonly rulerBorder: string
   readonly rulerTick: string
@@ -43,6 +45,8 @@ const FALLBACK: CanvasPalette = {
   content: '#1f1f1f',
   construction: '#6b6b68',
   snap: '#1d50cf',
+  selection: '#2f63e8',
+  handle: '#1d50cf',
   rulerBg: '#ffffff',
   rulerBorder: '#e9e9e4',
   rulerTick: '#d9d9d2',
@@ -62,6 +66,8 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     content: read('--ink-800', FALLBACK.content),
     construction: read('--ink-500', FALLBACK.construction),
     snap: read('--cobalt-600', FALLBACK.snap),
+    selection: read('--cobalt-500', FALLBACK.selection),
+    handle: read('--cobalt-600', FALLBACK.handle),
     rulerBg: read('--paper-0', FALLBACK.rulerBg),
     rulerBorder: read('--paper-200', FALLBACK.rulerBorder),
     rulerTick: read('--paper-300', FALLBACK.rulerTick),

@@ -1,11 +1,11 @@
 # F-013: Selection, node editing & transforms
 
-|                |              |
-| -------------- | ------------ |
-| **Phase**      | 1 — Sketcher |
-| **Status**     | agreed       |
-| **Depends on** | F-011        |
-| **Complexity** | L            |
+|                |                                                                |
+| -------------- | -------------------------------------------------------------- |
+| **Phase**      | 1 — Sketcher                                                   |
+| **Status**     | done                                                          |
+| **Depends on** | F-011                                                          |
+| **Complexity** | L                                                              |
 
 ## Summary
 
@@ -98,3 +98,95 @@ _Resolved 2026-07-18 (spike run; Mathieu delegated the call to the coordinator):
    throws on reflection). A native endpoint-node + bulge arc primitive is a possible later
    refinement. FR-1 is guarded by a property test: no edit sequence (incl. mirror) ever separates
    a shared node.
+
+## Implementation notes
+
+_Delivered on branch `f-013-selection-editing` (off `main`); Phase-1 node model reviewed and
+approved by the coordinator at the checkpoint, with the arc-demotion override below. Not merged._
+
+**Phase 1 — the stored-node model (`@vitrum/model`, Option B).** `Node = { pos: Vec2 }` + `NodeId`
+added to `Project.nodes`; `Segment.endpoints: [NodeId, NodeId]` (Line a/b, Cubic p0/p3, Arc
+computed ends; bézier handles stay free). Welded = same node id. Three structural invariants,
+enforced in `nodes.ts` and asserted by the property test: no dangling refs, node position
+bit-identical to the geometry endpoint (I2), no orphan nodes. `nodes` is always exactly the
+referenced set — add/remove/replace reconcile it — so every pre-existing F-002 undo/round-trip
+test still passes unchanged. New commands: `moveNode` (mergeable), `splitSegmentAtNode`,
+`mergeNodes`, `deleteNode`, plus `transformSegments` (move/rotate/scale/mirror) and a mergeable
+`updateSegmentsGeometry` (multi-segment handle edit). All exactly invertible via an internal
+`patchNetwork` primitive that self-inverts from the pre-state. `schemaVersion` 1 → 2 with one
+migration synthesising nodes from value-equal endpoints.
+
+**Arc demotion — adaptive multi-cubic (coordinator override of the spike's single-cubic
+recommendation).** When an arc must stop being circular (an endpoint moves, or a reflection /
+non-uniform transform), it demotes to `N = ceil(sweep / 90°)` welded cubic spans (quarter = 1,
+semicircle = 2, full circle = 4) so arched tops and circular motifs stay visually faithful on the
+mirror workflow. Interior joins are fresh **welded** nodes with deterministic ids (`${segId}~cN` /
+`~nN`) so re-application on redo reproduces the drag and undo restores the original single `Arc`
+exactly. New geometry helper `isSimilarity`; the single-cubic `arcToCubic` was removed in favour of
+the existing `arcToCubics`.
+
+**Phase 2 — selection & editing.** Pure hit-testing in `@vitrum/core/select`: `pickSegments`
+reuses the F-012 `GridIndex` and measures true curve distance (`closestPoint`), not bbox (FR-2);
+`marqueeSelect` does AutoCAD window/crossing via flattened-polyline containment + Liang–Barsky
+edge-crossing (FR-3). `SelectionController` (outside the document, not undoable — click-cycle,
+Shift-add, marquee, select-all/invert) and `EditController` (node drag with welded junctions moving
+together, bézier-handle drag with live merged commands, double-click-to-split, delete, arrow-nudge,
+Cmd-D duplicate, and whole-selection move/rotate/scale/mirror with interactive bbox handles + a
+rotate handle, plus inspector numeric variants). All edit drags snap through a new
+`SnapController.buildEditResolver` that excludes the dragged segments (no self-snap) and reuses the
+F-012 engine; each gesture is one merged command (FR-4). The drawing-tool commit path now welds via
+`segmentsFromDrafts` (gesture-internal coincidence + welding onto existing junctions), so drawn
+networks are editable without tearing.
+
+**Design.** Selection highlight, node glyphs, bézier + transform handles, marquee (solid = window,
+dashed = crossing) and the transform preview are drawn on the overlay layer through tokens only
+(`selectionRender.ts`). The inspector gained a selection editor (net-new; note for back-port to the
+Claude Design project): per-endpoint x/y, length/angle for a line, count/bbox for a multi-selection,
+all in Geist Mono, plus mirror/rotate/duplicate/delete actions built from `Button`/`Input` core
+primitives.
+
+**Verification.**
+
+- Model: FR-1 property test (`nodes.test.ts`, 300 runs of random move/split/merge/delete/mirror over
+  welded networks — invariants hold after every step and undo-all restores the initial doc exactly)
+  plus an arc-demotion property test (200 runs) and welded-drag integrity units (L-junction drag,
+  drag coalescing, arc-demote-then-undo-restores-the-arc, split, merge, delete, mirror).
+- Core: `pick.test.ts` (true-curve-distance hit-testing incl. bbox-contains-but-curve-far negatives,
+  overlap cycling) and `marquee.test.ts` (window/crossing, pass-through crossing, curve in/out).
+- UI: `selection.svelte.test.ts` (cycle, shift-add, invert) and `edit.svelte.test.ts` (select,
+  marquee window/crossing, welded node drag one-undo, delete, nudge, duplicate, split, mirror).
+- E2E: `apps/desktop/e2e/editing.spec.ts` — draw a welded L, select all, mirror via the inspector,
+  delete and undo; the debug palette's distinct-node count stays at 3 through the edits (the
+  coincidence checker the spec names — a tear would push it to 4).
+- Gates green from the repo root: `pnpm lint`, `format:check`, `check`, `test` (384), `test:e2e`
+  (12). Drove `pnpm dev:ui`: selection highlight, endpoint node glyphs, the transform handle, and the
+  inspector's exact numeric coordinate fields (FR-5) all render per the design system.
+
+**Deviations / recorded decisions.**
+
+- Node refs live on the model `Segment` (`endpoints`), not inside the `@vitrum/geometry` `Line`/
+  `Cubic` primitives, keeping the geometry kernel document-free (the boundary rule). This realises
+  the spike's "Line a/b / Cubic p0/p3 carry node-refs" at the model layer. Approved at checkpoint.
+- Arc demotion is adaptive multi-cubic per the coordinator's override (spike had recommended
+  single-cubic).
+- `updateSegmentGeometry` stays endpoint-agnostic (interior/handle edits only); endpoint moves go
+  through `moveNode`.
+
+**Supervisor sign-off (2026-07-18).** Mathieu accepted the feature and directed the merge, taking
+the subjective "rework the F-011 panel heavily without tearing the network" criterion as signed off.
+The no-tear invariant is verified automatically (FR-1 property test + arc-demotion property test +
+E2E coincidence count + unit tests); the debug palette's distinct-node count remains available for a
+hands-on coincidence check whenever desired. All automated gates verified green by the coordinator
+before merge (lint, format:check, check, test 384, test:e2e 12).
+
+**Follow-ups (out of scope).**
+
+- For an axis-aligned single-segment selection the transform bbox is degenerate, so its corner
+  handles sit on the endpoints and win the hit-test over node-drag; grabbing an endpoint node of such
+  a selection is awkward. A small "collapse degenerate handles" pass would fix it.
+- Smooth/corner tangent editing across a shared node (mirroring the neighbour handle live) is not yet
+  implemented; handle dragging currently moves the grabbed control point only. A one-shot
+  `setNodeSmooth` command is the natural home.
+- `deleteNode` removes incident spans rather than dissolving a 2-valent node by re-joining its two
+  curves; dissolve is a later refinement.
+- Edge (single-axis) scale handles were omitted (corners + rotate only).

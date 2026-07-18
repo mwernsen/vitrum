@@ -50,8 +50,8 @@ describe('schema versioning (FR-4)', () => {
     expect(() => deserialize(future)).toThrow(/Update Vitrum/)
   })
 
-  it('runs registered forward migrations for an older schema version', () => {
-    // A synthetic v0 file with a legacy field the migration renames.
+  it('runs a chain of registered forward migrations for an older schema version', () => {
+    // A synthetic v0 file; the injected chain must reach CURRENT_SCHEMA_VERSION (2).
     const legacy = JSON.stringify({
       schemaVersion: 0,
       project: { ...createEmptyProject({ name: 'legacy-name' }) },
@@ -64,9 +64,30 @@ describe('schema versioning (FR-4)', () => {
           project: { ...file.project, settings: { ...file.project.settings, name: 'migrated' } },
         }),
       },
+      { from: 1, migrate: (file) => ({ schemaVersion: 2, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
+  })
+
+  it('v1 → v2 synthesises shared nodes from coincident endpoints (F-013)', () => {
+    // A legacy v1 file: segments with no endpoint node refs, no `nodes` map. Two spans meet
+    // at (100, 0), so the migration must weld them onto one shared node.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {
+        s1: { id: 's1', geometry: line(vec2(0, 0), vec2(100, 0)), role: 'lead' },
+        s2: { id: 's2', geometry: line(vec2(100, 0), vec2(100, 80)), role: 'lead' },
+      },
+      glasses: {},
+      layers: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 1, project: legacyProject }))
+    // Three distinct endpoints → three nodes; s1.end and s2.start weld to the same id.
+    expect(Object.keys(project.nodes)).toHaveLength(3)
+    expect(project.segments.s1!.endpoints[1]).toBe(project.segments.s2!.endpoints[0])
+    expect(project.nodes[project.segments.s1!.endpoints[1]]!.pos).toEqual(vec2(100, 0))
   })
 
   it('throws when no migration path exists for an older version', () => {
