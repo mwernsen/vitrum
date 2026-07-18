@@ -18,10 +18,12 @@
     "check": "pnpm -r check",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "pnpm --filter @vitrum/geometry exec vitest run --coverage",
     "test:e2e": "pnpm --filter @vitrum/desktop test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "4.1.10",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.20.0",

@@ -20,6 +20,7 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource-variable/onest": "^5.2.11",
     "@vitrum/core": "workspace:*",
+    "@vitrum/geometry": "workspace:*",
     "lucide-svelte": "^1.0.1",
     "svelte": "^5.56.6"
   },
