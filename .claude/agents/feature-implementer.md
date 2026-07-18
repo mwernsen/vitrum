@@ -106,3 +106,10 @@ this file steers every future feature.
   endpoints are coincident by construction for F-020.
 - (F-011, 2026-07-18) The snapping seam is `PointerResolver = (world, ctx) => ResolvedPoint`
   on the controller (identity in v1); F-012 replaces it without touching any tool.
+- (F-012, 2026-07-18) Decorate the F-011 resolver seam entirely from the UI: a `SnapController`
+  owns the resolver closure + the active-snap rune, so snapping needed zero changes to
+  `ResolvedPoint`/`ResolveContext` or any tool. Keep new pointer signals (device, modifiers) on
+  the controller, fed by `Canvas`, not in the shared contract.
+- (F-012, 2026-07-18) Infinite/very-large geometry (guides) must go in the spatial index's
+  oversized always-checked list, or a single 45° guide bbox smears across ~1e8 cells; median-extent
+  cell sizing plus an oversized cap keeps queries O(local).
