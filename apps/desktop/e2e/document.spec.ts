@@ -4,11 +4,12 @@ import { join } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
 let app: ElectronApplication
+let runId = 0
 
-test.beforeEach(async ({}, testInfo) => {
+test.beforeEach(async () => {
   // Point autosave at a fresh, non-existent temp file so no crash-recovery prompt pops
   // at startup and runs stay isolated from each other and from the real app-data dir.
-  const autosavePath = join(tmpdir(), `vitrum-e2e-${testInfo.testId}-${testInfo.retry}.vitrum`)
+  const autosavePath = join(tmpdir(), `vitrum-e2e-${process.pid}-${runId++}.vitrum`)
   app = await electron.launch({
     args: ['.'],
     env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath },
