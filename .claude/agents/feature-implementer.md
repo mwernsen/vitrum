@@ -126,3 +126,20 @@ this file steers every future feature.
   transient locals.
 - (F-013, 2026-07-18) macOS turns Control+click into a right-click; never hold Ctrl to suppress
   snapping in Playwright — toggle the snap master, or drive via stable button/keyboard locators.
+- (F-020, 2026-07-18) `@vitrum/geometry` exports both a vec2 `length` and a curve `length as
+  curveLength`, and `flatten as flattenCurve` — import the aliased names in consumers; importing
+  bare `length`/`flatten` silently grabs the wrong symbol (NaN lengths).
+- (F-020, 2026-07-18) Piece detection stays model-free by mirroring `Segment`/`Node` structurally
+  (like the F-011 tools mirror `SegmentRole`); callers pass `outputSegments(project)` directly.
+  Topology is clustered by position (0.01 mm), never by node id — coincident-but-unwelded endpoints
+  join for tracing without mutating the document.
+- (F-020, 2026-07-18) For deterministic detection independent of input order: intersect each pair in
+  a stable id-ordered direction (segment–segment `t` depends on which curve is "a"), and canonicalize
+  each face's span rotation + hole order before building pieces. Otherwise full vs incremental (and
+  reruns) differ at the 1e-14 float level.
+- (F-020, 2026-07-18) Half-edge face tracing only yields holes from *disconnected* components; nest a
+  CW cycle as a hole only when it shares no segment with the candidate face — this discards a
+  component's own outer/unbounded boundary and keeps genuine islands.
+- (F-020, 2026-07-18) A full circle/ellipse is emitted as one closed arc with coincident start/end;
+  `buildGraph` must inject interior (quarter-point) splits or it drops the loop as a zero-length
+  self-loop (`from === to`) and the shape vanishes from detection.
