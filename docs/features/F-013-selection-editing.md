@@ -3,7 +3,7 @@
 |                |              |
 | -------------- | ------------ |
 | **Phase**      | 1 — Sketcher |
-| **Status**     | draft        |
+| **Status**     | agreed       |
 | **Depends on** | F-011        |
 | **Complexity** | L            |
 
@@ -75,5 +75,26 @@ node glyphs from the semantic overlay tokens.
 
 ## Open questions
 
-1. Shared-node in the model vs derived-by-coincidence (see Technical guidance) —
-   supervisor decision after the spike, since F-020/F-021 build on it.
+_Resolved 2026-07-18 (spike run; Mathieu delegated the call to the coordinator):_
+
+1. **Shared-node in the model vs derived-by-coincidence → Option B, stored nodes.**
+   The spike showed the F-011/F-012 "bit-identical by reference" weld is a construction-time
+   convenience, not a durable invariant (JSON has no references; the first `updateSegmentGeometry`
+   rebuilds geometry), so coincidence must be re-established durably regardless. Bare derived +
+   exact equality tears arc-adjacent junctions on the first rotate (arc endpoints are computed from
+   centre/radius/angle → ~7e-15 mm drift). Stored nodes make FR-1 a **structural invariant**, the
+   migration is cheapest now (schema v1, no user data), and it matches the product's CAD-discipline
+   principles and the likely F-06x constraint future.
+
+   **Model change:** add `NodeId` and `nodes: Record<NodeId, { pos: Vec2 }>` to `Project`; `Line`
+   `a`/`b` and `CubicBezier` `p0`/`p3` carry endpoint node-refs (handles stay free); welded = same
+   node id. New commands `moveNode` (mergeable — one drag = one undo, mirroring the existing
+   `updateSegmentGeometry` merge pattern), `splitSegmentAtNode`, `mergeNodes`, `deleteNode`. Bump
+   `schemaVersion` + one migration synthesising nodes from existing value-equal endpoints.
+
+   **Arc containment:** to avoid rippling a new arc representation through F-010/F-011/F-012 now,
+   arcs keep centre/radius/angle for drawing and snapping; on transform or node-edit they **demote
+   to cubic béziers** with node-referenced endpoints (mirror already requires this — `transformArc`
+   throws on reflection). A native endpoint-node + bulge arc primitive is a possible later
+   refinement. FR-1 is guarded by a property test: no edit sequence (incl. mirror) ever separates
+   a shared node.
