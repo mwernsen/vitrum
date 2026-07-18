@@ -44,6 +44,11 @@
         Redo
       </Button>
     </div>
+    <div class="actions">
+      <Button variant="ghost" size="sm" onclick={() => controller.loadStressScene()}>
+        Load stress scene
+      </Button>
+    </div>
   </div>
 </Dialog>
 

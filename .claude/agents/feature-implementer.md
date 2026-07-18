@@ -35,10 +35,14 @@ supervisor, and anything the spec doesn't settle gets asked, not assumed.
   Electron-free. New packages follow the same principle.
 - **Follow the design system** (CLAUDE.md "Design system" section): tokens only, no
   raw hex/px; build from the ported `components/core` primitives; the spec's
-  **Design** section names which `ui_kits/studio` surfaces apply. If you need UI
-  that has no design, stop and flag it to Mathieu — do not invent it in code. The
-  canonical source is the Claude Design project
-  `3c259295-607a-4eba-8cad-3890f7e80063` (readable via DesignSync).
+  **Design** section names which `ui_kits/studio` surfaces apply. When a spec needs
+  a screen or component that has no design yet, you may design and build it in code
+  — but **every screen must match the Vitrum Design System**: compose it from the
+  ported `components/core` primitives, style it exclusively through design tokens,
+  and follow the `ui_kits/studio` chrome and voice rules. Prefer reusing existing
+  patterns over inventing new ones, and note any net-new screen in the spec's
+  Implementation notes so it can be back-ported to the Claude Design project
+  (`3c259295-607a-4eba-8cad-3890f7e80063`, readable via DesignSync) later.
 - **Tests ship with the change**: core logic → Vitest unit tests (property-based
   where the spec says so), components → Testing Library, each user-facing flow → one
   Playwright E2E test. Specs name mandatory tests in their acceptance criteria.
@@ -86,3 +90,9 @@ this file steers every future feature.
   ['packages/*']` glob (resolves against the package cwd → no projects). Give each
   package its own `vitest.config.ts` with a `name`, as `core`/`ui` do; it's also where
   per-package coverage thresholds live.
+- (F-003, 2026-07-18) Viewport/coordinate maths live in `@vitrum/core` (`viewport.ts`),
+  pure and unit-tested; `core` may depend on `@vitrum/geometry` for `Vec2`/`BBox` (no
+  cycle — geometry is a leaf).
+- (F-003, 2026-07-18) Canvas chrome must read **leaf** design tokens (`--ink-*`/`--paper-*`)
+  via `getComputedStyle`; semantic aliases resolve to `var(...)` and are unusable as canvas
+  colours. Guard every draw on a null 2D context so component tests pass under jsdom.

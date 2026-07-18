@@ -6,4 +6,31 @@ export {
   type Panel,
   type Point,
 } from './geometry'
-export { convertLength, formatLength, type LengthUnit } from './units'
+export {
+  convertLength,
+  formatFractionalInch,
+  formatLength,
+  type LengthFormatOptions,
+  type LengthUnit,
+} from './units'
+export {
+  CSS_PX_PER_MM,
+  MAX_SCALE,
+  MIN_SCALE,
+  clampScale,
+  fitBounds,
+  gridStep,
+  makeViewport,
+  niceStep,
+  panByScreen,
+  rulerStepMm,
+  scaleAround,
+  screenToWorld,
+  ticksInRange,
+  visibleWorldBounds,
+  worldToScreen,
+  zoomBy,
+  type GridStep,
+  type Viewport,
+  type ViewSize,
+} from './viewport'
