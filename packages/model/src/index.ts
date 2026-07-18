@@ -37,6 +37,7 @@ export {
   reconcileNodes,
   reconcileProjectNodes,
   referencedNodeIds,
+  segmentsFromDrafts,
   setGeometryEndpoint,
   synthesizeNodes,
   transformGeometry,
@@ -56,6 +57,7 @@ export {
   splitSegmentAtNode,
   transformSegments,
   updateSegmentGeometry,
+  updateSegmentsGeometry,
   updateSettings,
   type Command,
 } from './commands'

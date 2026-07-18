@@ -200,6 +200,53 @@ export function updateSegmentGeometry(id: SegmentId, geometry: SegmentGeometry):
   return command
 }
 
+interface UpdateGeometriesCommand extends Command {
+  readonly kind: 'updateSegmentsGeometry'
+  readonly updates: readonly { readonly id: SegmentId; readonly geometry: SegmentGeometry }[]
+}
+
+/**
+ * Replace the geometry of several segments in one undoable step — the bézier-handle edit
+ * (F-013), which can touch two segments at once when smoothing a shared node's tangents. Only
+ * interior/handle geometry changes; endpoints (and therefore nodes) are untouched, so the weld
+ * invariant holds. Mergeable across a drag when the same id set is edited, so one drag is one
+ * undo entry (like {@link updateSegmentGeometry}).
+ */
+export function updateSegmentsGeometry(
+  updates: readonly { readonly id: SegmentId; readonly geometry: SegmentGeometry }[],
+): Command {
+  const command: UpdateGeometriesCommand = {
+    kind: 'updateSegmentsGeometry',
+    updates,
+    apply: (doc) => {
+      const segments = { ...doc.segments }
+      for (const { id, geometry } of updates) {
+        const seg = segments[id]
+        if (!seg) throw new Error(`updateSegmentsGeometry: segment ${id} does not exist`)
+        segments[id] = { ...seg, geometry }
+      }
+      return { ...doc, segments }
+    },
+    invert: (before) =>
+      updateSegmentsGeometry(
+        updates.map(({ id }) => {
+          const seg = before.segments[id]
+          if (!seg) throw new Error(`updateSegmentsGeometry.invert: segment ${id} does not exist`)
+          return { id, geometry: seg.geometry }
+        }),
+      ),
+    merge: (next) => {
+      if (next.kind !== 'updateSegmentsGeometry') return undefined
+      const other = next as UpdateGeometriesCommand
+      const a = updates.map((u) => u.id).sort()
+      const b = other.updates.map((u) => u.id).sort()
+      if (a.length !== b.length || a.some((id, i) => id !== b[i])) return undefined
+      return next
+    },
+  }
+  return command
+}
+
 /** Change a segment's role (lead / construction / border). */
 export function setSegmentRole(id: SegmentId, role: SegmentRole): Command {
   return {

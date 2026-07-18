@@ -11,7 +11,7 @@ import {
   type Vec2,
 } from '@vitrum/geometry'
 
-import { newNodeId } from './ids'
+import { newNodeId, newSegmentId } from './ids'
 import type { Node, NodeId, Project, Segment, SegmentGeometry, SegmentId } from './types'
 
 /**
@@ -253,6 +253,43 @@ export function synthesizeNodes(
     }
   }
   return { segments, nodes }
+}
+
+/**
+ * Turn drawing-tool drafts into segments ready for `addSegments`, welding endpoints two ways
+ * (F-013): endpoints coincident **within the gesture** share a fresh node, and an endpoint that
+ * lands *exactly* on an **existing** project node (F-012 endpoint-snap returns the node's exact
+ * coordinate) reuses that node id — so drawing onto a junction welds to it instead of stacking a
+ * duplicate. Fresh segment/node ids are minted here (the impure step kept out of commands).
+ */
+export function segmentsFromDrafts(
+  drafts: readonly { readonly geometry: SegmentGeometry; readonly role: Segment['role'] }[],
+  existingNodes: Readonly<Record<NodeId, Node>>,
+): Segment[] {
+  const existingByKey = new Map<string, NodeId>()
+  for (const [id, node] of Object.entries(existingNodes)) existingByKey.set(vecKey(node.pos), id)
+  const localByKey = new Map<string, NodeId>()
+
+  const nodeFor = (pos: Vec2): NodeId => {
+    const key = vecKey(pos)
+    const existing = existingByKey.get(key)
+    if (existing) return existing
+    const local = localByKey.get(key)
+    if (local) return local
+    const id = newNodeId()
+    localByKey.set(key, id)
+    return id
+  }
+
+  return drafts.map((draft) => {
+    const [s, e] = geometryEndpoints(draft.geometry)
+    return {
+      id: newSegmentId(),
+      geometry: draft.geometry,
+      role: draft.role,
+      endpoints: [nodeFor(s), nodeFor(e)],
+    }
+  })
 }
 
 /** Exact-equality key for welding endpoints; `-0` folds to `0` so it matches JSON. */

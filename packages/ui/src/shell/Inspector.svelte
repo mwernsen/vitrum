@@ -1,43 +1,207 @@
 <script lang="ts">
-  import { formatLength, totalLeadLength, type LengthUnit, type Panel } from '@vitrum/core'
+  import {
+    convertLength,
+    formatLength,
+    toMillimetres,
+    totalLeadLength,
+    type LengthUnit,
+    type Panel,
+  } from '@vitrum/core'
+  import { curveLength, vec2 } from '@vitrum/geometry'
+  import { geometryEndpoints, type Project, type Segment } from '@vitrum/model'
 
   import PieceSummary from '../PieceSummary.svelte'
+  import Button from '../components/Button.svelte'
+  import Input from '../components/Input.svelte'
+  import type { EditController } from '../tools/edit.svelte'
+  import type { SelectionController } from '../tools/selection.svelte'
 
   interface Props {
     panel: Panel
     unit: LengthUnit
+    /** Editing controller (F-013). Absent ⇒ inspector shows the panel summary only. */
+    edit?: EditController
+    /** Selection model (F-013). */
+    selection?: SelectionController
+    /** The current document, for reading selected geometry. */
+    doc?: Project
   }
 
-  let { panel, unit }: Props = $props()
+  let { panel, unit, edit, selection, doc }: Props = $props()
 
   const width = $derived(formatLength(panel.widthMm, unit))
   const height = $derived(formatLength(panel.heightMm, unit))
   const leadMeters = $derived(totalLeadLength(panel) / 1000)
+
+  const selectedIds = $derived(selection ? [...selection.selected] : [])
+  const selectedSegments = $derived<Segment[]>(
+    doc ? selectedIds.map((id) => doc!.segments[id]).filter((s): s is Segment => !!s) : [],
+  )
+  const single = $derived<Segment | null>(
+    selectedSegments.length === 1 ? selectedSegments[0]! : null,
+  )
+
+  // Display a mm value in the active unit as a plain, trimmed number string (FR-5: the number
+  // the user types round-trips exactly, since editing converts straight back to mm).
+  function show(mm: number): string {
+    return String(Number(convertLength(mm, unit).toFixed(4)))
+  }
+  function toMm(text: string): number | null {
+    const n = Number(text)
+    return Number.isFinite(n) ? toMillimetres(n, unit) : null
+  }
+
+  const ends = $derived(single ? geometryEndpoints(single.geometry) : null)
+  const isLine = $derived(single?.geometry.kind === 'line')
+  const lengthMm = $derived(single ? curveLength(single.geometry) : 0)
+  const angleDeg = $derived.by(() => {
+    if (!ends) return 0
+    return (Math.atan2(ends[1].y - ends[0].y, ends[1].x - ends[0].x) * 180) / Math.PI
+  })
+
+  const bboxSize = $derived.by(() => {
+    if (selectedSegments.length === 0) return null
+    const b = edit?.selectionBBox
+    return b ? { w: b.max.x - b.min.x, h: b.max.y - b.min.y } : null
+  })
+
+  function setEnd(which: 0 | 1, axis: 'x' | 'y', text: string): void {
+    if (!edit || !single || !ends) return
+    const mm = toMm(text)
+    if (mm === null) return
+    const cur = ends[which]
+    edit.setEndpoint(single.id, which, axis === 'x' ? vec2(mm, cur.y) : vec2(cur.x, mm))
+  }
+
+  function setLength(text: string): void {
+    if (!edit || !single || !ends) return
+    const mm = toMm(text)
+    if (mm === null || mm <= 0) return
+    const a = ends[0]
+    const rad = (angleDeg * Math.PI) / 180
+    edit.setEndpoint(single.id, 1, vec2(a.x + Math.cos(rad) * mm, a.y + Math.sin(rad) * mm))
+  }
+
+  function setAngle(text: string): void {
+    if (!edit || !single || !ends) return
+    const deg = Number(text)
+    if (!Number.isFinite(deg)) return
+    const a = ends[0]
+    const rad = (deg * Math.PI) / 180
+    edit.setEndpoint(
+      single.id,
+      1,
+      vec2(a.x + Math.cos(rad) * lengthMm, a.y + Math.sin(rad) * lengthMm),
+    )
+  }
 </script>
 
 <aside class="inspector" aria-label="Inspector">
-  <h2>{panel.name}</h2>
-  <dl class="props">
-    <div>
-      <dt>Size</dt>
-      <dd>{width} × {height}</dd>
-    </div>
-    <div>
-      <dt>Pieces</dt>
-      <dd>{panel.pieces.length}</dd>
-    </div>
-    <div>
-      <dt>Lead</dt>
-      <dd>{leadMeters.toFixed(2)} m</dd>
-    </div>
-  </dl>
+  {#if edit && selection && selectedSegments.length > 0}
+    <h2>{single ? 'Segment' : `${selectedSegments.length} selected`}</h2>
 
-  <h3>Pieces</h3>
-  <ul>
-    {#each panel.pieces as piece (piece.id)}
-      <PieceSummary {piece} />
-    {/each}
-  </ul>
+    {#if single && ends}
+      <div class="fields">
+        <div class="row">
+          <Input
+            size="sm"
+            label="Start x"
+            value={show(ends[0].x)}
+            onchange={(v) => setEnd(0, 'x', v)}
+          />
+          <Input
+            size="sm"
+            label="Start y"
+            value={show(ends[0].y)}
+            onchange={(v) => setEnd(0, 'y', v)}
+          />
+        </div>
+        <div class="row">
+          <Input
+            size="sm"
+            label="End x"
+            value={show(ends[1].x)}
+            onchange={(v) => setEnd(1, 'x', v)}
+          />
+          <Input
+            size="sm"
+            label="End y"
+            value={show(ends[1].y)}
+            onchange={(v) => setEnd(1, 'y', v)}
+          />
+        </div>
+        {#if isLine}
+          <div class="row">
+            <Input size="sm" label="Length" value={show(lengthMm)} onchange={setLength} />
+            <Input
+              size="sm"
+              label="Angle"
+              value={String(Number(angleDeg.toFixed(3)))}
+              onchange={setAngle}
+            />
+          </div>
+        {:else}
+          <dl class="props">
+            <div>
+              <dt>Length</dt>
+              <dd>{formatLength(lengthMm, unit)}</dd>
+            </div>
+          </dl>
+        {/if}
+      </div>
+    {:else}
+      <dl class="props">
+        <div>
+          <dt>Segments</dt>
+          <dd>{selectedSegments.length}</dd>
+        </div>
+        {#if bboxSize}
+          <div>
+            <dt>Size</dt>
+            <dd>{show(bboxSize.w)} × {show(bboxSize.h)}</dd>
+          </div>
+        {/if}
+      </dl>
+    {/if}
+
+    <h3>Transform</h3>
+    <div class="actions">
+      <Button size="sm" variant="secondary" onclick={() => edit.mirror('horizontal')}>
+        Mirror horizontal
+      </Button>
+      <Button size="sm" variant="secondary" onclick={() => edit.mirror('vertical')}>
+        Mirror vertical
+      </Button>
+      <Button size="sm" variant="secondary" onclick={() => edit.rotateBy(90)}>Rotate 90°</Button>
+      <Button size="sm" variant="secondary" onclick={() => edit.duplicate()}>Duplicate</Button>
+    </div>
+    <div class="actions">
+      <Button size="sm" variant="ghost" onclick={() => edit.deleteSelection()}>Delete</Button>
+    </div>
+  {:else}
+    <h2>{panel.name}</h2>
+    <dl class="props">
+      <div>
+        <dt>Size</dt>
+        <dd>{width} × {height}</dd>
+      </div>
+      <div>
+        <dt>Pieces</dt>
+        <dd>{panel.pieces.length}</dd>
+      </div>
+      <div>
+        <dt>Lead</dt>
+        <dd>{leadMeters.toFixed(2)} m</dd>
+      </div>
+    </dl>
+
+    <h3>Pieces</h3>
+    <ul>
+      {#each panel.pieces as piece (piece.id)}
+        <PieceSummary {piece} />
+      {/each}
+    </ul>
+  {/if}
 </aside>
 
 <style>
@@ -62,6 +226,23 @@
     text-transform: uppercase;
     letter-spacing: var(--tracking-eyebrow);
     color: var(--text-muted);
+  }
+
+  .fields {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   .props {

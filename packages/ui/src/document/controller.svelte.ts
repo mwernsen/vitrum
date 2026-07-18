@@ -11,7 +11,7 @@ import {
   removeSegments,
   serialize,
 } from '@vitrum/model'
-import type { Command, Project } from '@vitrum/model'
+import type { Command, ExecuteOptions, Project } from '@vitrum/model'
 
 import { stressScene } from '../canvas/scene'
 
@@ -85,7 +85,8 @@ export class DocumentController {
    * Apply one document command. The sanctioned mutation path for drawing tools (F-011):
    * each completed gesture calls this exactly once, so it is a single undo entry (FR-1).
    */
-  execute = (command: Command): void => this.#store.execute(command)
+  execute = (command: Command, options?: ExecuteOptions): void =>
+    this.#store.execute(command, options)
   togglePalette = (): void => {
     this.paletteOpen = !this.paletteOpen
   }

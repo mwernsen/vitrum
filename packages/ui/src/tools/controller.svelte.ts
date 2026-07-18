@@ -22,9 +22,11 @@ import {
 import type { Vec2 } from '@vitrum/geometry'
 import {
   addSegments,
-  createSegment,
   replaceSegments,
+  segmentsFromDrafts,
   type Command,
+  type Node,
+  type NodeId,
   type Segment,
 } from '@vitrum/model'
 
@@ -37,6 +39,8 @@ export interface ToolHost {
   execute(command: Command): void
   /** The current segments, so the border tool can enforce one contour per document. */
   getSegments(): readonly Segment[]
+  /** The current nodes, so a committed gesture welds to existing junctions (F-013). */
+  getNodes(): Readonly<Record<NodeId, Node>>
 }
 
 /** The tools available for activation, keyed by their single-key shortcut. */
@@ -295,7 +299,9 @@ export class ToolController {
   }
 
   #commit(drafts: readonly SegmentDraft[]): void {
-    const segments = drafts.map((d) => createSegment(d.geometry, d.role))
+    // Weld the gesture: coincident endpoints within it share a node, and an endpoint snapped
+    // onto an existing junction reuses that node id (F-013), so editing later never tears.
+    const segments = segmentsFromDrafts(drafts, this.#host.getNodes())
     // The border tool replaces the single border contour (v1): removing any existing
     // border segments and adding the new ones in one undo entry.
     if (drafts.every((d) => d.role === 'border')) {
