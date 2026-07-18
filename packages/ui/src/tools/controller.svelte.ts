@@ -3,6 +3,7 @@ import {
   bezierTool,
   borderTool,
   circleTool,
+  guideTool,
   identityResolver,
   lineTool,
   parseNumericEntry,
@@ -46,6 +47,7 @@ const SHORTCUTS: Record<string, ToolId> = {
   r: 'rectangle',
   c: 'circle',
   p: 'polygon',
+  g: 'guide',
 }
 
 /**
@@ -61,6 +63,7 @@ const TOOLS: Partial<Record<ToolId, ToolDef<unknown>>> = {
   circle: circleTool as ToolDef<unknown>,
   polygon: polygonTool as ToolDef<unknown>,
   border: borderTool as ToolDef<unknown>,
+  guide: guideTool as ToolDef<unknown>,
 }
 
 /**

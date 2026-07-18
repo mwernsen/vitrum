@@ -38,6 +38,9 @@ export {
   type Command,
 } from './commands'
 
+// Network queries
+export { constructionSegmentIds, isOutputSegment, outputSegments } from './network'
+
 // Store
 export { DocumentStore, type ExecuteOptions, type Listener } from './store'
 

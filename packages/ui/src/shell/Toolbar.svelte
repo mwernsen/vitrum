@@ -4,6 +4,7 @@
   import Minus from 'lucide-svelte/icons/minus'
   import MousePointer2 from 'lucide-svelte/icons/mouse-pointer-2'
   import PenTool from 'lucide-svelte/icons/pen-tool'
+  import Ruler from 'lucide-svelte/icons/ruler'
   import Spline from 'lucide-svelte/icons/spline'
   import Square from 'lucide-svelte/icons/square'
   import SquareDashed from 'lucide-svelte/icons/square-dashed'
@@ -30,6 +31,7 @@
     { id: 'circle', label: 'Circle or ellipse', key: 'C', icon: Circle },
     { id: 'polygon', label: 'Regular polygon', key: 'P', icon: Triangle },
     { id: 'border', label: 'Panel border', key: '', icon: SquareDashed },
+    { id: 'guide', label: 'Construction guide', key: 'G', icon: Ruler },
   ]
 
   const activeId = $derived(tools?.activeId ?? 'select')

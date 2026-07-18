@@ -1,4 +1,4 @@
-import type { LengthUnit, PreviewShape, Viewport, ViewSize } from '@vitrum/core'
+import type { LengthUnit, PreviewShape, SnapHit, SnapKind, Viewport, ViewSize } from '@vitrum/core'
 import {
   formatFractionalInch,
   gridStep,
@@ -28,6 +28,7 @@ export interface CanvasPalette {
   readonly cursor: string
   readonly content: string
   readonly construction: string
+  readonly snap: string
   readonly rulerBg: string
   readonly rulerBorder: string
   readonly rulerTick: string
@@ -41,6 +42,7 @@ const FALLBACK: CanvasPalette = {
   cursor: '#2f63e8',
   content: '#1f1f1f',
   construction: '#6b6b68',
+  snap: '#1d50cf',
   rulerBg: '#ffffff',
   rulerBorder: '#e9e9e4',
   rulerTick: '#d9d9d2',
@@ -59,6 +61,7 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     cursor: read('--cobalt-500', FALLBACK.cursor),
     content: read('--ink-800', FALLBACK.content),
     construction: read('--ink-500', FALLBACK.construction),
+    snap: read('--cobalt-600', FALLBACK.snap),
     rulerBg: read('--paper-0', FALLBACK.rulerBg),
     rulerBorder: read('--paper-200', FALLBACK.rulerBorder),
     rulerTick: read('--paper-300', FALLBACK.rulerTick),
@@ -235,6 +238,104 @@ export function drawToolPreview(
     }
   }
   ctx.setLineDash([])
+}
+
+/** Half-size (screen px) of a snap glyph, and the text-hint offset from the snap point. */
+const SNAP_GLYPH = 5
+
+/** Human-readable label per snap kind, shown next to the marker (sentence case, lowercase). */
+const SNAP_LABELS: Record<SnapKind, string> = {
+  endpoint: 'endpoint',
+  intersection: 'intersection',
+  midpoint: 'midpoint',
+  'on-curve': 'on curve',
+  grid: 'grid',
+  angle: 'angle',
+}
+
+/**
+ * Draw the active snap marker (F-012): a distinct glyph per kind at the snap point (square =
+ * endpoint, × = intersection, triangle = midpoint, circle = on-curve, plus = grid, diamond =
+ * angle), any alignment/extension guide lines, and a short text hint by the cursor. Drawn on
+ * the overlay layer in a single accent (cobalt) so it reads as chrome, not glass. Guarded on
+ * a null 2D context so component tests under jsdom are unaffected.
+ */
+export function drawSnapMarker(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  hit: SnapHit | null,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || !hit) return
+  ctx.save()
+  ctx.strokeStyle = palette.snap
+  ctx.fillStyle = palette.snap
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([])
+
+  // Alignment / extension guides (angle snap): faint dashed lines behind the glyph.
+  if (hit.guides) {
+    ctx.globalAlpha = 0.5
+    ctx.setLineDash([4, 4])
+    ctx.beginPath()
+    for (const [a, b] of hit.guides) {
+      const sa = worldToScreen(vp, a)
+      const sb = worldToScreen(vp, b)
+      ctx.moveTo(sa.x, sa.y)
+      ctx.lineTo(sb.x, sb.y)
+    }
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.globalAlpha = 1
+  }
+
+  const s = worldToScreen(vp, hit.world)
+  const g = SNAP_GLYPH
+  ctx.beginPath()
+  switch (hit.kind) {
+    case 'endpoint':
+      ctx.strokeRect(s.x - g, s.y - g, g * 2, g * 2)
+      break
+    case 'intersection':
+      ctx.moveTo(s.x - g, s.y - g)
+      ctx.lineTo(s.x + g, s.y + g)
+      ctx.moveTo(s.x + g, s.y - g)
+      ctx.lineTo(s.x - g, s.y + g)
+      ctx.stroke()
+      break
+    case 'midpoint':
+      ctx.moveTo(s.x, s.y - g)
+      ctx.lineTo(s.x + g, s.y + g)
+      ctx.lineTo(s.x - g, s.y + g)
+      ctx.closePath()
+      ctx.stroke()
+      break
+    case 'on-curve':
+      ctx.arc(s.x, s.y, g, 0, Math.PI * 2)
+      ctx.stroke()
+      break
+    case 'grid':
+      ctx.moveTo(s.x - g, s.y)
+      ctx.lineTo(s.x + g, s.y)
+      ctx.moveTo(s.x, s.y - g)
+      ctx.lineTo(s.x, s.y + g)
+      ctx.stroke()
+      break
+    case 'angle':
+      ctx.moveTo(s.x, s.y - g)
+      ctx.lineTo(s.x + g, s.y)
+      ctx.lineTo(s.x, s.y + g)
+      ctx.lineTo(s.x - g, s.y)
+      ctx.closePath()
+      ctx.stroke()
+      break
+  }
+
+  ctx.font = '11px "Geist Mono", ui-monospace, monospace'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillText(SNAP_LABELS[hit.kind], s.x + g + 4, s.y - g - 2)
+  ctx.restore()
 }
 
 function rulerLabel(mm: number, unit: LengthUnit): string {

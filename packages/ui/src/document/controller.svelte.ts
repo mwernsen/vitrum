@@ -1,11 +1,14 @@
+import { curveEndpoints } from '@vitrum/core'
 import { line, vec2 } from '@vitrum/geometry'
 import {
   Autosaver,
   addSegment,
+  constructionSegmentIds,
   createEmptyProject,
   createSegment,
   deserialize,
   DocumentStore,
+  removeSegments,
   serialize,
 } from '@vitrum/model'
 import type { Command, Project } from '@vitrum/model'
@@ -35,6 +38,19 @@ export class DocumentController {
   paletteOpen = $state(false)
 
   segmentCount = $derived(Object.keys(this.doc.segments).length)
+
+  /**
+   * The number of distinct endpoint coordinates in the network, deduped bit-identically.
+   * When snapping welds an endpoint (F-012 FR-1), the two segments share one coordinate, so
+   * this count drops — the observable the debug panel and the F-012 E2E use to prove welds.
+   */
+  distinctNodeCount = $derived.by(() => {
+    const seen: Record<string, true> = {}
+    for (const segment of Object.values(this.doc.segments)) {
+      for (const p of curveEndpoints(segment.geometry)) seen[`${p.x},${p.y}`] = true
+    }
+    return Object.keys(seen).length
+  })
 
   constructor(host: AppHost, store: DocumentStore = new DocumentStore()) {
     this.#store = store
@@ -72,6 +88,15 @@ export class DocumentController {
   execute = (command: Command): void => this.#store.execute(command)
   togglePalette = (): void => {
     this.paletteOpen = !this.paletteOpen
+  }
+
+  /**
+   * Remove every construction guide in one reversible command (F-012 "clear all guides").
+   * A no-op when there are no guides.
+   */
+  clearGuides = (): void => {
+    const ids = constructionSegmentIds(this.#store.document)
+    if (ids.length > 0) this.#store.execute(removeSegments(ids))
   }
 
   /** Debug-only: append a lead segment so the command/undo/save machinery is exercisable. */

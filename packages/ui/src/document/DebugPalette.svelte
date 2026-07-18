@@ -25,6 +25,9 @@
     <p class="count" data-testid="segment-count">
       Segments: <span class="mono">{controller.segmentCount}</span>
     </p>
+    <p class="count" data-testid="node-count">
+      Distinct nodes: <span class="mono">{controller.distinctNodeCount}</span>
+    </p>
     <div class="actions">
       <Button variant="primary" size="sm" onclick={controller.addDebugSegment}>Add segment</Button>
       <Button
