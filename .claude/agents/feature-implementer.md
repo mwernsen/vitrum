@@ -96,3 +96,13 @@ this file steers every future feature.
 - (F-003, 2026-07-18) Canvas chrome must read **leaf** design tokens (`--ink-*`/`--paper-*`)
   via `getComputedStyle`; semantic aliases resolve to `var(...)` and are unusable as canvas
   colours. Guard every draw on a null 2D context so component tests pass under jsdom.
+- (F-011, 2026-07-18) Drawing tools are pure `ToolDef<S>` reducers in `@vitrum/core/tools/`
+  emitting geometry-only `SegmentDraft[]`; the UI `ToolController` turns each gesture into
+  one command. Keep new tools pure and framework-free — the interactive glue (pointer→world
+  via `screenToWorld`, snapping resolver, key handling) lives once in the controller.
+- (F-011, 2026-07-18) A gesture must be one undo entry: buffer the whole gesture in tool
+  state and commit a single compound command on finish (not per-span), so auto-welded
+  polylines/shapes undo atomically. Shared spans reuse the exact same anchor `Vec2` so
+  endpoints are coincident by construction for F-020.
+- (F-011, 2026-07-18) The snapping seam is `PointerResolver = (world, ctx) => ResolvedPoint`
+  on the controller (identity in v1); F-012 replaces it without touching any tool.

@@ -3,7 +3,7 @@
 |                |              |
 | -------------- | ------------ |
 | **Phase**      | 1 — Sketcher |
-| **Status**     | draft        |
+| **Status**     | agreed       |
 | **Depends on** | F-011        |
 | **Complexity** | M            |
 
@@ -63,4 +63,8 @@ detection (F-020) reliable: coincident endpoints must be _exactly_ coincident.
 
 ## Open questions
 
-1. Default snap radius and whether stylus input should get a larger radius than mouse.
+_Resolved by Mathieu 2026-07-18:_
+
+1. Snap radius is screen-space and zoom-independent: **8 px for mouse, 12 px for pen/touch**,
+   differentiated via `PointerEvent.pointerType`. Keep the value centralized/configurable in
+   the snap settings.
