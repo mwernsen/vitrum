@@ -1,18 +1,20 @@
 <script lang="ts">
-  // Drawing tools land in F-011; these are placeholder buttons so the toolbar
-  // region exists. `Select` is shown as the active tool.
-  interface Tool {
-    id: string
-    label: string
-    glyph: string
-  }
+  import Minus from 'lucide-svelte/icons/minus'
+  import MousePointer2 from 'lucide-svelte/icons/mouse-pointer-2'
+  import PenTool from 'lucide-svelte/icons/pen-tool'
+  import Spline from 'lucide-svelte/icons/spline'
+  import Square from 'lucide-svelte/icons/square'
 
-  const tools: Tool[] = [
-    { id: 'select', label: 'Select', glyph: '⌖' },
-    { id: 'line', label: 'Line', glyph: '╱' },
-    { id: 'arc', label: 'Arc', glyph: '◜' },
-    { id: 'rectangle', label: 'Rectangle', glyph: '▭' },
-    { id: 'bezier', label: 'Bézier curve', glyph: '∿' },
+  import IconButton from '../components/IconButton.svelte'
+
+  // Placeholder tools until the drawing tools land (F-011). Icon component type
+  // is inferred from the lucide imports.
+  const tools = [
+    { id: 'select', label: 'Select', icon: MousePointer2 },
+    { id: 'line', label: 'Line', icon: Minus },
+    { id: 'arc', label: 'Arc', icon: Spline },
+    { id: 'rectangle', label: 'Rectangle', icon: Square },
+    { id: 'bezier', label: 'Bézier curve', icon: PenTool },
   ]
 
   const activeTool = 'select'
@@ -20,15 +22,14 @@
 
 <div class="toolbar" role="toolbar" aria-orientation="vertical" aria-label="Tools">
   {#each tools as tool (tool.id)}
-    <button
-      type="button"
-      class="tool"
-      aria-label={tool.label}
+    {@const Icon = tool.icon}
+    <IconButton
+      label={tool.label}
+      variant={tool.id === activeTool ? 'outline' : 'ghost'}
       aria-pressed={tool.id === activeTool}
-      disabled={tool.id !== activeTool}
     >
-      <span aria-hidden="true">{tool.glyph}</span>
-    </button>
+      <Icon size={18} />
+    </IconButton>
   {/each}
 </div>
 
@@ -37,33 +38,9 @@
     grid-area: tools;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.5rem;
-    background: #292524;
-    border-right: 1px solid #44403c;
-  }
-
-  .tool {
-    width: 2.5rem;
-    height: 2.5rem;
-    display: grid;
-    place-items: center;
-    font-size: 1.25rem;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: 0.375rem;
-    color: #d6d3d1;
-    cursor: pointer;
-  }
-
-  .tool[aria-pressed='true'] {
-    background: #1c1917;
-    border-color: #3b82f6;
-    color: #fafaf9;
-  }
-
-  .tool:disabled {
-    opacity: 0.4;
-    cursor: default;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    background: var(--paper-50);
+    border-right: 1px solid var(--border-subtle);
   }
 </style>

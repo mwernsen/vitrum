@@ -32,30 +32,30 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 1.75rem;
-    padding: 0 0.75rem;
-    background: #292524;
-    border-top: 1px solid #44403c;
-    font-size: 0.8rem;
-    color: #a8a29e;
+    height: 28px;
+    padding: 0 var(--space-3);
+    background: var(--paper-50);
+    border-top: 1px solid var(--border-subtle);
+    font: var(--text-caption);
+    color: var(--text-muted);
   }
 
   .coords {
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
   }
 
   .unit {
-    background: #1c1917;
-    border: 1px solid #44403c;
-    border-radius: 0.25rem;
-    color: #d6d3d1;
-    font: inherit;
-    padding: 0.05rem 0.5rem;
+    background: var(--paper-0);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    color: var(--text-body);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 1px 8px;
     cursor: pointer;
-    text-transform: lowercase;
   }
 
   .unit:hover {
-    border-color: #57534e;
+    border-color: var(--border-strong);
   }
 </style>

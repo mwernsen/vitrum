@@ -5,3 +5,8 @@ coverage/
 playwright-report/
 test-results/
 pnpm-lock.yaml
+
+# Vendored from the Claude Design project — kept byte-identical to source
+# (F-004). Formatting is owned by the design system, not this repo.
+packages/ui/src/design/
+packages/ui/src/components/*.prompt.md

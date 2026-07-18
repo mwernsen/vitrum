@@ -30,18 +30,18 @@
     display: grid;
     place-items: center;
     overflow: hidden;
-    background-color: #1c1917;
+    background-color: var(--surface-dark);
     /* Faint reference grid so the empty canvas reads as a drawing surface. */
     background-image:
-      linear-gradient(#ffffff0d 1px, transparent 1px),
-      linear-gradient(90deg, #ffffff0d 1px, transparent 1px);
+      linear-gradient(var(--border-dark) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-dark) 1px, transparent 1px);
     background-size: 24px 24px;
     touch-action: none;
   }
 
   .hint {
-    color: #78716c;
-    font-size: 0.9rem;
+    color: var(--ink-500);
+    font: var(--text-small);
     pointer-events: none;
   }
 </style>

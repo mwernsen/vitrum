@@ -17,7 +17,7 @@ test('opens a window titled Vitrum', async () => {
 
 test('renders the four-region app shell', async () => {
   const window = await app.firstWindow()
-  await expect(window.getByRole('menubar', { name: 'Main menu' })).toBeVisible()
+  await expect(window.getByRole('banner')).toBeVisible()
   await expect(window.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
   await expect(window.getByRole('main', { name: 'Design canvas' })).toBeVisible()
   await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeVisible()
@@ -42,4 +42,21 @@ test('exposes the preload API with context isolation', async () => {
   const window = await app.firstWindow()
   const api = await window.evaluate(() => (globalThis as { vitrum?: unknown }).vitrum)
   expect(api).toMatchObject({ platform: expect.any(String) })
+})
+
+test('makes no external network requests (offline-first, F-004 FR-3)', async () => {
+  const window = await app.firstWindow()
+  // Fonts (Onest, Geist Mono), Lucide icons and styles are bundled; nothing
+  // should be fetched from a CDN. Attach before reloading so we capture the
+  // full asset load, then fail on any non-local http(s) request.
+  const external: string[] = []
+  window.on('request', (request) => {
+    const url = request.url()
+    if (/^https?:\/\//i.test(url) && !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(url)) {
+      external.push(url)
+    }
+  })
+  await window.reload()
+  await window.waitForLoadState('networkidle')
+  expect(external).toEqual([])
 })

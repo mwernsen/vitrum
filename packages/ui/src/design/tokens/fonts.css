@@ -1,0 +1,11 @@
+/* Vitrum webfonts.
+
+   VENDORING DEVIATION (F-004, offline-first FR-3): the canonical source ships a
+   Google Fonts @import here. The desktop app must not fetch at runtime, so the
+   @font-face declarations are self-hosted via the `@fontsource-variable/*`
+   packages, imported once in `../index.ts`. This file is intentionally left
+   without the CDN import. The font-family tokens themselves live in
+   typography.css (--font-sans / --font-mono) and are unchanged.
+
+   Onest ≈ TT Norms Pro (commercial brand face, to be licensed later);
+   Geist Mono covers eyebrow labels and numeric data. */

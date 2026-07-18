@@ -23,27 +23,30 @@
   .piece {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    background: rgba(255, 255, 255, 0.06);
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--paper-50);
+    border: 1px solid var(--border-subtle);
   }
 
   .swatch {
-    width: 1.25rem;
-    height: 1.25rem;
-    border-radius: 0.25rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-strong);
     flex-shrink: 0;
   }
 
   .label {
     flex: 1;
+    font: var(--text-small);
+    color: var(--text-body);
   }
 
   .stats {
-    font-variant-numeric: tabular-nums;
-    opacity: 0.7;
-    font-size: 0.875rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
   }
 </style>

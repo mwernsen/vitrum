@@ -44,44 +44,46 @@
   .inspector {
     grid-area: inspector;
     width: clamp(14rem, 20vw, 20rem);
-    padding: 1rem;
-    background: #292524;
-    border-left: 1px solid #44403c;
+    padding: var(--space-4);
+    background: var(--paper-0);
+    border-left: 1px solid var(--border-subtle);
     overflow-y: auto;
   }
 
   h2 {
-    margin: 0 0 0.75rem;
-    font-size: 1.1rem;
+    margin: 0 0 var(--space-3);
+    font: var(--text-h4);
+    color: var(--text-strong);
   }
 
   h3 {
-    margin: 1.25rem 0 0.5rem;
-    font-size: 0.8rem;
+    margin: var(--space-5) 0 var(--space-2);
+    font: var(--text-eyebrow);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #a8a29e;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--text-muted);
   }
 
   .props {
     margin: 0;
     display: grid;
-    gap: 0.4rem;
+    gap: var(--space-2);
   }
 
   .props div {
     display: flex;
     justify-content: space-between;
-    font-size: 0.9rem;
+    font: var(--text-small);
   }
 
   .props dt {
-    color: #a8a29e;
+    color: var(--text-muted);
   }
 
   .props dd {
     margin: 0;
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+    color: var(--text-body);
   }
 
   ul {
@@ -90,6 +92,6 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--space-2);
   }
 </style>

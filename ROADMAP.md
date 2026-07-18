@@ -42,6 +42,12 @@ Each feature has one self-contained spec in [docs/features/](docs/features/), fo
 Engineering conventions, the decided stack (Svelte 5 + Electron desktop app, pnpm
 monorepo), and the quality gates live in [CLAUDE.md](CLAUDE.md).
 
+Features are implemented by the **feature-implementer** agent
+([.claude/agents/feature-implementer.md](.claude/agents/feature-implementer.md)) —
+launch it with a ticket id ("implement F-002") or let it pick the next unblocked
+feature. The agent definition accumulates project learnings after each feature;
+proposals to extend it go through Mathieu.
+
 Numbering leaves gaps so new features can be inserted. Later-phase specs (4–5) are
 intentionally lighter; they must be expanded and re-approved before implementation.
 

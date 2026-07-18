@@ -3,7 +3,7 @@
 |                |                 |
 | -------------- | --------------- |
 | **Phase**      | 0 — Foundations |
-| **Status**     | draft           |
+| **Status**     | done            |
 | **Depends on** | F-001           |
 | **Complexity** | M               |
 
@@ -91,11 +91,56 @@ template's **Design** section names the applicable components/screens.
 
 ## Open questions
 
-1. Font licensing: Onest/Geist Mono are the stand-ins for TT Norms Pro (commercial).
-   Buy TT Norms Pro now or ship Onest until the brand is finalized? (Spec assumes
-   Onest for now.)
-2. Lucide packaging: `lucide-svelte` dependency (easy updates) vs inlined SVG subset
-   (smaller, pinned)? Recommendation: `lucide-svelte`.
-3. Should the `.prompt.md` component briefs be vendored into the repo too (agents
-   working offline benefit), or always read from Claude Design? Recommendation:
-   vendor them next to each ported component.
+_Resolved by Mathieu 2026-07-18:_
+
+1. **Fonts: ship Onest + Geist Mono** (OFL stand-ins) now; swap to TT Norms Pro once
+   the brand is finalized. Tokens keep it a one-file change.
+2. **Icons: `lucide-svelte`** dependency (easy updates, tree-shaken).
+3. **Vendor the `.prompt.md` briefs** into the repo, next to each ported component.
+
+## Implementation notes
+
+_Implemented 2026-07-18._
+
+**Delivered:**
+
+- **Tokens vendored** verbatim into `packages/ui/src/design/tokens/` (`colors`,
+  `typography`, `spacing`, `effects`) + `styles.css`; kept byte-identical to source
+  and Prettier-ignored so the repo never reformats them (FR-1). Sync metadata +
+  re-sync procedure in `packages/ui/src/design/README.md`.
+- **All 14 components ported** to Svelte 5 in `packages/ui/src/components/`, each with
+  its verbatim `.prompt.md` and a Testing Library test. React inline-style + hover
+  state became scoped CSS with `:hover`/`:checked`/`data-*` variants; token-only
+  colors; prop contracts match each `.d.ts`.
+- **Component gallery** at `packages/ui/gallery.html` (`pnpm dev:ui` → `/gallery.html`)
+  renders every component in its variants for specimen comparison.
+- **App shell restyled** to `ui_kits/studio` chrome (FR-5): 56px paper top bar with
+  the Shard-V logo, wordmark, Draft badge, Lucide icon actions and avatar; token-only
+  throughout; the four regions and their tests stay green.
+- **Offline-first (FR-3):** fonts self-hosted via `@fontsource-variable/onest` +
+  `@fontsource-variable/geist-mono` (bundled woff2, no CDN); a Playwright E2E test
+  fails on any external http(s) request.
+
+**Deviations / decisions to flag:**
+
+- **Lint gate is color-only, not spacing (FR-4).** The rule (stylelint `color-no-hex`,
+  wired into `pnpm lint`, proven with a deliberate violation) hard-gates raw hex —
+  the load-bearing "colors via tokens" guarantee. A strict "no raw px" rule was
+  **not** added: the canonical components themselves use off-scale control-internal
+  px (e.g. button padding `9px 20px`, 5–10px gaps), so enforcing spacing tokens would
+  force unfaithful ports. `--space-*` remains a soft convention for layout. This
+  softens the "no raw hex/px literals" line in CLAUDE.md — worth a second look if you
+  want px enforced too.
+- **`fonts.css` is the one non-verbatim token file** — its Google Fonts `@import` is
+  removed for offline; noted in-file and in the design README.
+- **Toast action color:** source uses a raw `#9db6f5`; substituted `var(--cobalt-100)`
+  (nearest token on dark) to keep the no-hex rule. Candidate for a real token.
+- **Component porting was parallelized across subagents**, which did not have
+  `DesignSync` access; their `.prompt.md` and two visuals were reconciled against the
+  canonical source afterward (Tabs → underline, Toast → dark snackbar, Radio → white
+  face + ink dot, Select → `string | {label,value}` options).
+
+**Remaining for `done` → acceptance:** the gallery has been screenshot-verified by me
+and is visually consistent with the specimens, but the **side-by-side gallery review
+with Mathieu** (acceptance criterion 1) is still owed. Status set to `done` pending
+that sign-off.

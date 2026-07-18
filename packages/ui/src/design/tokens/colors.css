@@ -1,0 +1,25 @@
+:root{
+  /* Ink — near-black editorial base */
+  --ink-950:#050505; --ink-900:#121212; --ink-800:#1f1f1f; --ink-700:#2e2e2e; --ink-600:#4a4a48; --ink-500:#6b6b68;
+  /* Paper — warm neutrals */
+  --paper-0:#ffffff; --paper-50:#fafaf8; --paper-100:#f4f4f1; --paper-200:#e9e9e4; --paper-300:#d9d9d2; --paper-400:#bcbcb4;
+  /* Primary action (product) */
+  --cobalt-700:#123ea8; --cobalt-600:#1d50cf; --cobalt-500:#2f63e8; --cobalt-100:#e2e9fc; --cobalt-50:#f0f4fe;
+  /* Vitrail accents — jewel tones for the stained-glass sector */
+  --ruby-600:#a82430; --ruby-100:#f7e2e4;
+  --amber-600:#c4860d; --amber-100:#faeed3;
+  --emerald-600:#1c714b; --emerald-100:#dff0e7;
+  --violet-600:#5d3d99; --violet-100:#ece5f6;
+  /* Semantic status */
+  --success-600:var(--emerald-600); --success-100:var(--emerald-100);
+  --warning-600:var(--amber-600); --warning-100:var(--amber-100);
+  --danger-600:var(--ruby-600); --danger-100:var(--ruby-100);
+  --info-600:var(--cobalt-600); --info-100:var(--cobalt-100);
+  /* Semantic aliases */
+  --text-body:var(--ink-800); --text-strong:var(--ink-950); --text-muted:var(--ink-500); --text-inverse:var(--paper-50);
+  --surface-page:var(--paper-50); --surface-card:var(--paper-0); --surface-sunken:var(--paper-100); --surface-dark:var(--ink-950); --surface-dark-raised:#161616;
+  --border-subtle:var(--paper-200); --border-strong:var(--paper-300); --border-dark:rgba(255,255,255,.14);
+  --action-primary:var(--ink-950); --action-primary-hover:var(--ink-700); --action-accent:var(--cobalt-600); --action-accent-hover:var(--cobalt-700);
+  --link:var(--cobalt-600); --link-hover:var(--cobalt-700);
+  --focus-ring:0 0 0 2px var(--paper-0),0 0 0 4px var(--cobalt-500);
+}

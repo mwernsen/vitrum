@@ -3,9 +3,9 @@
 
   import Canvas from './Canvas.svelte'
   import Inspector from './Inspector.svelte'
-  import MenuBar from './MenuBar.svelte'
   import StatusBar from './StatusBar.svelte'
   import Toolbar from './Toolbar.svelte'
+  import TopBar from './TopBar.svelte'
 
   interface Props {
     panel: Panel
@@ -25,7 +25,7 @@
 </script>
 
 <div class="shell">
-  <MenuBar />
+  <TopBar title={panel.name} />
   <Toolbar />
   <Canvas onmove={(position) => (cursor = position)} onleave={() => (cursor = null)} />
   <Inspector {panel} {unit} />

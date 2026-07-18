@@ -6,7 +6,7 @@ import App from './App.svelte'
 describe('App', () => {
   it('renders the four-region app shell', () => {
     render(App)
-    expect(screen.getByRole('menubar', { name: 'Main menu' })).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('toolbar', { name: 'Tools' })).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Design canvas' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()

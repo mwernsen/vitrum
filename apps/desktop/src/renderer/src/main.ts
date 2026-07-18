@@ -1,3 +1,4 @@
+import '@vitrum/ui/design'
 import { App } from '@vitrum/ui'
 import { mount } from 'svelte'
 

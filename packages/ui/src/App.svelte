@@ -51,12 +51,8 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family:
-      'Inter',
-      system-ui,
-      -apple-system,
-      sans-serif;
-    background: #1c1917;
-    color: #fafaf9;
+    font: var(--text-body);
+    background: var(--surface-page);
+    color: var(--text-body);
   }
 </style>

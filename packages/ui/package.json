@@ -7,7 +7,9 @@
     ".": {
       "svelte": "./src/index.ts",
       "default": "./src/index.ts"
-    }
+    },
+    "./design": "./src/design/index.ts",
+    "./design/styles.css": "./src/design/styles.css"
   },
   "scripts": {
     "dev": "vite",
@@ -15,7 +17,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/onest": "^5.2.11",
     "@vitrum/core": "workspace:*",
+    "lucide-svelte": "^1.0.1",
     "svelte": "^5.56.6"
   },
   "devDependencies": {

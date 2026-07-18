@@ -27,7 +27,7 @@ const panel: Panel = {
 describe('AppShell', () => {
   it('renders all four regions plus the canvas', () => {
     render(AppShell, { panel })
-    expect(screen.getByRole('menubar')).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('toolbar')).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Design canvas' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()
