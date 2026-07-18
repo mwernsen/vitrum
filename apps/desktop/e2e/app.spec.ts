@@ -27,10 +27,12 @@ test('renders the four-region app shell', async () => {
   await expect(window.getByRole('region', { name: 'Status bar' })).toBeVisible()
 })
 
-test('shows the sample panel in the inspector', async () => {
+test('shows the panel and no detected pieces for an empty document', async () => {
   const window = await app.firstWindow()
   await expect(window.getByRole('heading', { level: 2, name: 'Sample panel' })).toBeVisible()
-  await expect(window.getByRole('listitem')).toHaveCount(3)
+  // The inspector reflects real F-020 detection now; a fresh document has zero pieces.
+  await expect(window.getByTestId('inspector-piece-count')).toHaveText('0')
+  await expect(window.getByRole('listitem')).toHaveCount(0)
 })
 
 test('toggles the measurement unit from the status bar', async () => {

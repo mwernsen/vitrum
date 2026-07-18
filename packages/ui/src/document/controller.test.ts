@@ -1,4 +1,5 @@
-import { createEmptyProject, serialize } from '@vitrum/model'
+import { line, vec2 } from '@vitrum/geometry'
+import { addSegment, createEmptyProject, createSegment, serialize } from '@vitrum/model'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { DocumentController } from './controller.svelte'
@@ -38,6 +39,24 @@ describe('DocumentController', () => {
 
     controller.redo()
     expect(controller.segmentCount).toBe(2)
+  })
+
+  it('derives pieces and diagnostics from the live network (F-020)', () => {
+    const { controller } = setup()
+    const corners = [vec2(0, 0), vec2(100, 0), vec2(100, 100), vec2(0, 100)]
+    for (let i = 0; i < 4; i++) {
+      controller.execute(addSegment(createSegment(line(corners[i]!, corners[(i + 1) % 4]!))))
+    }
+    const result = controller.detect()
+    expect(result.pieces).toHaveLength(1)
+    expect(result.pieces[0]!.area).toBeCloseTo(10000, 3)
+    expect(result.diagnostics).toHaveLength(0)
+
+    // A spur adds a dangling-end diagnostic without changing the detected piece count.
+    controller.execute(addSegment(createSegment(line(vec2(100, 100), vec2(150, 150)))))
+    const withSpur = controller.detect()
+    expect(withSpur.pieces).toHaveLength(1)
+    expect(withSpur.diagnostics.some((d) => d.kind === 'dangling-end')).toBe(true)
   })
 
   it('reports dirty state to the host', () => {

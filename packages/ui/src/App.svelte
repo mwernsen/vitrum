@@ -20,48 +20,15 @@
   // svelte-ignore state_referenced_locally
   const controller = new DocumentController(host)
 
-  // Placeholder panel for the canvas/inspector until F-003 renders the real document.
-  // F-002 owns the document model, command/undo machinery and persistence; wiring the
-  // viewport to draw `controller.doc` is F-003.
+  // Placeholder panel providing the inspector's name and size only. Pieces are no longer
+  // mocked here — the inspector lists the *real* pieces F-020 detects from the live network
+  // (F-020); named glass and lead totals arrive with F-021/F-023.
   const panel: Panel = {
     id: 'sample',
     name: 'Sample panel',
     widthMm: 300,
     heightMm: 400,
-    pieces: [
-      {
-        id: 'sky',
-        label: 'Sky',
-        color: '#3b82f6',
-        vertices: [
-          { x: 0, y: 0 },
-          { x: 300, y: 0 },
-          { x: 300, y: 150 },
-          { x: 0, y: 150 },
-        ],
-      },
-      {
-        id: 'hill',
-        label: 'Hill',
-        color: '#16a34a',
-        vertices: [
-          { x: 0, y: 150 },
-          { x: 300, y: 150 },
-          { x: 150, y: 400 },
-        ],
-      },
-      {
-        id: 'sun',
-        label: 'Sun',
-        color: '#f59e0b',
-        vertices: [
-          { x: 200, y: 40 },
-          { x: 260, y: 40 },
-          { x: 260, y: 100 },
-          { x: 200, y: 100 },
-        ],
-      },
-    ],
+    pieces: [],
   }
 
   // Undo/redo and save/open are also wired to the native menu (desktop) via the host;

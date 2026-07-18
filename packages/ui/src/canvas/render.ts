@@ -1,4 +1,13 @@
-import type { LengthUnit, PreviewShape, SnapHit, SnapKind, Viewport, ViewSize } from '@vitrum/core'
+import type {
+  Diagnostic,
+  LengthUnit,
+  Piece,
+  PreviewShape,
+  SnapHit,
+  SnapKind,
+  Viewport,
+  ViewSize,
+} from '@vitrum/core'
 import {
   formatFractionalInch,
   gridStep,
@@ -35,6 +44,9 @@ export interface CanvasPalette {
   readonly rulerBorder: string
   readonly rulerTick: string
   readonly rulerText: string
+  /** Cycling fills for the F-020 dev piece overlay, drawn from the vitrail palette. */
+  readonly pieceFills: readonly string[]
+  readonly danger: string
 }
 
 const FALLBACK: CanvasPalette = {
@@ -51,6 +63,8 @@ const FALLBACK: CanvasPalette = {
   rulerBorder: '#e9e9e4',
   rulerTick: '#d9d9d2',
   rulerText: '#6b6b68',
+  pieceFills: ['#2f63e8', '#d97706', '#059669', '#e11d48', '#7c3aed'],
+  danger: '#e11d48',
 }
 
 /** Read the canvas palette from an element's resolved custom properties. */
@@ -72,6 +86,14 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     rulerBorder: read('--paper-200', FALLBACK.rulerBorder),
     rulerTick: read('--paper-300', FALLBACK.rulerTick),
     rulerText: read('--ink-500', FALLBACK.rulerText),
+    pieceFills: [
+      read('--cobalt-500', FALLBACK.pieceFills[0]!),
+      read('--amber-600', FALLBACK.pieceFills[1]!),
+      read('--emerald-600', FALLBACK.pieceFills[2]!),
+      read('--ruby-600', FALLBACK.pieceFills[3]!),
+      read('--violet-600', FALLBACK.pieceFills[4]!),
+    ],
+    danger: read('--danger-600', FALLBACK.danger),
   }
 }
 
@@ -185,6 +207,107 @@ export function drawContent(
     ctx.stroke()
   }
   ctx.setLineDash([])
+}
+
+function traceRing(ctx: CanvasRenderingContext2D, vp: Viewport, ring: readonly Vec2[]): void {
+  ring.forEach((p, i) => {
+    const s = worldToScreen(vp, p)
+    if (i === 0) ctx.moveTo(s.x, s.y)
+    else ctx.lineTo(s.x, s.y)
+  })
+  ctx.closePath()
+}
+
+/**
+ * Draw the detected-piece overlay (F-020 dev visualization): each piece filled with a
+ * cycling vitrail colour (holes punched out via the even-odd rule) and labelled with its
+ * stable id, so redrawing a line and watching ids stay put is eyeballable. Culled to the
+ * visible region like `drawContent`. Rendered document content is token-exempt, but we still
+ * source the fills from the vitrail palette so the overlay reads as glass, not chrome.
+ */
+export function drawPieceFills(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  size: ViewSize,
+  pieces: readonly Piece[],
+  palette: CanvasPalette,
+): void {
+  if (!ctx || pieces.length === 0) return
+  const visible = bboxExpand(visibleWorldBounds(vp, size), 5)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '10px "Geist Mono", ui-monospace, monospace'
+
+  pieces.forEach((piece, i) => {
+    if (!bboxOverlap(piece.bbox, visible)) return
+    const fill = palette.pieceFills[i % palette.pieceFills.length]!
+    ctx.beginPath()
+    traceRing(ctx, vp, piece.ring)
+    for (const hole of piece.holeRings) traceRing(ctx, vp, hole)
+    ctx.fillStyle = fill
+    ctx.globalAlpha = 0.16
+    ctx.fill('evenodd')
+    ctx.globalAlpha = 1
+
+    const c = worldToScreen(vp, piece.centroid)
+    ctx.fillStyle = palette.rulerText
+    ctx.fillText(piece.id, c.x, c.y)
+  })
+}
+
+/** Highlight the piece under the cursor (F-020 hover). Drawn on the overlay layer. */
+export function drawPieceHighlight(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  pieces: readonly Piece[],
+  hoveredId: string | null,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || !hoveredId) return
+  const piece = pieces.find((p) => p.id === hoveredId)
+  if (!piece) return
+  ctx.beginPath()
+  traceRing(ctx, vp, piece.ring)
+  for (const hole of piece.holeRings) traceRing(ctx, vp, hole)
+  ctx.fillStyle = palette.selection
+  ctx.globalAlpha = 0.22
+  ctx.fill('evenodd')
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = palette.selection
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+}
+
+/** Draw diagnostic markers (F-020): free ends, near-misses and duplicate/overlap segments. */
+export function drawDiagnostics(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  diagnostics: readonly Diagnostic[],
+  palette: CanvasPalette,
+): void {
+  if (!ctx || diagnostics.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = palette.danger
+  ctx.fillStyle = palette.danger
+  ctx.lineWidth = 1.5
+  const g = 5
+  for (const d of diagnostics) {
+    const s = worldToScreen(vp, d.at)
+    ctx.beginPath()
+    if (d.kind === 'dangling-end') {
+      ctx.arc(s.x, s.y, g, 0, Math.PI * 2)
+      ctx.stroke()
+    } else if (d.kind === 'near-miss') {
+      ctx.moveTo(s.x - g, s.y - g)
+      ctx.lineTo(s.x + g, s.y + g)
+      ctx.moveTo(s.x + g, s.y - g)
+      ctx.lineTo(s.x - g, s.y + g)
+      ctx.stroke()
+    } else {
+      ctx.strokeRect(s.x - g, s.y - g, g * 2, g * 2)
+    }
+  }
+  ctx.restore()
 }
 
 /** Draw the cursor crosshair. Its own layer so pointer moves never redraw content. */

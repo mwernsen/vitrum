@@ -3,14 +3,13 @@
     convertLength,
     formatLength,
     toMillimetres,
-    totalLeadLength,
     type LengthUnit,
     type Panel,
+    type Piece,
   } from '@vitrum/core'
   import { curveLength, vec2 } from '@vitrum/geometry'
   import { geometryEndpoints, type Project, type Segment } from '@vitrum/model'
 
-  import PieceSummary from '../PieceSummary.svelte'
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
   import type { EditController } from '../tools/edit.svelte'
@@ -25,13 +24,19 @@
     selection?: SelectionController
     /** The current document, for reading selected geometry. */
     doc?: Project
+    /** Detected pieces (F-020), derived from the live network. */
+    pieces?: readonly Piece[]
   }
 
-  let { panel, unit, edit, selection, doc }: Props = $props()
+  let { panel, unit, edit, selection, doc, pieces = [] }: Props = $props()
 
   const width = $derived(formatLength(panel.widthMm, unit))
   const height = $derived(formatLength(panel.heightMm, unit))
-  const leadMeters = $derived(totalLeadLength(panel) / 1000)
+
+  /** Piece area in the active unit's squared measure (mm → cm², in → in²). */
+  function formatArea(mm2: number): string {
+    return unit === 'in' ? `${(mm2 / 645.16).toFixed(2)} in²` : `${(mm2 / 100).toFixed(1)} cm²`
+  }
 
   const selectedIds = $derived(selection ? [...selection.selected] : [])
   const selectedSegments = $derived<Segment[]>(
@@ -187,20 +192,25 @@
       </div>
       <div>
         <dt>Pieces</dt>
-        <dd>{panel.pieces.length}</dd>
-      </div>
-      <div>
-        <dt>Lead</dt>
-        <dd>{leadMeters.toFixed(2)} m</dd>
+        <dd data-testid="inspector-piece-count">{pieces.length}</dd>
       </div>
     </dl>
 
     <h3>Pieces</h3>
-    <ul>
-      {#each panel.pieces as piece (piece.id)}
-        <PieceSummary {piece} />
-      {/each}
-    </ul>
+    {#if pieces.length === 0}
+      <p class="empty">Draw a closed region to detect a piece.</p>
+    {:else}
+      <ul>
+        {#each pieces as piece (piece.id)}
+          <li class="piece">
+            <span class="pid">{piece.id}</span>
+            <span class="pmeta">
+              {formatArea(piece.area)} · {formatLength(piece.perimeter, unit)}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   {/if}
 </aside>
 
@@ -274,5 +284,32 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .piece {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2);
+    background: var(--surface-sunken);
+    border-radius: var(--radius-xs);
+  }
+
+  .pid {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-strong);
+  }
+
+  .pmeta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .empty {
+    margin: 0;
+    font: var(--text-small);
+    color: var(--text-muted);
   }
 </style>

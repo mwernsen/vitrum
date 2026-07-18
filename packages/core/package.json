@@ -14,6 +14,7 @@
     "@vitrum/geometry": "workspace:*"
   },
   "devDependencies": {
+    "fast-check": "^3.23.2",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   }

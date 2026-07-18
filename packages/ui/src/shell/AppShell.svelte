@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Panel } from '@vitrum/core'
+  import { pointInPolygon, polygon } from '@vitrum/geometry'
   import { createEmptyProject } from '@vitrum/model'
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
@@ -64,14 +65,44 @@
   // Rebuild the snap spatial index whenever the visible network changes.
   $effect(() => snap.updateScene(shownSegments))
 
+  // Piece detection (F-020). Feeds both the inspector (always) and the dev overlay (when its
+  // toggle is on). Reads `controller.doc` inside `detect()`, so it re-runs on edits. Capped so
+  // the debug stress scene (thousands of segments) doesn't stall the render path.
+  const DETECT_SEGMENT_CAP = 2000
+  const detection = $derived(
+    controller && segments.length <= DETECT_SEGMENT_CAP ? controller.detect() : null,
+  )
+  const pieces = $derived(detection?.pieces ?? [])
+  const diagnostics = $derived(detection?.diagnostics ?? [])
+  const hoveredPieceId = $derived.by(() => {
+    const world = viewport.cursorWorld
+    if (!world || !viewport.piecesVisible) return null
+    for (const piece of pieces) {
+      if (pointInPolygon(polygon(piece.ring, piece.holeRings), world)) return piece.id
+    }
+    return null
+  })
+
   let calibrationOpen = $state(false)
 </script>
 
 <div class="shell">
   <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
   <Toolbar {tools} />
-  <Canvas {viewport} segments={shownSegments} {bounds} {tools} {snap} {edit} {selection} />
-  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} />
+  <Canvas
+    {viewport}
+    segments={shownSegments}
+    {bounds}
+    {tools}
+    {snap}
+    {edit}
+    {selection}
+    {pieces}
+    {diagnostics}
+    showPieces={viewport.piecesVisible}
+    {hoveredPieceId}
+  />
+  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} {pieces} />
   <StatusBar
     {viewport}
     {snap}

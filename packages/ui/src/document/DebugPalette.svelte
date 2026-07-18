@@ -9,6 +9,11 @@
   }
 
   let { controller }: Props = $props()
+
+  // Piece detection (F-020) is computed only while the palette is open — it reads
+  // `controller.doc` inside `detect()`, so it re-runs on edits but stays off the hot path
+  // when the palette is closed (e.g. the debug stress scene).
+  const detection = $derived(controller.paletteOpen ? controller.detect() : null)
 </script>
 
 <!--
@@ -27,6 +32,12 @@
     </p>
     <p class="count" data-testid="node-count">
       Distinct nodes: <span class="mono">{controller.distinctNodeCount}</span>
+    </p>
+    <p class="count" data-testid="piece-count">
+      Pieces: <span class="mono">{detection?.pieces.length ?? 0}</span>
+    </p>
+    <p class="count" data-testid="diagnostic-count">
+      Diagnostics: <span class="mono">{detection?.diagnostics.length ?? 0}</span>
     </p>
     <div class="actions">
       <Button variant="primary" size="sm" onclick={controller.addDebugSegment}>Add segment</Button>
