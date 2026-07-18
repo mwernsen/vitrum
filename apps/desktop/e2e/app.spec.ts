@@ -1,9 +1,20 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
 let app: ElectronApplication
+let runId = 0
 
 test.beforeEach(async () => {
-  app = await electron.launch({ args: ['.'] })
+  // Point autosave at a fresh, non-existent temp file so the real app-data autosave is
+  // never read: otherwise a leftover snapshot raises the native crash-recovery dialog at
+  // startup, which has no automatable answer and hangs the run until manually dismissed.
+  const autosavePath = join(tmpdir(), `vitrum-e2e-app-${process.pid}-${runId++}.vitrum`)
+  app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath },
+  })
 })
 
 test.afterEach(async () => {
