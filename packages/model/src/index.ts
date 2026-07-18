@@ -20,11 +20,26 @@ export {
   type SegmentGeometry,
   type SegmentId,
   type SegmentRole,
-  type TechniqueSettings,
 } from './types'
 
+// Technique model (F-021)
+export {
+  SEED_CAME_PROFILES,
+  defaultTechnique,
+  seedCameLibrary,
+  type CameKind,
+  type CameOverride,
+  type CameProfile,
+  type CameProfileId,
+  type FoilSettings,
+  type LeadSettings,
+  type SolderFinish,
+  type TechniqueKind,
+  type TechniqueSettings,
+} from './technique'
+
 // Ids and factories
-export { newGlassId, newLayerId, newNodeId, newSegmentId } from './ids'
+export { newCameProfileId, newGlassId, newLayerId, newNodeId, newSegmentId } from './ids'
 export { createSegment, weldSegments } from './factory'
 
 // Node helpers (F-013)
@@ -50,15 +65,21 @@ export {
   deleteNode,
   mergeNodes,
   moveNode,
+  removeCameProfile,
   removeSegment,
   removeSegments,
   replaceSegments,
+  setCameOverride,
   setSegmentRole,
+  setTechniqueKind,
   splitSegmentAtNode,
   transformSegments,
+  updateFoilSettings,
+  updateLeadSettings,
   updateSegmentGeometry,
   updateSegmentsGeometry,
   updateSettings,
+  upsertCameProfile,
   type Command,
 } from './commands'
 

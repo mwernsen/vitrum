@@ -1,10 +1,12 @@
 import type {
+  CutContour,
   Diagnostic,
   LengthUnit,
   Piece,
   PreviewShape,
   SnapHit,
   SnapKind,
+  SolderFinish,
   Viewport,
   ViewSize,
 } from '@vitrum/core'
@@ -47,6 +49,22 @@ export interface CanvasPalette {
   /** Cycling fills for the F-020 dev piece overlay, drawn from the vitrail palette. */
   readonly pieceFills: readonly string[]
   readonly danger: string
+  /** Lead came line colour (F-021), and the three copper-foil solder-bead finishes. */
+  readonly lead: string
+  readonly solderSilver: string
+  readonly solderCopper: string
+  readonly solderBlack: string
+}
+
+/**
+ * How the technique model (F-021) styles the drawn network: lead lines render at true came flange
+ * width (zoom-proportional), foil designs render as thin solder-coloured lines. `leadWidthMm`
+ * resolves a segment's came flange (heavier perimeter came shows as a thicker line).
+ */
+export interface TechniqueRender {
+  readonly kind: 'lead' | 'foil'
+  readonly solderFinish: SolderFinish
+  readonly leadWidthMm: (segmentId: string, role: string) => number
 }
 
 const FALLBACK: CanvasPalette = {
@@ -65,6 +83,10 @@ const FALLBACK: CanvasPalette = {
   rulerText: '#6b6b68',
   pieceFills: ['#2f63e8', '#d97706', '#059669', '#e11d48', '#7c3aed'],
   danger: '#e11d48',
+  lead: '#4a4a48',
+  solderSilver: '#6b6b68',
+  solderCopper: '#c4860d',
+  solderBlack: '#121212',
 }
 
 /** Read the canvas palette from an element's resolved custom properties. */
@@ -94,7 +116,20 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
       read('--violet-600', FALLBACK.pieceFills[4]!),
     ],
     danger: read('--danger-600', FALLBACK.danger),
+    lead: read('--ink-600', FALLBACK.lead),
+    solderSilver: read('--ink-500', FALLBACK.solderSilver),
+    solderCopper: read('--amber-600', FALLBACK.solderCopper),
+    solderBlack: read('--ink-900', FALLBACK.solderBlack),
   }
+}
+
+/** The solder-bead colour for a foil finish. */
+function solderColor(palette: CanvasPalette, finish: SolderFinish): string {
+  return finish === 'copper'
+    ? palette.solderCopper
+    : finish === 'black'
+      ? palette.solderBlack
+      : palette.solderSilver
 }
 
 /** Ruler thickness in CSS px (top ruler height / left ruler width). */
@@ -172,9 +207,16 @@ export function drawGrid(
   ctx.stroke()
 }
 
+/** Smallest on-screen line weight (CSS px) so a came stays visible when zoomed far out. */
+const MIN_LEAD_PX = 1.25
+/** On-screen weight (CSS px) of the thin copper-foil solder line. */
+const FOIL_PX = 1.5
+
 /**
  * Draw the document's lead-line network, culling segments outside the visible region so
- * cost tracks what's on screen, not the document size (FR-4).
+ * cost tracks what's on screen, not the document size (FR-4). When a `technique` is supplied
+ * (F-021), lead lines render at true came flange width (zoom-proportional, heavier perimeter
+ * came reading as a thicker line) and foil designs render as thin solder-coloured lines.
  */
 export function drawContent(
   ctx: CanvasRenderingContext2D | null,
@@ -182,20 +224,40 @@ export function drawContent(
   size: ViewSize,
   segments: readonly Segment[],
   palette: CanvasPalette,
+  technique?: TechniqueRender,
 ): void {
   if (!ctx) return
   const visible = bboxExpand(visibleWorldBounds(vp, size), 5)
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
+  const foilStroke = technique ? solderColor(palette, technique.solderFinish) : palette.content
+
   for (const segment of segments) {
     const box: BBox = bboxOf(segment.geometry)
     if (!bboxOverlap(box, visible)) continue
 
     const construction = segment.role === 'construction'
-    ctx.strokeStyle = construction ? palette.construction : palette.content
-    ctx.lineWidth = segment.role === 'border' ? 2 : 1.25
-    ctx.setLineDash(construction ? [4, 4] : [])
+    if (construction) {
+      ctx.strokeStyle = palette.construction
+      ctx.lineWidth = 1.25
+      ctx.setLineDash([4, 4])
+    } else if (!technique) {
+      ctx.strokeStyle = palette.content
+      ctx.lineWidth = segment.role === 'border' ? 2 : 1.25
+      ctx.setLineDash([])
+    } else if (technique.kind === 'foil') {
+      // Copper foil: a thin solder-coloured line regardless of piece size or zoom.
+      ctx.strokeStyle = foilStroke
+      ctx.lineWidth = FOIL_PX
+      ctx.setLineDash([])
+    } else {
+      // Lead came: draw at true flange width so heavier (perimeter) came reads as a thicker line.
+      const widthPx = technique.leadWidthMm(segment.id, segment.role) * vp.scale
+      ctx.strokeStyle = segment.role === 'border' ? palette.content : palette.lead
+      ctx.lineWidth = Math.max(MIN_LEAD_PX, widthPx)
+      ctx.setLineDash([])
+    }
 
     const points = segmentToWorldPoints(segment.geometry)
     ctx.beginPath()
@@ -207,6 +269,32 @@ export function drawContent(
     ctx.stroke()
   }
   ctx.setLineDash([])
+}
+
+/**
+ * Draw the technique-derived cut contours (F-021 dev overlay): the inset outline where each piece
+ * of glass is actually cut, so toggling lead⇄foil or a per-segment came override visibly shifts the
+ * cut lines. Degenerate contours (a piece too small to inset) are drawn in the danger colour.
+ */
+export function drawCutContours(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  contours: readonly CutContour[],
+  palette: CanvasPalette,
+): void {
+  if (!ctx || contours.length === 0) return
+  ctx.save()
+  ctx.setLineDash([3, 3])
+  ctx.lineWidth = 1
+  for (const cut of contours) {
+    if (cut.ring.length < 2) continue
+    ctx.strokeStyle = cut.degenerate ? palette.danger : palette.snap
+    ctx.beginPath()
+    traceRing(ctx, vp, cut.ring)
+    for (const hole of cut.holeRings) traceRing(ctx, vp, hole)
+    ctx.stroke()
+  }
+  ctx.restore()
 }
 
 function traceRing(ctx: CanvasRenderingContext2D, vp: Viewport, ring: readonly Vec2[]): void {

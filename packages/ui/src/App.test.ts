@@ -18,6 +18,6 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Sample panel' })).toBeInTheDocument()
     // The inspector now reflects real F-020 detection; an empty document has zero pieces.
     expect(screen.getByTestId('inspector-piece-count')).toHaveTextContent('0')
-    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    expect(screen.getByText('Draw a closed region to detect a piece.')).toBeInTheDocument()
   })
 })

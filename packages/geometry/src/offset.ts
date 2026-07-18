@@ -8,6 +8,7 @@ import { arc, cubic, line, polygon, polyline } from './types'
 import {
   add,
   cross,
+  dot,
   leftNormal,
   length as vlength,
   normalize,
@@ -122,6 +123,70 @@ export function offsetPolygon(p: Polygon, d: number, miterLimit = 4): OffsetResu
   // is CCW, so a non-positive area means it folded through itself.
   const invalid = selfIntersects(outer, true) || signedAreaOf(outer) <= EPS
   return { contour: polygon(outer, holes), selfIntersects: invalid }
+}
+
+/**
+ * Offset a closed ring by a **per-edge** distance — the primitive the technique model (F-021)
+ * needs, where different edges of one glass piece inset by different came allowances. `distances`
+ * is one value per ring edge (`distances[i]` applies to the edge `ring[i] → ring[i+1]`), with the
+ * same sign convention as {@link offsetPolygon}: positive grows the enclosed region outward,
+ * negative insets it, independent of the ring's winding.
+ *
+ * Each edge is offset by its own distance along its outward normal, then adjacent offset edges are
+ * re-intersected (miter join, with a bevel fallback past `miterLimit`) — the "offset-each-span +
+ * re-intersect adjacent spans" construction. `selfIntersects` is set when the result folds through
+ * itself (e.g. a feature inset past its own half-width), which F-021 surfaces as a degenerate,
+ * uncuttable piece rather than dropping it (FR-3).
+ */
+export function offsetRingVariable(
+  ring: readonly Vec2[],
+  distances: readonly number[],
+  miterLimit = 4,
+): OffsetResult<Vec2[]> {
+  const n = ring.length
+  if (n < 3 || distances.length !== n) return { contour: [...ring], selfIntersects: false }
+
+  const ccw = isCCW(ring)
+  const dir: Vec2[] = []
+  const outwardNormal: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const edge = sub(ring[(i + 1) % n]!, ring[i]!)
+    dir.push(normalize(edge))
+    outwardNormal.push(normalize(ccw ? rightNormal(edge) : leftNormal(edge)))
+  }
+
+  let maxAbs = EPS
+  for (const d of distances) maxAbs = Math.max(maxAbs, Math.abs(d))
+
+  // Per-edge offset points at each vertex: `aPoint` on the incoming edge's offset line, `bPoint`
+  // on the outgoing edge's. The corner is where those two offset lines meet (a miter).
+  const out: Vec2[] = []
+  const miter: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const prev = (i - 1 + n) % n
+    const aPoint = add(ring[i]!, scale(outwardNormal[prev]!, distances[prev]!))
+    const bPoint = add(ring[i]!, scale(outwardNormal[i]!, distances[i]!))
+    const hit = intersectLines(aPoint, dir[prev]!, bPoint, dir[i]!)
+    miter.push(hit ?? aPoint)
+    if (hit && vlength(sub(hit, ring[i]!)) <= miterLimit * maxAbs + EPS) {
+      out.push(hit)
+    } else {
+      out.push(aPoint)
+      if (vlength(sub(aPoint, bPoint)) > EPS) out.push(bPoint)
+    }
+  }
+
+  // Degeneracy (FR-3). Two independent signals: the contour crosses itself, or an edge *reversed*
+  // direction relative to its source — the tell-tale of an inset past a feature's own half-width,
+  // which folds into a valid-looking but inside-out contour that neither a crossing nor a winding
+  // test alone catches (the fold can stay convex and keep its winding sign).
+  let folded = false
+  for (let i = 0; i < n && !folded; i++) {
+    const edge = sub(miter[(i + 1) % n]!, miter[i]!)
+    if (vlength(edge) <= EPS) continue
+    if (dot(normalize(edge), dir[i]!) < -EPS) folded = true
+  }
+  return { contour: out, selfIntersects: selfIntersects(out, true) || folded }
 }
 
 // --- ring offset -----------------------------------------------------------------

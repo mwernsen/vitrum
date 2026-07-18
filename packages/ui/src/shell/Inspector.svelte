@@ -2,18 +2,28 @@
   import {
     convertLength,
     formatLength,
+    resolveCame,
     toMillimetres,
     type LengthUnit,
     type Panel,
     type Piece,
   } from '@vitrum/core'
   import { curveLength, vec2 } from '@vitrum/geometry'
-  import { geometryEndpoints, type Project, type Segment } from '@vitrum/model'
+  import {
+    geometryEndpoints,
+    setCameOverride,
+    type Command,
+    type Project,
+    type Segment,
+  } from '@vitrum/model'
 
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
+  import Select from '../components/Select.svelte'
   import type { EditController } from '../tools/edit.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
+
+  import TechniquePanel from './TechniquePanel.svelte'
 
   interface Props {
     panel: Panel
@@ -26,9 +36,11 @@
     doc?: Project
     /** Detected pieces (F-020), derived from the live network. */
     pieces?: readonly Piece[]
+    /** Command sink (F-021 technique edits). Absent ⇒ technique panel is read-only/hidden. */
+    execute?: (command: Command) => void
   }
 
-  let { panel, unit, edit, selection, doc, pieces = [] }: Props = $props()
+  let { panel, unit, edit, selection, doc, pieces = [], execute }: Props = $props()
 
   const width = $derived(formatLength(panel.widthMm, unit))
   const height = $derived(formatLength(panel.heightMm, unit))
@@ -98,6 +110,32 @@
       1,
       vec2(a.x + Math.cos(rad) * lengthMm, a.y + Math.sin(rad) * lengthMm),
     )
+  }
+
+  // Per-segment came override (F-021), shown for a single selected segment in lead mode.
+  const leadMode = $derived(doc?.technique.kind === 'lead')
+  const cameOptions = $derived(
+    doc
+      ? [
+          {
+            value: '',
+            label: `Default (${doc.technique.lead.profiles[doc.technique.lead.defaultProfileId]?.name ?? '—'})`,
+          },
+          ...Object.values(doc.technique.lead.profiles).map((p) => ({
+            value: p.id,
+            label: p.name,
+          })),
+        ]
+      : [],
+  )
+  const cameOverrideValue = $derived(
+    single && doc ? (doc.technique.lead.overrides[single.id]?.profileId ?? '') : '',
+  )
+  const effectiveCame = $derived(single && doc ? resolveCame(doc.technique, single.id) : null)
+
+  function setSegmentCame(profileId: string): void {
+    if (!execute || !single) return
+    execute(setCameOverride(single.id, profileId === '' ? null : { profileId }))
   }
 </script>
 
@@ -169,6 +207,31 @@
       </dl>
     {/if}
 
+    {#if single && leadMode && doc && execute}
+      <h3>Came</h3>
+      <div class="fields">
+        <Select
+          size="sm"
+          label="Came on this line"
+          options={cameOptions}
+          value={cameOverrideValue}
+          onchange={setSegmentCame}
+        />
+        {#if effectiveCame}
+          <dl class="props">
+            <div>
+              <dt>Heart</dt>
+              <dd>{effectiveCame.heartMm} mm</dd>
+            </div>
+            <div>
+              <dt>Flange</dt>
+              <dd>{effectiveCame.flangeMm} mm</dd>
+            </div>
+          </dl>
+        {/if}
+      </div>
+    {/if}
+
     <h3>Transform</h3>
     <div class="actions">
       <Button size="sm" variant="secondary" onclick={() => edit.mirror('horizontal')}>
@@ -195,6 +258,10 @@
         <dd data-testid="inspector-piece-count">{pieces.length}</dd>
       </div>
     </dl>
+
+    {#if doc && execute}
+      <TechniquePanel technique={doc.technique} {execute} />
+    {/if}
 
     <h3>Pieces</h3>
     {#if pieces.length === 0}

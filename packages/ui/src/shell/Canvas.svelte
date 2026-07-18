@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Diagnostic, Piece } from '@vitrum/core'
+  import type { CutContour, Diagnostic, Piece } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
   import type { Segment } from '@vitrum/model'
@@ -8,6 +8,7 @@
   import {
     RULER_SIZE,
     drawContent,
+    drawCutContours,
     drawDiagnostics,
     drawGrid,
     drawOverlay,
@@ -19,6 +20,7 @@
     prepareContext,
     readCanvasPalette,
     type CanvasPalette,
+    type TechniqueRender,
   } from '../canvas/render'
   import { drawEditLayer } from '../canvas/selectionRender'
   import type { ViewportController } from '../canvas/viewport.svelte'
@@ -49,6 +51,12 @@
     showPieces?: boolean
     /** Id of the piece under the cursor, for hover highlight (F-020). */
     hoveredPieceId?: string | null
+    /** Technique styling for the network (F-021). Absent ⇒ plain ink lines. */
+    technique?: TechniqueRender
+    /** Technique-derived cut contours to overlay (F-021 dev toggle). */
+    cutContours?: readonly CutContour[]
+    /** Whether the cut-contour overlay is on (F-021 dev toggle). */
+    showCuts?: boolean
   }
 
   let {
@@ -63,6 +71,9 @@
     diagnostics = [],
     showPieces = false,
     hoveredPieceId = null,
+    technique,
+    cutContours = [],
+    showCuts = false,
   }: Props = $props()
 
   /** True when the inert select tool is active and editing is wired in. */
@@ -105,7 +116,8 @@
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
       if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
-      drawContent(ctx, viewport.transform, size, segments, palette)
+      drawContent(ctx, viewport.transform, size, segments, palette, technique)
+      if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       dirty.content = false
     }
     if (dirty.overlay) {
@@ -178,6 +190,9 @@
     void segments
     void pieces
     void showPieces
+    void technique
+    void cutContours
+    void showCuts
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {

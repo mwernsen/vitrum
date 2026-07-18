@@ -1,9 +1,10 @@
 <script lang="ts">
-  import type { Panel } from '@vitrum/core'
+  import { leadFlangeMm, type Panel } from '@vitrum/core'
   import { pointInPolygon, polygon } from '@vitrum/geometry'
   import { createEmptyProject } from '@vitrum/model'
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
+  import type { TechniqueRender } from '../canvas/render'
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
@@ -83,6 +84,22 @@
     return null
   })
 
+  // Technique model (F-021): how the network is styled (lead came flange vs thin foil solder
+  // line), plus the technique-derived cut contours (computed only when the overlay is on).
+  const technique = $derived(controller?.doc.technique)
+  const techniqueRender = $derived<TechniqueRender | undefined>(
+    technique
+      ? {
+          kind: technique.kind,
+          solderFinish: technique.foil.solderFinish,
+          leadWidthMm: (segmentId: string) => leadFlangeMm(technique, segmentId),
+        }
+      : undefined,
+  )
+  const cutContours = $derived(
+    controller && viewport.cutsVisible && pieces.length > 0 ? controller.cutContours(pieces) : [],
+  )
+
   let calibrationOpen = $state(false)
 </script>
 
@@ -101,8 +118,19 @@
     {diagnostics}
     showPieces={viewport.piecesVisible}
     {hoveredPieceId}
+    technique={techniqueRender}
+    {cutContours}
+    showCuts={viewport.cutsVisible}
   />
-  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} {pieces} />
+  <Inspector
+    {panel}
+    unit={viewport.unit}
+    {edit}
+    {selection}
+    doc={controller?.doc}
+    {pieces}
+    execute={controller ? (command) => controller.execute(command) : undefined}
+  />
   <StatusBar
     {viewport}
     {snap}

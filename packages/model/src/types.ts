@@ -1,5 +1,7 @@
 import type { Arc, CubicBezier, Line, Vec2 } from '@vitrum/geometry'
 
+import { defaultTechnique, type TechniqueSettings } from './technique'
+
 /**
  * The document model (F-002). This is the single source of truth for a stained glass
  * project: the lead-line network the designer draws, plus the settings and (later)
@@ -58,14 +60,6 @@ export interface ProjectSettings {
   readonly panelSize?: { readonly width: number; readonly height: number }
 }
 
-/**
- * Technique parameters (lead came vs copper foil). Placeholder until F-021 defines the
- * real model; kept in the document now so persistence and undo cover it from day one.
- */
-export interface TechniqueSettings {
-  readonly kind: 'lead' | 'foil'
-}
-
 /** A glass assignment target. Placeholder until F-022 (glass catalog). */
 export interface Glass {
   readonly id: GlassId
@@ -100,13 +94,12 @@ export interface Project {
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
-const DEFAULT_TECHNIQUE: TechniqueSettings = { kind: 'lead' }
 
 /** A fresh, empty project. `settings` overrides are shallow-merged over the defaults. */
 export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Project {
   return {
     settings: { ...DEFAULT_SETTINGS, ...settings },
-    technique: DEFAULT_TECHNIQUE,
+    technique: defaultTechnique(),
     segments: {},
     nodes: {},
     glasses: {},

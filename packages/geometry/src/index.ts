@@ -125,6 +125,7 @@ export {
   offsetLine,
   offsetPolygon,
   offsetPolyline,
+  offsetRingVariable,
   type OffsetResult,
 } from './offset'
 

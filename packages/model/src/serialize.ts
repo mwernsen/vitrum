@@ -1,4 +1,5 @@
 import { synthesizeNodes } from './nodes'
+import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
 import type { Project, Segment } from './types'
 
 /**
@@ -11,7 +12,7 @@ import type { Project, Segment } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -52,7 +53,30 @@ const migrateV1ToV2: Migration = {
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2]
+/**
+ * v2 → v3 (F-021): the technique model. v2 files carry a placeholder `technique: { kind }`. Expand
+ * it into the full lead/foil parameter model, seeding the came library and defaults while
+ * preserving the file's chosen `kind`. Any partial technique block a pre-release v2 file might
+ * carry is layered over the defaults so no field is lost.
+ */
+const migrateV2ToV3: Migration = {
+  from: 2,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'technique'> & {
+      technique?: Partial<TechniqueSettings> & { kind?: TechniqueKind }
+    }
+    const base = defaultTechnique()
+    const prior = project.technique
+    const technique: TechniqueSettings = {
+      kind: prior?.kind ?? base.kind,
+      lead: prior?.lead ? { ...base.lead, ...prior.lead } : base.lead,
+      foil: prior?.foil ? { ...base.foil, ...prior.foil } : base.foil,
+    }
+    return { schemaVersion: 3, project: { ...project, technique } }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2, migrateV2ToV3]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
 export class SchemaVersionError extends Error {
