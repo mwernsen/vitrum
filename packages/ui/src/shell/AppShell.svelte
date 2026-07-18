@@ -6,6 +6,7 @@
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
   import { ToolController } from '../tools/controller.svelte'
+  import { SnapController } from '../tools/snap.svelte'
 
   import Canvas from './Canvas.svelte'
   import Inspector from './Inspector.svelte'
@@ -33,8 +34,20 @@
     getSegments: () => (controller ? Object.values(controller.doc.segments) : []),
   })
 
+  // The snapping controller (F-012) replaces the tool controller's identity resolver with
+  // one that snaps to nodes, intersections, the grid and construction guides.
+  const snap = new SnapController(viewport)
+  tools.resolver = snap.resolver
+
   const segments = $derived(controller ? Object.values(controller.doc.segments) : [])
+  // Hidden guides drop out of both rendering and snapping (F-012 visibility toggle).
+  const shownSegments = $derived(
+    viewport.guidesVisible ? segments : segments.filter((s) => s.role !== 'construction'),
+  )
   const bounds = $derived(controller ? documentBounds(controller.doc) : null)
+
+  // Rebuild the snap spatial index whenever the visible network changes.
+  $effect(() => snap.updateScene(shownSegments))
 
   let calibrationOpen = $state(false)
 </script>
@@ -42,12 +55,14 @@
 <div class="shell">
   <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
   <Toolbar {tools} />
-  <Canvas {viewport} {segments} {bounds} {tools} />
+  <Canvas {viewport} segments={shownSegments} {bounds} {tools} {snap} />
   <Inspector {panel} unit={viewport.unit} />
   <StatusBar
     {viewport}
+    {snap}
     onfit={() => viewport.zoomToFit(bounds)}
     oncalibrate={() => (calibrationOpen = true)}
+    onClearGuides={controller ? () => controller.clearGuides() : undefined}
   />
 </div>
 

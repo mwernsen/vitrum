@@ -32,6 +32,8 @@ export class ViewportController {
   devicePixelRatio = $state(1)
   unit = $state<LengthUnit>('mm')
   gridVisible = $state(true)
+  /** Construction-guide visibility (F-012). Hidden guides neither render nor snap. */
+  guidesVisible = $state(true)
   /** Calibrated CSS px per mm for this display, used to report 1:1 physical zoom. */
   pxPerMm = $state(defaultPxPerMm())
   /** Cursor position in drawing-area CSS px, or `null` when the pointer is away. */
@@ -111,6 +113,10 @@ export class ViewportController {
 
   toggleGrid(): void {
     this.gridVisible = !this.gridVisible
+  }
+
+  toggleGuides(): void {
+    this.guidesVisible = !this.guidesVisible
   }
 
   /** Apply a new physical calibration (CSS px per mm) from the calibration dialog. */

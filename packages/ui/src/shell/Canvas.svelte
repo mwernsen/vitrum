@@ -10,6 +10,7 @@
     drawGrid,
     drawOverlay,
     drawRuler,
+    drawSnapMarker,
     drawToolPreview,
     prepareContext,
     readCanvasPalette,
@@ -17,6 +18,7 @@
   } from '../canvas/render'
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ToolController } from '../tools/controller.svelte'
+  import type { SnapController } from '../tools/snap.svelte'
 
   interface Props {
     viewport: ViewportController
@@ -26,9 +28,11 @@
     bounds?: BBox | null
     /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
     tools?: ToolController
+    /** The snapping controller (F-012). Absent ⇒ no snap markers. */
+    snap?: SnapController
   }
 
-  let { viewport, segments = [], bounds = null, tools }: Props = $props()
+  let { viewport, segments = [], bounds = null, tools, snap }: Props = $props()
 
   let stackEl: HTMLDivElement
   let gridCanvas: HTMLCanvasElement
@@ -71,6 +75,7 @@
       const ctx = prepareContext(overlayCanvas, size, dpr)
       drawOverlay(ctx, size, viewport.cursorScreen, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
+      if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       dirty.overlay = false
     }
     if (dirty.rulers) {
@@ -114,6 +119,7 @@
     void viewport.unit
     void viewport.transform
     void tools?.previewShapes
+    void snap?.hit
     schedule('overlay', 'rulers')
   })
 
@@ -156,6 +162,12 @@
     return { shift: event.shiftKey, alt: event.altKey }
   }
 
+  // Feed the snap engine the pointer device (8 px mouse / 12 px pen-touch radius) and the
+  // master temporary-disable modifier (FR-3): holding Ctrl/Cmd suspends snapping while drawn.
+  function updateSnap(event: PointerEvent) {
+    snap?.setPointer(event.pointerType, event.ctrlKey || event.metaKey)
+  }
+
   function handlePointerDown(event: PointerEvent) {
     if (event.button === 1 || spaceDown) {
       panning = true
@@ -166,6 +178,7 @@
     }
     // Left button with a tool active starts/continues a drawing gesture.
     if (event.button === 0 && tools && tools.activeId !== 'select') {
+      updateSnap(event)
       tools.pointerDown(localPoint(event), mods(event))
       event.preventDefault()
     }
@@ -179,11 +192,15 @@
       lastPointer = { x: event.clientX, y: event.clientY }
       return
     }
-    if (tools && tools.activeId !== 'select') tools.pointerMove(point, mods(event))
+    if (tools && tools.activeId !== 'select') {
+      updateSnap(event)
+      tools.pointerMove(point, mods(event))
+    }
   }
 
   function handlePointerUp(event: PointerEvent) {
     if (!panning && tools && tools.activeId !== 'select' && event.button === 0) {
+      updateSnap(event)
       tools.pointerUp(localPoint(event), mods(event))
     }
     endPan(event)
@@ -198,6 +215,7 @@
 
   function handlePointerLeave() {
     viewport.setCursor(null)
+    snap?.clear()
   }
 
   function handleWheel(event: WheelEvent) {

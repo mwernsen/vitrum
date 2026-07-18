@@ -2,16 +2,23 @@
   import { formatLength } from '@vitrum/core'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
+  import type { SnapController } from '../tools/snap.svelte'
+
+  import SnapSettings from './SnapSettings.svelte'
 
   interface Props {
     viewport: ViewportController
+    /** The snapping controller (F-012). Absent ⇒ no snap chip. */
+    snap?: SnapController
     /** Zoom-to-fit needs document bounds, which the shell owns; wired through here. */
     onfit?: () => void
     /** Open the 1:1 calibration dialog. */
     oncalibrate?: () => void
+    /** Reversible "clear all guides" command (F-012). */
+    onClearGuides?: () => void
   }
 
-  let { viewport, onfit, oncalibrate }: Props = $props()
+  let { viewport, snap, onfit, oncalibrate, onClearGuides }: Props = $props()
 
   const coords = $derived.by(() => {
     const world = viewport.cursorWorld
@@ -38,6 +45,9 @@
     >
       Grid
     </button>
+    {#if snap}
+      <SnapSettings {snap} {viewport} {onClearGuides} />
+    {/if}
     <button type="button" class="chip" aria-label="Zoom to fit" onclick={() => onfit?.()}>
       Fit
     </button>

@@ -24,6 +24,7 @@ export {
   circumcenter,
   constrainAngle,
   ellipseDrafts,
+  guideTool,
   identityResolver,
   isNumericChar,
   lineTool,
@@ -42,6 +43,7 @@ export {
   type BezierState,
   type DrawGeometry,
   type DrawRole,
+  type GuideState,
   type LineState,
   type NumericValue,
   type PointerInput,
@@ -57,6 +59,21 @@ export {
   type ToolInput,
   type ToolStep,
 } from './tools'
+export {
+  DEFAULT_SNAP_SETTINGS,
+  GridIndex,
+  SNAP_KINDS,
+  buildSnapScene,
+  curveEndpoints,
+  resolveSnap,
+  type SnapHit,
+  type SnapKind,
+  type SnapQuery,
+  type SnapScene,
+  type SnapSettings,
+  type SnapTarget,
+  type SnapToggles,
+} from './snap'
 export {
   CSS_PX_PER_MM,
   MAX_SCALE,

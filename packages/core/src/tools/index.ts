@@ -32,6 +32,7 @@ export {
   regularPolygonVertices,
 } from './shapes'
 
+export { guideTool, type GuideState } from './guide'
 export { lineTool, type LineState } from './line'
 export {
   arcFromCenter,

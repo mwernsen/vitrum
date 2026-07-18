@@ -12,7 +12,8 @@ import type { Arc, CubicBezier, Line, Vec2 } from '@vitrum/geometry'
  */
 
 /** The tools a user can activate. `select` is the inert default (no drawing). */
-export type ToolId = 'line' | 'arc' | 'bezier' | 'rectangle' | 'circle' | 'polygon' | 'border'
+export type ToolId =
+  'line' | 'arc' | 'bezier' | 'rectangle' | 'circle' | 'polygon' | 'border' | 'guide'
 
 /** The role a drawn segment carries (mirrors `@vitrum/model`'s `SegmentRole`). */
 export type DrawRole = 'lead' | 'construction' | 'border'
