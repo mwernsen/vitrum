@@ -1,6 +1,14 @@
-import { applyToPoint, splitAt, type Transform2D, type Vec2 } from '@vitrum/geometry'
+import {
+  applyToPoint,
+  isSimilarity,
+  splitAt,
+  transformShape,
+  type Transform2D,
+  type Vec2,
+} from '@vitrum/geometry'
 
 import {
+  demoteArcSegment,
   geometryEndpoints,
   incidentEndpoints,
   reconcileNodes,
@@ -269,96 +277,90 @@ function touchedIds(
   return ids
 }
 
+/**
+ * Move a segment's endpoint(s) that sit at a `moves` node to the new position, demoting an
+ * incident `Arc` into a welded cubic chain first (adaptive multi-cubic, F-013). `remap`
+ * optionally re-points a moved node id to another (mergeNodes uses it to fold `dropId` into
+ * `keepId`). Interior chain nodes are emitted at their demotion positions; the touched outer
+ * span follows the new position. Accumulates into `setSegments`/`setNodes`.
+ */
+function emitMovedSegment(
+  doc: Project,
+  segment: Segment,
+  moves: ReadonlyMap<NodeId, Vec2>,
+  remap: ReadonlyMap<NodeId, NodeId>,
+  setSegments: Record<SegmentId, Segment>,
+  setNodes: Record<NodeId, Node>,
+): void {
+  if (!moves.has(segment.endpoints[0]) && !moves.has(segment.endpoints[1])) return
+  const resolve = (id: NodeId): NodeId => remap.get(id) ?? id
+
+  const spans =
+    segment.geometry.kind === 'arc'
+      ? demoteArcSegment(
+          segment as Segment & { geometry: Extract<SegmentGeometry, { kind: 'arc' }> },
+          doc.nodes[segment.endpoints[0]]!.pos,
+          doc.nodes[segment.endpoints[1]]!.pos,
+        )
+      : { segments: [segment], nodes: {} as Record<NodeId, Node> }
+
+  for (const [id, node] of Object.entries(spans.nodes)) setNodes[id] = node
+  for (const span of spans.segments) {
+    let geometry = span.geometry
+    const endpoints: [NodeId, NodeId] = [...span.endpoints]
+    const at0 = moves.get(span.endpoints[0])
+    const at1 = moves.get(span.endpoints[1])
+    if (at0) {
+      geometry = setGeometryEndpoint(geometry, 0, at0)
+      endpoints[0] = resolve(span.endpoints[0])
+    }
+    if (at1) {
+      geometry = setGeometryEndpoint(geometry, 1, at1)
+      endpoints[1] = resolve(span.endpoints[1])
+    }
+    setSegments[span.id] = { ...span, geometry, endpoints }
+  }
+}
+
+/** The forward patch for a `moveNode`: move `nodeId` to `pos`, dragging every welded span. */
+function moveNodePatch(doc: Project, nodeId: NodeId, pos: Vec2): NetworkPatch {
+  if (!(nodeId in doc.nodes)) throw new Error(`moveNode: node ${nodeId} does not exist`)
+  const setNodes: Record<NodeId, Node> = { [nodeId]: { pos } }
+  const setSegments: Record<SegmentId, Segment> = {}
+  const moves = new Map<NodeId, Vec2>([[nodeId, pos]])
+  const noRemap = new Map<NodeId, NodeId>()
+  for (const segment of Object.values(doc.segments)) {
+    emitMovedSegment(doc, segment, moves, noRemap, setSegments, setNodes)
+  }
+  return { setNodes, setSegments }
+}
+
 interface MoveNodeCommand extends Command {
   readonly kind: 'moveNode'
   readonly nodeId: NodeId
-  readonly pos: Vec2
 }
 
 /**
- * Move a node to `pos`, dragging every welded endpoint with it (F-013 FR-1). Each incident
- * segment's endpoint at this node is rewritten to `pos` exactly; an incident `Arc` demotes
- * to a free cubic (it can no longer stay circular). Mergeable, so a whole drag is one undo
- * step (mirroring `updateSegmentGeometry`): the kept inverse restores the pre-drag state —
- * including any arc that was demoted mid-drag — because it captures the document before the
- * drag began.
+ * Move a node to `pos`, dragging every welded endpoint with it (F-013 FR-1). An incident arc
+ * demotes to a welded cubic chain (adaptive ≤90° spans) that stays welded across its whole
+ * length. Mergeable, so a whole drag is one undo step (mirroring `updateSegmentGeometry`): the
+ * kept inverse restores the pre-drag state — including any arc demoted mid-drag — because both
+ * `apply` and `invert` derive their patch from the same pre-apply document, and demotion ids
+ * are deterministic so redo reproduces the drag exactly.
  */
 export function moveNode(nodeId: NodeId, pos: Vec2): Command {
   const command: MoveNodeCommand = {
     kind: 'moveNode',
     nodeId,
-    pos,
-    apply: (doc) => {
-      if (!(nodeId in doc.nodes)) throw new Error(`moveNode: node ${nodeId} does not exist`)
-      const segments = { ...doc.segments }
-      for (const segment of Object.values(doc.segments)) {
-        let geometry = segment.geometry
-        let changed = false
-        if (segment.endpoints[0] === nodeId) {
-          geometry = setGeometryEndpoint(geometry, 0, pos)
-          changed = true
-        }
-        if (segment.endpoints[1] === nodeId) {
-          geometry = setGeometryEndpoint(geometry, 1, pos)
-          changed = true
-        }
-        if (changed) segments[segment.id] = { ...segment, geometry }
-      }
-      return { ...doc, nodes: { ...doc.nodes, [nodeId]: { pos } }, segments }
-    },
-    invert: (before) => {
-      const node = before.nodes[nodeId]
-      if (!node) throw new Error(`moveNode.invert: node ${nodeId} does not exist`)
-      const geometries = incidentEndpoints(before.segments, nodeId).map(({ segment }) => ({
-        id: segment.id,
-        geometry: segment.geometry,
-      }))
-      return restoreNodeGeometry(nodeId, node.pos, dedupeGeometries(geometries))
-    },
+    apply: (doc) => patchNetwork(moveNodePatch(doc, nodeId, pos), 'moveNode').apply(doc),
+    invert: (before) => patchNetwork(moveNodePatch(before, nodeId, pos), 'moveNode').invert(before),
     merge: (next) => {
       if (next.kind !== 'moveNode') return undefined
-      const other = next as MoveNodeCommand
-      if (other.nodeId !== nodeId) return undefined
-      return moveNode(nodeId, other.pos)
+      if ((next as MoveNodeCommand).nodeId !== nodeId) return undefined
+      return next
     },
   }
   return command
-}
-
-/** The inverse of a `moveNode`: restore a node's position and its incident geometries exactly. */
-function restoreNodeGeometry(
-  nodeId: NodeId,
-  pos: Vec2,
-  geometries: readonly { readonly id: SegmentId; readonly geometry: SegmentGeometry }[],
-): Command {
-  return {
-    kind: 'restoreNodeGeometry',
-    apply: (doc) => {
-      const segments = { ...doc.segments }
-      for (const { id, geometry } of geometries) {
-        const seg = segments[id]
-        if (seg) segments[id] = { ...seg, geometry }
-      }
-      return { ...doc, nodes: { ...doc.nodes, [nodeId]: { pos } }, segments }
-    },
-    invert: (before) => {
-      const node = before.nodes[nodeId]
-      if (!node) throw new Error(`restoreNodeGeometry.invert: node ${nodeId} does not exist`)
-      const restored = geometries.map(({ id }) => ({
-        id,
-        geometry: before.segments[id]?.geometry ?? geometries.find((g) => g.id === id)!.geometry,
-      }))
-      return restoreNodeGeometry(nodeId, node.pos, restored)
-    },
-  }
-}
-
-function dedupeGeometries(
-  geometries: readonly { readonly id: SegmentId; readonly geometry: SegmentGeometry }[],
-): { readonly id: SegmentId; readonly geometry: SegmentGeometry }[] {
-  const seen = new Map<SegmentId, SegmentGeometry>()
-  for (const g of geometries) if (!seen.has(g.id)) seen.set(g.id, g.geometry)
-  return [...seen].map(([id, geometry]) => ({ id, geometry }))
 }
 
 /**
@@ -412,47 +414,34 @@ export function splitSegmentAtNode(
   }
 }
 
+/** The forward patch for a `mergeNodes`: fold `dropId` into `keepId`. */
+function mergeNodesPatch(doc: Project, keepId: NodeId, dropId: NodeId): NetworkPatch {
+  if (keepId === dropId) throw new Error('mergeNodes: keep and drop are the same node')
+  const keep = doc.nodes[keepId]
+  if (!keep) throw new Error(`mergeNodes: node ${keepId} does not exist`)
+  if (!(dropId in doc.nodes)) throw new Error(`mergeNodes: node ${dropId} does not exist`)
+  const setNodes: Record<NodeId, Node> = {}
+  const setSegments: Record<SegmentId, Segment> = {}
+  const moves = new Map<NodeId, Vec2>([[dropId, keep.pos]])
+  const remap = new Map<NodeId, NodeId>([[dropId, keepId]])
+  for (const segment of Object.values(doc.segments)) {
+    emitMovedSegment(doc, segment, moves, remap, setSegments, setNodes)
+  }
+  return { setNodes, setSegments, deleteNodes: [dropId] }
+}
+
 /**
  * Weld two nodes into one: every endpoint at `dropId` is re-pointed to `keepId` and moved to
- * `keepId`'s position (arcs demote), then `dropId` is removed. This is how dragging one node
- * onto another, or an explicit merge, coalesces a junction. Reversible.
+ * `keepId`'s position (an incident arc demotes to a cubic chain), then `dropId` is removed.
+ * This is how dragging one node onto another, or an explicit merge, coalesces a junction.
+ * Reversible.
  */
 export function mergeNodes(keepId: NodeId, dropId: NodeId): Command {
   return {
     kind: 'mergeNodes',
-    apply: (doc) => {
-      if (keepId === dropId) throw new Error('mergeNodes: keep and drop are the same node')
-      const keep = doc.nodes[keepId]
-      if (!keep) throw new Error(`mergeNodes: node ${keepId} does not exist`)
-      if (!(dropId in doc.nodes)) throw new Error(`mergeNodes: node ${dropId} does not exist`)
-      const setSegments: Record<SegmentId, Segment> = {}
-      for (const segment of Object.values(doc.segments)) {
-        if (segment.endpoints[0] !== dropId && segment.endpoints[1] !== dropId) continue
-        let geometry = segment.geometry
-        const endpoints: [NodeId, NodeId] = [...segment.endpoints]
-        if (endpoints[0] === dropId) {
-          geometry = setGeometryEndpoint(geometry, 0, keep.pos)
-          endpoints[0] = keepId
-        }
-        if (endpoints[1] === dropId) {
-          geometry = setGeometryEndpoint(geometry, 1, keep.pos)
-          endpoints[1] = keepId
-        }
-        setSegments[segment.id] = { ...segment, geometry, endpoints }
-      }
-      return patchNetwork({ setSegments, deleteNodes: [dropId] }, 'mergeNodes').apply(doc)
-    },
-    invert: (before) => {
-      const drop = before.nodes[dropId]
-      if (!drop) throw new Error(`mergeNodes.invert: node ${dropId} does not exist`)
-      const setSegments: Record<SegmentId, Segment> = {}
-      for (const segment of Object.values(before.segments)) {
-        if (segment.endpoints[0] === dropId || segment.endpoints[1] === dropId) {
-          setSegments[segment.id] = segment
-        }
-      }
-      return patchNetwork({ setNodes: { [dropId]: drop }, setSegments }, 'mergeNodes')
-    },
+    apply: (doc) => patchNetwork(mergeNodesPatch(doc, keepId, dropId), 'mergeNodes').apply(doc),
+    invert: (before) =>
+      patchNetwork(mergeNodesPatch(before, keepId, dropId), 'mergeNodes').invert(before),
   }
 }
 
@@ -467,53 +456,81 @@ export function deleteNode(project: Project, nodeId: NodeId): Command {
   return removeSegments([...new Set(ids)])
 }
 
-/**
- * Apply an affine transform to a whole selection of segments (F-013 move/rotate/scale/mirror).
- * Every node the selection touches is transformed once, so welded junctions stay welded (FR-1);
- * selected segments are transformed in full (arcs demote to cubics under reflection or
- * non-uniform scale), and an unselected segment sharing a moved node has just that endpoint
- * follow, so the weld stretches rather than tears. Reversible via the patch primitive.
- */
-export function transformSegments(
-  project: Project,
+/** The forward patch for a `transformSegments`. */
+function transformPatch(
+  doc: Project,
   segmentIds: readonly SegmentId[],
-  transform: Transform2D,
-): Command {
+  t: Transform2D,
+): NetworkPatch {
   const selected = new Set(segmentIds)
   const touched = new Set<NodeId>()
   for (const id of segmentIds) {
-    const seg = project.segments[id]
+    const seg = doc.segments[id]
     if (!seg) throw new Error(`transformSegments: segment ${id} does not exist`)
     touched.add(seg.endpoints[0])
     touched.add(seg.endpoints[1])
   }
 
   const setNodes: Record<NodeId, Node> = {}
-  for (const id of touched) {
-    const node = project.nodes[id]
-    if (node) setNodes[id] = { pos: applyToPoint(transform, node.pos) }
-  }
-  const posOf = (id: NodeId) => setNodes[id]?.pos ?? project.nodes[id]!.pos
-
+  for (const id of touched) setNodes[id] = { pos: applyToPoint(t, doc.nodes[id]!.pos) }
   const setSegments: Record<SegmentId, Segment> = {}
-  for (const seg of Object.values(project.segments)) {
-    if (selected.has(seg.id)) {
-      setSegments[seg.id] = { ...seg, geometry: transformGeometry(seg.geometry, transform) }
-      continue
+
+  // Selected segments transform in full. An arc under a reflection / non-uniform scale can no
+  // longer stay circular, so it demotes to a cubic chain and every span is transformed.
+  for (const id of selected) {
+    const seg = doc.segments[id]!
+    if (seg.geometry.kind === 'arc' && !isSimilarity(t)) {
+      const chain = demoteArcSegment(
+        seg as Segment & { geometry: Extract<SegmentGeometry, { kind: 'arc' }> },
+        doc.nodes[seg.endpoints[0]]!.pos,
+        doc.nodes[seg.endpoints[1]]!.pos,
+      )
+      for (const [nid, node] of Object.entries(chain.nodes)) {
+        setNodes[nid] = { pos: applyToPoint(t, node.pos) }
+      }
+      for (const span of chain.segments) {
+        setSegments[span.id] = {
+          ...span,
+          geometry: transformShape(t, span.geometry) as SegmentGeometry,
+        }
+      }
+    } else {
+      setSegments[id] = { ...seg, geometry: transformGeometry(seg.geometry, t) }
     }
-    let geometry = seg.geometry
-    let changed = false
-    if (touched.has(seg.endpoints[0])) {
-      geometry = setGeometryEndpoint(geometry, 0, posOf(seg.endpoints[0]))
-      changed = true
-    }
-    if (touched.has(seg.endpoints[1])) {
-      geometry = setGeometryEndpoint(geometry, 1, posOf(seg.endpoints[1]))
-      changed = true
-    }
-    if (changed) setSegments[seg.id] = { ...seg, geometry }
   }
-  return patchNetwork({ setNodes, setSegments }, 'transformSegments')
+
+  // Unselected segments sharing a moved node let just that endpoint follow, so the weld
+  // stretches rather than tears (an unselected arc demotes but keeps its interior shape).
+  const moves = new Map<NodeId, Vec2>()
+  for (const id of touched) moves.set(id, setNodes[id]!.pos)
+  const noRemap = new Map<NodeId, NodeId>()
+  for (const seg of Object.values(doc.segments)) {
+    if (selected.has(seg.id)) continue
+    emitMovedSegment(doc, seg, moves, noRemap, setSegments, setNodes)
+  }
+  return { setNodes, setSegments }
+}
+
+/**
+ * Apply an affine transform to a whole selection of segments (F-013 move/rotate/scale/mirror).
+ * Every node the selection touches is transformed once, so welded junctions stay welded (FR-1);
+ * selected segments are transformed in full (arcs demote to a cubic chain under reflection or
+ * non-uniform scale, staying visually faithful), and an unselected segment sharing a moved node
+ * has just that endpoint follow, so the weld stretches rather than tears. Reversible.
+ */
+export function transformSegments(
+  segmentIds: readonly SegmentId[],
+  transform: Transform2D,
+): Command {
+  return {
+    kind: 'transformSegments',
+    apply: (doc) =>
+      patchNetwork(transformPatch(doc, segmentIds, transform), 'transformSegments').apply(doc),
+    invert: (before) =>
+      patchNetwork(transformPatch(before, segmentIds, transform), 'transformSegments').invert(
+        before,
+      ),
+  }
 }
 
 /* -------------------------------------------------------------------------- */

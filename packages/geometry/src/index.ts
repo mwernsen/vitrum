@@ -75,7 +75,6 @@ export {
   arcStart,
   arcSweep,
   arcTangentAt,
-  arcToCubic,
   arcToCubics,
 } from './arcmath'
 export {

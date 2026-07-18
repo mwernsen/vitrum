@@ -1,5 +1,6 @@
 import {
   arc,
+  arcEnd,
   arcStart,
   compose,
   line,
@@ -27,7 +28,7 @@ import { weldSegments } from './factory'
 import { newNodeId, newSegmentId } from './ids'
 import { geometryEndpoints, incidentEndpoints } from './nodes'
 import { DocumentStore } from './store'
-import type { Project } from './types'
+import type { Project, Segment } from './types'
 
 /* -------------------------------------------------------------------------- */
 /* Invariant checker                                                           */
@@ -139,7 +140,7 @@ function planEdit(project: Project, spec: EditSpec): Command | null {
       // Pick a non-empty subset deterministically from the low bits of `subset`.
       const chosen = segmentIds.filter((_, i) => ((spec.subset >> i) & 1) === 1)
       const subset = chosen.length > 0 ? chosen : [segmentIds[spec.subset % segmentIds.length]!]
-      return transformSegments(project, subset, transformFor(spec.kind))
+      return transformSegments(subset, transformFor(spec.kind))
     }
   }
 }
@@ -164,6 +165,66 @@ describe('FR-1: no edit sequence ever separates a welded node', () => {
     )
   })
 })
+
+describe('FR-1 with arcs: demotion never separates a welded node', () => {
+  it('keeps arcs-welded-to-lines intact through random node moves and mirrors', () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          cx: fc.integer({ min: -100, max: 100 }),
+          cy: fc.integer({ min: -100, max: 100 }),
+          r: fc.integer({ min: 10, max: 120 }),
+          start: fc.double({ min: 0, max: Math.PI * 2, noNaN: true }),
+          sweep: fc.double({ min: 0.3, max: Math.PI * 1.9, noNaN: true }),
+          ccw: fc.boolean(),
+          moveX: fc.integer({ min: -300, max: 300 }),
+          moveY: fc.integer({ min: -300, max: 300 }),
+          mirror: fc.boolean(),
+        }),
+        (p) => {
+          const a = arc(
+            vec2(p.cx, p.cy),
+            p.r,
+            p.start,
+            p.start + (p.ccw ? p.sweep : -p.sweep),
+            p.ccw,
+          )
+          const s = arcStart(a)
+          const e = arcEnd(a)
+          // Weld a spoke line to each arc endpoint (bit-identical coordinates → shared nodes).
+          const { segments } = weldSegments([
+            { geometry: a, role: 'lead' },
+            { geometry: line(s, vec2(s.x + 40, s.y + 40)), role: 'lead' },
+            { geometry: line(e, vec2(e.x - 40, e.y - 30)), role: 'lead' },
+          ])
+          const store = new DocumentStore(reconcileInitial(segments))
+          const initial = store.document
+          expectNetworkIntact(initial)
+
+          // Drag the arc's start-side junction: the arc demotes but the spoke stays welded.
+          store.execute(moveNode(segments[0]!.endpoints[0], vec2(p.moveX, p.moveY)))
+          expectNetworkIntact(store.document)
+
+          if (p.mirror) {
+            store.execute(transformSegments(Object.keys(store.document.segments), scaling(-1, 1)))
+            expectNetworkIntact(store.document)
+          }
+
+          while (store.canUndo) store.undo()
+          expect(store.document).toEqual(initial)
+        },
+      ),
+      { numRuns: 200 },
+    )
+  })
+})
+
+/** Seed a store document from welded segments (via one addSegments) and return the result. */
+function reconcileInitial(segments: readonly Segment[]): Project {
+  const store = new DocumentStore()
+  store.execute(addSegments([...segments]))
+  return store.document
+}
 
 /* -------------------------------------------------------------------------- */
 /* Welded-drag integrity (concrete scenarios)                                  */
@@ -210,9 +271,9 @@ describe('welded-drag integrity', () => {
     expect(store.document).toEqual(before)
   })
 
-  it('demotes an arc welded to a line, keeping the junction and restoring on undo', () => {
-    // A quarter-ish arc; weld a line to its exact start point.
-    const a = arc(vec2(0, 0), 50, 0, Math.PI / 2, true)
+  it('demotes an arc to a welded cubic chain, keeping the junction and restoring on undo', () => {
+    // A 180° arc → two ≤90° cubic spans; weld a line to its exact start point.
+    const a = arc(vec2(0, 0), 50, 0, Math.PI, true)
     const p = arcStart(a) // (50, 0)
     const { segments } = weldSegments([
       { geometry: a, role: 'lead' },
@@ -223,12 +284,16 @@ describe('welded-drag integrity', () => {
     const store = new DocumentStore()
     store.execute(addSegments(segments))
     const before = store.document
+    expect(Object.keys(store.document.segments)).toHaveLength(2)
+    expect(Object.keys(store.document.nodes)).toHaveLength(3)
 
     store.execute(moveNode(shared, vec2(60, 10)))
     expectNetworkIntact(store.document)
+    // Arc → 2 cubics (original id reused for the first span, one new span + one interior node).
     const arcSeg = store.document.segments[segments[0]!.id]!
-    expect(arcSeg.geometry.kind).toBe('cubic') // arc demoted to a free cubic
-    expect(Object.keys(store.document.nodes)).toHaveLength(3)
+    expect(arcSeg.geometry.kind).toBe('cubic')
+    expect(Object.keys(store.document.segments)).toHaveLength(3)
+    expect(Object.keys(store.document.nodes)).toHaveLength(4)
 
     store.undo()
     expect(store.document).toEqual(before) // the arc comes back exactly
@@ -284,8 +349,8 @@ describe('welded-drag integrity', () => {
     expect(store.document).toEqual(before)
   })
 
-  it('mirrors a selection without tearing welds, demoting arcs', () => {
-    const a = arc(vec2(50, 0), 30, 0, Math.PI / 2, true)
+  it('mirrors a selection without tearing welds, demoting arcs to a cubic chain', () => {
+    const a = arc(vec2(50, 0), 30, 0, Math.PI, true) // 180° → two cubic spans
     const p = arcStart(a)
     const { segments } = weldSegments([
       { geometry: a, role: 'lead' },
@@ -293,10 +358,15 @@ describe('welded-drag integrity', () => {
     ])
     const store = new DocumentStore()
     store.execute(addSegments(segments))
+    const before = store.document
     const ids = Object.keys(store.document.segments)
 
-    store.execute(transformSegments(store.document, ids, compose(scaling(-1, 1))))
+    store.execute(transformSegments(ids, compose(scaling(-1, 1))))
     expectNetworkIntact(store.document)
     expect(store.document.segments[segments[0]!.id]!.geometry.kind).toBe('cubic')
+    expect(Object.keys(store.document.segments).length).toBeGreaterThan(2) // arc demoted to a chain
+
+    store.undo()
+    expect(store.document).toEqual(before) // arc restored exactly
   })
 })

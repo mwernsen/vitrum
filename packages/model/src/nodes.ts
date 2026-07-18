@@ -1,17 +1,18 @@
 import {
   arcEnd,
   arcStart,
-  arcToCubic,
+  arcToCubics,
   cubic,
   isSimilarity,
   line,
   transformShape,
+  type Arc,
   type Transform2D,
   type Vec2,
 } from '@vitrum/geometry'
 
 import { newNodeId } from './ids'
-import type { Node, NodeId, Project, Segment, SegmentGeometry } from './types'
+import type { Node, NodeId, Project, Segment, SegmentGeometry, SegmentId } from './types'
 
 /**
  * Node bookkeeping for the stored-node model (F-013, resolved Open question — Option B).
@@ -40,11 +41,11 @@ export function geometryEndpoints(geometry: SegmentGeometry): readonly [Vec2, Ve
 }
 
 /**
- * Return a copy of `geometry` with endpoint `which` (0 = start, 1 = end) moved to `pos`,
- * leaving the other endpoint and any interior handles untouched. An `Arc` cannot keep an
- * endpoint off its circle, so it is **demoted to a single free cubic** first (the resolved
- * arc-containment rule): the demoted cubic matches the arc's endpoints and tangents, then
- * the requested endpoint is set. Lines and cubics are edited directly and exactly.
+ * Return a copy of a **line or cubic** `geometry` with endpoint `which` (0 = start, 1 = end)
+ * moved to `pos`, leaving the other endpoint and any interior handles untouched. Arcs are not
+ * accepted: an arc cannot keep an endpoint off its circle, so it is demoted to a cubic chain
+ * at the segment level ({@link demoteArcSegment}) before any endpoint moves — passing one here
+ * is a bug.
  */
 export function setGeometryEndpoint(
   geometry: SegmentGeometry,
@@ -58,24 +59,88 @@ export function setGeometryEndpoint(
       return which === 0
         ? cubic(pos, geometry.p1, geometry.p2, geometry.p3)
         : cubic(geometry.p0, geometry.p1, geometry.p2, pos)
-    case 'arc': {
-      const c = arcToCubic(geometry)
-      return which === 0 ? cubic(pos, c.p1, c.p2, c.p3) : cubic(c.p0, c.p1, c.p2, pos)
-    }
+    case 'arc':
+      throw new Error('setGeometryEndpoint: demote the arc to cubics before moving an endpoint')
   }
 }
 
+/** True when transforming `geometry` under `t` keeps its kind (a similarity keeps arcs). */
+export function keepsKind(geometry: SegmentGeometry, t: Transform2D): boolean {
+  return geometry.kind !== 'arc' || isSimilarity(t)
+}
+
 /**
- * Transform a segment's geometry, demoting an `Arc` to a cubic when the transform is not
- * an orientation-preserving similarity (a reflection or non-uniform scale would make a
- * circular arc elliptical or flip its winding — F-013 mirror). Lines and cubics transform
- * exactly under any affine.
+ * Transform a **kind-preserving** segment geometry (a line/cubic, or an arc under a
+ * similarity). Arcs under a reflection or non-uniform scale must be demoted first via
+ * {@link demoteArcSegment}; call {@link keepsKind} to decide. Throws otherwise.
  */
 export function transformGeometry(geometry: SegmentGeometry, t: Transform2D): SegmentGeometry {
-  if (geometry.kind === 'arc' && !isSimilarity(t)) {
-    return transformShape(t, arcToCubic(geometry)) as SegmentGeometry
+  if (!keepsKind(geometry, t)) {
+    throw new Error('transformGeometry: demote the arc to cubics before a non-similarity transform')
   }
   return transformShape(t, geometry) as SegmentGeometry
+}
+
+/**
+ * Deterministic ids for demoting one arc segment into a chain of `count` cubic spans. The
+ * first span **reuses** the arc's own segment id (so nothing else needs re-pointing); the
+ * rest, plus the `count − 1` interior junction nodes, get ids derived from the arc's id.
+ * Determinism matters: `moveNode` re-applies its patch on redo, and the coalesced inverse
+ * must reference the *same* generated ids it produced during the live drag.
+ */
+export function arcDemotionIds(
+  segmentId: SegmentId,
+  count: number,
+): { readonly segmentIds: string[]; readonly nodeIds: string[] } {
+  const segmentIds = [segmentId]
+  const nodeIds: string[] = []
+  for (let i = 1; i < count; i++) {
+    segmentIds.push(`${segmentId}~c${i}`)
+    nodeIds.push(`${segmentId}~n${i}`)
+  }
+  return { segmentIds, nodeIds }
+}
+
+/**
+ * Demote an arc segment into a welded chain of ≤90° cubic spans (F-013, adaptive multi-cubic
+ * rule): a quarter-circle → 1 cubic, a semicircle → 2, a full circle → 4, so every arched top
+ * or circular motif stays visually faithful when edited or mirrored. The chain's outer
+ * endpoints keep the arc's original endpoint node ids (pinned to `startPos`/`endPos` exactly);
+ * interior joins are fresh shared nodes, so FR-1 holds across the whole chain. Ids are
+ * deterministic ({@link arcDemotionIds}).
+ */
+export function demoteArcSegment(
+  segment: Segment & { readonly geometry: Arc },
+  startPos: Vec2,
+  endPos: Vec2,
+): { segments: Segment[]; nodes: Record<NodeId, Node> } {
+  const cubics = arcToCubics(segment.geometry)
+  const n = cubics.length
+  const { segmentIds, nodeIds } = arcDemotionIds(segment.id, n)
+
+  // Boundary points: pin the outer ends to the exact node positions; interior joins are the
+  // shared span endpoints (one object each, so adjacent spans weld bit-identically).
+  const boundary: Vec2[] = new Array<Vec2>(n + 1)
+  boundary[0] = startPos
+  boundary[n] = endPos
+  for (let i = 1; i < n; i++) boundary[i] = cubics[i - 1]!.p3
+
+  const segments: Segment[] = []
+  const nodes: Record<NodeId, Node> = {}
+  for (let i = 0; i < n; i++) {
+    const c = cubics[i]!
+    const geometry = cubic(boundary[i]!, c.p1, c.p2, boundary[i + 1]!)
+    const startNode = i === 0 ? segment.endpoints[0] : nodeIds[i - 1]!
+    const endNode = i === n - 1 ? segment.endpoints[1] : nodeIds[i]!
+    segments.push({
+      id: segmentIds[i]!,
+      geometry,
+      role: segment.role,
+      endpoints: [startNode, endNode],
+    })
+  }
+  for (let i = 1; i < n; i++) nodes[nodeIds[i - 1]!] = { pos: boundary[i]! }
+  return { segments, nodes }
 }
 
 /** Every segment that references `nodeId` at either endpoint, with which end it is. */

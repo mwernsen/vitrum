@@ -29,8 +29,11 @@ export { createSegment, weldSegments } from './factory'
 
 // Node helpers (F-013)
 export {
+  arcDemotionIds,
+  demoteArcSegment,
   geometryEndpoints,
   incidentEndpoints,
+  keepsKind,
   reconcileNodes,
   reconcileProjectNodes,
   referencedNodeIds,
