@@ -1,5 +1,6 @@
 <script lang="ts">
   import Download from 'lucide-svelte/icons/download'
+  import Redo2 from 'lucide-svelte/icons/redo-2'
   import Undo2 from 'lucide-svelte/icons/undo-2'
   import ZoomIn from 'lucide-svelte/icons/zoom-in'
 
@@ -7,12 +8,15 @@
   import IconButton from '../components/IconButton.svelte'
   import Tooltip from '../components/Tooltip.svelte'
   import logo from '../design/assets/logo.svg'
+  import type { DocumentController } from '../document/controller.svelte'
 
   interface Props {
     title: string
+    /** When present, undo/redo become live and the badge reflects save state (F-002). */
+    controller?: DocumentController
   }
 
-  let { title }: Props = $props()
+  let { title, controller }: Props = $props()
 </script>
 
 <header class="topbar">
@@ -21,12 +25,33 @@
     <span class="wordmark">Vitrum</span>
   </span>
   <span class="doc-title">{title}</span>
-  <Badge tone="neutral">Draft</Badge>
+  {#if controller}
+    <Badge tone={controller.isDirty ? 'warning' : 'neutral'}>
+      {controller.isDirty ? 'Unsaved' : 'Saved'}
+    </Badge>
+  {:else}
+    <Badge tone="neutral">Draft</Badge>
+  {/if}
 
   <div class="spacer"></div>
 
   <Tooltip label="Undo" side="bottom">
-    <IconButton label="Undo"><Undo2 size={18} /></IconButton>
+    <IconButton
+      label="Undo"
+      disabled={controller ? !controller.canUndo : false}
+      onclick={() => controller?.undo()}
+    >
+      <Undo2 size={18} />
+    </IconButton>
+  </Tooltip>
+  <Tooltip label="Redo" side="bottom">
+    <IconButton
+      label="Redo"
+      disabled={controller ? !controller.canRedo : false}
+      onclick={() => controller?.redo()}
+    >
+      <Redo2 size={18} />
+    </IconButton>
   </Tooltip>
   <Tooltip label="Zoom" side="bottom">
     <IconButton label="Zoom"><ZoomIn size={18} /></IconButton>

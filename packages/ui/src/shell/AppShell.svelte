@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { LengthUnit, Panel } from '@vitrum/core'
 
+  import type { DocumentController } from '../document/controller.svelte'
+
   import Canvas from './Canvas.svelte'
   import Inspector from './Inspector.svelte'
   import StatusBar from './StatusBar.svelte'
@@ -9,9 +11,11 @@
 
   interface Props {
     panel: Panel
+    /** The document controller (F-002). Optional so the shell renders in isolation tests. */
+    controller?: DocumentController
   }
 
-  let { panel }: Props = $props()
+  let { panel, controller }: Props = $props()
 
   // Shell-level UI state. Real document/viewport state arrives with F-002/F-003;
   // for now the cursor position and display unit are enough to make the four
@@ -25,7 +29,7 @@
 </script>
 
 <div class="shell">
-  <TopBar title={panel.name} />
+  <TopBar title={panel.name} {controller} />
   <Toolbar />
   <Canvas onmove={(position) => (cursor = position)} onleave={() => (cursor = null)} />
   <Inspector {panel} {unit} />

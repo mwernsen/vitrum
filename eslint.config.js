@@ -48,6 +48,22 @@ export default ts.config(
     },
   },
   {
+    files: ['packages/model/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@vitrum/ui', '@vitrum/desktop', 'svelte', 'svelte/*', 'electron'],
+              message: 'packages/model is pure domain logic and must not depend on UI layers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/ui/**'],
     rules: {
       'no-restricted-imports': [
