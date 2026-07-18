@@ -10,11 +10,13 @@
     drawGrid,
     drawOverlay,
     drawRuler,
+    drawToolPreview,
     prepareContext,
     readCanvasPalette,
     type CanvasPalette,
   } from '../canvas/render'
   import type { ViewportController } from '../canvas/viewport.svelte'
+  import type { ToolController } from '../tools/controller.svelte'
 
   interface Props {
     viewport: ViewportController
@@ -22,9 +24,11 @@
     segments?: readonly Segment[]
     /** World bounds for zoom-to-fit; `null` frames the default panel region. */
     bounds?: BBox | null
+    /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
+    tools?: ToolController
   }
 
-  let { viewport, segments = [], bounds = null }: Props = $props()
+  let { viewport, segments = [], bounds = null, tools }: Props = $props()
 
   let stackEl: HTMLDivElement
   let gridCanvas: HTMLCanvasElement
@@ -66,6 +70,7 @@
     if (dirty.overlay) {
       const ctx = prepareContext(overlayCanvas, size, dpr)
       drawOverlay(ctx, size, viewport.cursorScreen, palette)
+      if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       dirty.overlay = false
     }
     if (dirty.rulers) {
@@ -108,6 +113,7 @@
     void viewport.cursorScreen
     void viewport.unit
     void viewport.transform
+    void tools?.previewShapes
     schedule('overlay', 'rulers')
   })
 
@@ -146,21 +152,41 @@
     return vec2(event.clientX - rect.left, event.clientY - rect.top)
   }
 
+  function mods(event: PointerEvent | MouseEvent) {
+    return { shift: event.shiftKey, alt: event.altKey }
+  }
+
   function handlePointerDown(event: PointerEvent) {
     if (event.button === 1 || spaceDown) {
       panning = true
       lastPointer = { x: event.clientX, y: event.clientY }
       stackEl.setPointerCapture(event.pointerId)
       event.preventDefault()
+      return
+    }
+    // Left button with a tool active starts/continues a drawing gesture.
+    if (event.button === 0 && tools && tools.activeId !== 'select') {
+      tools.pointerDown(localPoint(event), mods(event))
+      event.preventDefault()
     }
   }
 
   function handlePointerMove(event: PointerEvent) {
-    viewport.setCursor(localPoint(event))
+    const point = localPoint(event)
+    viewport.setCursor(point)
     if (panning && lastPointer) {
       viewport.pan(event.clientX - lastPointer.x, event.clientY - lastPointer.y)
       lastPointer = { x: event.clientX, y: event.clientY }
+      return
     }
+    if (tools && tools.activeId !== 'select') tools.pointerMove(point, mods(event))
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    if (!panning && tools && tools.activeId !== 'select' && event.button === 0) {
+      tools.pointerUp(localPoint(event), mods(event))
+    }
+    endPan(event)
   }
 
   function endPan(event: PointerEvent) {
@@ -199,8 +225,21 @@
     )
   }
 
+  function handleDblClick(event: MouseEvent) {
+    // Double-click finishes a polyline chain (the second click already placed the point).
+    if (tools && tools.activeId !== 'select') {
+      tools.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+      event.preventDefault()
+    }
+  }
+
   function handleWindowKeyDown(event: KeyboardEvent) {
     if (isTyping(event.target)) return
+    // The tool layer gets first refusal (single-key activation, numeric entry, Esc/Enter).
+    if (tools && tools.handleKeyDown(event)) {
+      event.preventDefault()
+      return
+    }
     if (event.code === 'Space' && !spaceDown) {
       spaceDown = true
       event.preventDefault()
@@ -232,6 +271,7 @@
 
   function handleWindowKeyUp(event: KeyboardEvent) {
     if (event.code === 'Space') spaceDown = false
+    tools?.handleKeyUp(event)
   }
 </script>
 
@@ -250,14 +290,21 @@
       bind:this={stackEl}
       onpointerdown={handlePointerDown}
       onpointermove={handlePointerMove}
-      onpointerup={endPan}
+      onpointerup={handlePointerUp}
       onpointercancel={endPan}
       onpointerleave={handlePointerLeave}
+      ondblclick={handleDblClick}
       onwheel={handleWheel}
     >
       <canvas class="layer" bind:this={gridCanvas}></canvas>
       <canvas class="layer" bind:this={contentCanvas}></canvas>
       <canvas class="layer" bind:this={overlayCanvas}></canvas>
+      {#if tools && (tools.numericBuffer !== '' || tools.hint)}
+        <div class="numeric" aria-label="Tool entry">
+          {#if tools.hint}<span class="hint">{tools.hint}</span>{/if}
+          {tools.numericBuffer}
+        </div>
+      {/if}
     </div>
   </div>
 </main>
@@ -309,7 +356,7 @@
     grid-area: stack;
     position: relative;
     overflow: hidden;
-    background: var(--surface-dark);
+    background: var(--surface-page);
     touch-action: none;
     cursor: crosshair;
   }
@@ -326,5 +373,25 @@
     display: block;
     width: 100%;
     height: 100%;
+  }
+
+  .numeric {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 10px;
+    background: var(--ink-950);
+    color: var(--text-inverse);
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    pointer-events: none;
+  }
+
+  .numeric .hint {
+    color: var(--text-muted);
+    margin-right: var(--space-2);
+    text-transform: lowercase;
   }
 </style>

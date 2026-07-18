@@ -1,4 +1,4 @@
-import type { LengthUnit, Viewport, ViewSize } from '@vitrum/core'
+import type { LengthUnit, PreviewShape, Viewport, ViewSize } from '@vitrum/core'
 import {
   formatFractionalInch,
   gridStep,
@@ -35,11 +35,11 @@ export interface CanvasPalette {
 }
 
 const FALLBACK: CanvasPalette = {
-  gridMinor: 'rgba(255,255,255,.14)',
-  gridMajor: '#bcbcb4',
-  axis: '#d9d9d2',
+  gridMinor: '#e9e9e4',
+  gridMajor: '#d9d9d2',
+  axis: '#bcbcb4',
   cursor: '#2f63e8',
-  content: '#fafaf8',
+  content: '#1f1f1f',
   construction: '#6b6b68',
   rulerBg: '#ffffff',
   rulerBorder: '#e9e9e4',
@@ -53,11 +53,11 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
   const read = (name: string, fallback: string): string =>
     cs.getPropertyValue(name).trim() || fallback
   return {
-    gridMinor: read('--border-dark', FALLBACK.gridMinor),
-    gridMajor: read('--paper-400', FALLBACK.gridMajor),
-    axis: read('--paper-300', FALLBACK.axis),
+    gridMinor: read('--paper-200', FALLBACK.gridMinor),
+    gridMajor: read('--paper-300', FALLBACK.gridMajor),
+    axis: read('--paper-400', FALLBACK.axis),
     cursor: read('--cobalt-500', FALLBACK.cursor),
-    content: read('--paper-50', FALLBACK.content),
+    content: read('--ink-800', FALLBACK.content),
     construction: read('--ink-500', FALLBACK.construction),
     rulerBg: read('--paper-0', FALLBACK.rulerBg),
     rulerBorder: read('--paper-200', FALLBACK.rulerBorder),
@@ -196,6 +196,45 @@ export function drawOverlay(
   ctx.lineTo(size.width, crisp(cursorScreen.y))
   ctx.stroke()
   ctx.globalAlpha = 1
+}
+
+/**
+ * Draw a drawing tool's live preview (F-011): placed spans solid, the rubber-band span
+ * to the cursor dashed, and anchor handles as small squares. Drawn on the overlay layer
+ * so it never forces a content/grid repaint. All coordinates are world mm, projected
+ * through the viewport — the model stays in mm, this is display only.
+ */
+export function drawToolPreview(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  shapes: readonly PreviewShape[],
+  palette: CanvasPalette,
+): void {
+  if (!ctx || shapes.length === 0) return
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+
+  for (const shape of shapes) {
+    if (shape.kind === 'segment') {
+      ctx.strokeStyle = shape.ghost ? palette.cursor : palette.content
+      ctx.lineWidth = shape.role === 'border' ? 2 : 1.25
+      ctx.setLineDash(shape.ghost ? [5, 4] : [])
+      const points = segmentToWorldPoints(shape.geometry)
+      ctx.beginPath()
+      points.forEach((p, i) => {
+        const s = worldToScreen(vp, p)
+        if (i === 0) ctx.moveTo(s.x, s.y)
+        else ctx.lineTo(s.x, s.y)
+      })
+      ctx.stroke()
+    } else {
+      const s = worldToScreen(vp, shape.at)
+      ctx.setLineDash([])
+      ctx.fillStyle = palette.cursor
+      ctx.fillRect(Math.round(s.x) - 2.5, Math.round(s.y) - 2.5, 5, 5)
+    }
+  }
+  ctx.setLineDash([])
 }
 
 function rulerLabel(mm: number, unit: LengthUnit): string {

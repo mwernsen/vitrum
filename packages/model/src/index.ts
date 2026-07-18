@@ -28,7 +28,10 @@ export { createSegment } from './factory'
 // Commands
 export {
   addSegment,
+  addSegments,
   removeSegment,
+  removeSegments,
+  replaceSegments,
   setSegmentRole,
   updateSegmentGeometry,
   updateSettings,
