@@ -13,9 +13,11 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Status bar' })).toBeInTheDocument()
   })
 
-  it('shows the sample panel in the inspector', () => {
+  it('shows the panel and no detected pieces for an empty document', () => {
     render(App)
     expect(screen.getByRole('heading', { level: 2, name: 'Sample panel' })).toBeInTheDocument()
-    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+    // The inspector now reflects real F-020 detection; an empty document has zero pieces.
+    expect(screen.getByTestId('inspector-piece-count')).toHaveTextContent('0')
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
   })
 })

@@ -161,6 +161,26 @@ visual/bench checks listed below).
 - Geometry `clip.test.ts` (5); UI `controller.test.ts` (+1 integration); E2E
   `pieces.spec.ts` (draw → close → split → dangle, asserting live piece/diagnostic counts).
 
+**Post-review fixes (2026-07-18, after Mathieu's manual check)**
+
+- **Correctness bug — closed single-segment loops.** A full circle (and any closed bézier)
+  is emitted by `circleTool` as one segment whose start and end coincide, so `buildGraph`
+  was dropping it as a zero-length self-loop — a circle inside a square detected as one
+  piece. Fixed in `graph.ts`: a closed-loop segment with fewer than two interior split
+  points now gets quarter-point splits injected, so it forms a proper cycle with distinct
+  vertices. Added focused regression tests (`detect.test.ts` "disconnected inner loops"):
+  circle-in-square → 2 (annulus + disc, areas conserved), circle-in-circle → 2, two disjoint
+  circles in a square → 3. Verified live in the browser (colored overlay shows the annulus
+  with the circle hole punched via even-odd, plus the disc, each id-labelled).
+- **Piece inspector is now live (net-new user-facing surface — back-port to the Claude
+  Design project later).** The Inspector's placeholder Panel (Sky/Hill/Sun, a mock Pieces
+  count and a Lead total) is replaced: it now shows the real detected piece count and a list
+  of pieces (stable id + area + perimeter from `properties.ts`), composed from tokens only,
+  sentence case, numbers in mono. Fake glass names/colours and the Lead total are **dropped**
+  — named glass is F-023 and lead totals are F-021/F-023 scope, deferred. Detection feeds the
+  inspector always (capped at 2000 segments so the debug stress scene stays responsive); the
+  coloured canvas overlay stays gated behind the "Pieces" toggle.
+
 **Handed to Mathieu (pending)**
 
 - Manual gallery/visual check: draw the F-011 acceptance panel with the "Pieces" overlay on;

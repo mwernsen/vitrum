@@ -111,7 +111,18 @@ function splitParameters(
       raw[hi]!.push(x.t1)
     }
   }
-  return segments.map((seg, i) => dedupeParams(seg, raw[i]!, tol))
+  return segments.map((seg, i) => {
+    const params = dedupeParams(seg, raw[i]!, tol)
+    // A single closed-loop segment (a full circle, or a closed bézier) has coincident
+    // endpoints, so `[0, 1]` alone would collapse to one vertex and the loop would be dropped
+    // as a zero-length edge. Inject quarter-point splits so it forms a proper cycle with
+    // distinct vertices — unless crossings already gave it ≥2 interior vertices.
+    const closed = distance(pointAt(seg.geometry, 0), pointAt(seg.geometry, 1)) <= tol
+    if (closed && params.filter((t) => t > tol && t < 1 - tol).length < 2) {
+      return dedupeParams(seg, [...params, 0.25, 0.5, 0.75], tol)
+    }
+    return params
+  })
 }
 
 function dedupeParams(seg: PieceSegment, params: number[], tol: number): number[] {

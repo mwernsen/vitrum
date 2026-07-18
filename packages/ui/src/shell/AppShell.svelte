@@ -65,10 +65,13 @@
   // Rebuild the snap spatial index whenever the visible network changes.
   $effect(() => snap.updateScene(shownSegments))
 
-  // Piece detection (F-020) — dev overlay, computed only while the toggle is on so it stays
-  // off the hot path (e.g. the debug stress scene). Reads `controller.doc` inside `detect()`,
-  // so it re-runs on edits.
-  const detection = $derived(viewport.piecesVisible && controller ? controller.detect() : null)
+  // Piece detection (F-020). Feeds both the inspector (always) and the dev overlay (when its
+  // toggle is on). Reads `controller.doc` inside `detect()`, so it re-runs on edits. Capped so
+  // the debug stress scene (thousands of segments) doesn't stall the render path.
+  const DETECT_SEGMENT_CAP = 2000
+  const detection = $derived(
+    controller && segments.length <= DETECT_SEGMENT_CAP ? controller.detect() : null,
+  )
   const pieces = $derived(detection?.pieces ?? [])
   const diagnostics = $derived(detection?.diagnostics ?? [])
   const hoveredPieceId = $derived.by(() => {
@@ -99,7 +102,7 @@
     showPieces={viewport.piecesVisible}
     {hoveredPieceId}
   />
-  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} />
+  <Inspector {panel} unit={viewport.unit} {edit} {selection} doc={controller?.doc} {pieces} />
   <StatusBar
     {viewport}
     {snap}

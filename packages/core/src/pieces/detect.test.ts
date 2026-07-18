@@ -152,6 +152,70 @@ describe('detectPieces — border and holes', () => {
   })
 })
 
+/** A full circle as a single closed arc segment (how `circleTool` emits it). */
+function circle(cx: number, cy: number, r: number, id: string): PieceSegment {
+  return {
+    id,
+    geometry: arc(vec2(cx, cy), r, 0, 2 * Math.PI, true),
+    role: 'lead',
+    endpoints: [`${id}s`, `${id}e`],
+  }
+}
+
+const CIRCLE_AREA = (r: number): number => Math.PI * r * r
+const near = (actual: number, expected: number): boolean =>
+  Math.abs(actual - expected) / expected < 0.01
+
+describe('detectPieces — disconnected inner loops (nesting)', () => {
+  const squareEdges: Array<[string, string, string?]> = [
+    ['n0', 'n1'],
+    ['n1', 'n2'],
+    ['n2', 'n3'],
+    ['n3', 'n0'],
+  ]
+
+  it('a circle fully inside a square is two pieces: an annulus and the inner disc', () => {
+    const segments = [...net(SQUARE, squareEdges), circle(50, 50, 20, 'c')]
+    const { pieces } = detectPieces(segments)
+    expect(pieces).toHaveLength(2)
+    const disc = pieces.find((p) => p.area < 5000)!
+    const annulus = pieces.find((p) => p.area >= 5000)!
+    expect(near(disc.area, CIRCLE_AREA(20))).toBe(true)
+    expect(near(annulus.area, 10000 - CIRCLE_AREA(20))).toBe(true)
+    expect(annulus.holes).toHaveLength(1)
+    // Conservation: annulus glass + disc = square area.
+    expect(near(annulus.area + disc.area, 10000)).toBe(true)
+  })
+
+  it('a circle inside a circle is two pieces (annulus + inner disc)', () => {
+    const segments = [circle(50, 50, 40, 'outer'), circle(50, 50, 20, 'inner')]
+    const { pieces } = detectPieces(segments)
+    expect(pieces).toHaveLength(2)
+    const disc = pieces.find((p) => p.area < CIRCLE_AREA(30))!
+    const annulus = pieces.find((p) => p.area >= CIRCLE_AREA(30))!
+    expect(near(disc.area, CIRCLE_AREA(20))).toBe(true)
+    expect(near(annulus.area, CIRCLE_AREA(40) - CIRCLE_AREA(20))).toBe(true)
+    expect(annulus.holes).toHaveLength(1)
+  })
+
+  it('two disjoint circles inside a square are three pieces', () => {
+    const nodes: Record<string, Vec2> = {
+      n0: vec2(0, 0),
+      n1: vec2(200, 0),
+      n2: vec2(200, 100),
+      n3: vec2(0, 100),
+    }
+    const segments = [...net(nodes, squareEdges), circle(50, 50, 15, 'a'), circle(150, 50, 15, 'b')]
+    const { pieces } = detectPieces(segments)
+    expect(pieces).toHaveLength(3)
+    const discs = pieces.filter((p) => near(p.area, CIRCLE_AREA(15)))
+    expect(discs).toHaveLength(2)
+    const outer = pieces.find((p) => p.area > 10000)!
+    expect(outer.holes).toHaveLength(2)
+    expect(near(outer.area, 200 * 100 - 2 * CIRCLE_AREA(15))).toBe(true)
+  })
+})
+
 describe('detectPieces — determinism (FR-2)', () => {
   const nodes: Record<string, Vec2> = {
     n0: vec2(0, 0),
