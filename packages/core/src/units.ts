@@ -7,6 +7,11 @@ export function convertLength(mm: number, unit: LengthUnit): number {
   return unit === 'in' ? mm / MM_PER_INCH : mm
 }
 
+/** Convert a length expressed in `unit` back to millimetres (the storage unit). */
+export function toMillimetres(value: number, unit: LengthUnit): number {
+  return unit === 'in' ? value * MM_PER_INCH : value
+}
+
 /** Options for {@link formatLength}. Defaults keep the plain decimal behaviour callers rely on. */
 export interface LengthFormatOptions {
   /** Render inches as a reduced fraction (e.g. `3 5/8"`) instead of a decimal. Ignored for mm. */

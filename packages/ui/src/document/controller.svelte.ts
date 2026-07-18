@@ -8,7 +8,7 @@ import {
   DocumentStore,
   serialize,
 } from '@vitrum/model'
-import type { Project } from '@vitrum/model'
+import type { Command, Project } from '@vitrum/model'
 
 import { stressScene } from '../canvas/scene'
 
@@ -64,6 +64,12 @@ export class DocumentController {
 
   undo = (): void => this.#store.undo()
   redo = (): void => this.#store.redo()
+
+  /**
+   * Apply one document command. The sanctioned mutation path for drawing tools (F-011):
+   * each completed gesture calls this exactly once, so it is a single undo entry (FR-1).
+   */
+  execute = (command: Command): void => this.#store.execute(command)
   togglePalette = (): void => {
     this.paletteOpen = !this.paletteOpen
   }

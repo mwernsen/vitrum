@@ -5,6 +5,7 @@
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
+  import { ToolController } from '../tools/controller.svelte'
 
   import Canvas from './Canvas.svelte'
   import Inspector from './Inspector.svelte'
@@ -24,6 +25,14 @@
   // owns one — tests render without a controller, the app renders with one.
   const viewport = new ViewportController()
 
+  // The drawing-tool controller (F-011). It needs a command sink; when no document
+  // controller is present (isolation tests) commits are simply dropped.
+  const tools = new ToolController({
+    viewport,
+    execute: (command) => controller?.execute(command),
+    getSegments: () => (controller ? Object.values(controller.doc.segments) : []),
+  })
+
   const segments = $derived(controller ? Object.values(controller.doc.segments) : [])
   const bounds = $derived(controller ? documentBounds(controller.doc) : null)
 
@@ -32,8 +41,8 @@
 
 <div class="shell">
   <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
-  <Toolbar />
-  <Canvas {viewport} {segments} {bounds} />
+  <Toolbar {tools} />
+  <Canvas {viewport} {segments} {bounds} {tools} />
   <Inspector {panel} unit={viewport.unit} />
   <StatusBar
     {viewport}

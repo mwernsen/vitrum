@@ -7,3 +7,6 @@ export * from './components'
 export { DocumentController } from './document/controller.svelte'
 export { createBrowserHost } from './document/browserHost'
 export type { AppHost, MenuAction } from './document/host'
+
+// Drawing-tool controller (F-011)
+export { ToolController, type ToolHost } from './tools/controller.svelte'

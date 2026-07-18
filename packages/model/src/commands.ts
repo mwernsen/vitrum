@@ -47,6 +47,83 @@ export function addSegment(segment: Segment): Command {
   }
 }
 
+/**
+ * Add several segments as one atomic command — the whole of a drawing gesture (a
+ * polyline chain, a shape's edges) so a single undo removes all of it, not one span
+ * (F-011 FR-1). Fails if any id is already present (ids are never reused).
+ */
+export function addSegments(segments: readonly Segment[]): Command {
+  return {
+    kind: 'addSegments',
+    apply: (doc) => {
+      const next = { ...doc.segments }
+      for (const segment of segments) {
+        if (segment.id in next) {
+          throw new Error(`addSegments: segment ${segment.id} already exists`)
+        }
+        next[segment.id] = segment
+      }
+      return { ...doc, segments: next }
+    },
+    invert: () => removeSegments(segments.map((s) => s.id)),
+  }
+}
+
+/**
+ * Atomically remove some segments and add others in one command. Used by the border tool
+ * (F-011) to replace the single border contour: remove the old border's segments and add
+ * the new ones as one undo entry. Reversible exactly — its inverse re-adds whatever was
+ * actually removed (read from the pre-state) and removes what was added.
+ */
+export function replaceSegments(removeIds: readonly SegmentId[], add: readonly Segment[]): Command {
+  return {
+    kind: 'replaceSegments',
+    apply: (doc) => {
+      const next = { ...doc.segments }
+      for (const id of removeIds) delete next[id]
+      for (const segment of add) {
+        if (segment.id in next)
+          throw new Error(`replaceSegments: segment ${segment.id} already exists`)
+        next[segment.id] = segment
+      }
+      return { ...doc, segments: next }
+    },
+    invert: (before) => {
+      // Re-add exactly the segments this command actually removed (present in `before`).
+      const removed = removeIds
+        .map((id) => before.segments[id])
+        .filter((s): s is Segment => s !== undefined)
+      return replaceSegments(
+        add.map((s) => s.id),
+        removed,
+      )
+    },
+  }
+}
+
+/** Remove several segments as one command — the inverse of {@link addSegments}. */
+export function removeSegments(ids: readonly SegmentId[]): Command {
+  return {
+    kind: 'removeSegments',
+    apply: (doc) => {
+      let segments = doc.segments
+      for (const id of ids) {
+        if (!(id in segments)) throw new Error(`removeSegments: segment ${id} does not exist`)
+        segments = withoutSegment(segments, id)
+      }
+      return { ...doc, segments }
+    },
+    invert: (before) => {
+      const restored = ids.map((id) => {
+        const segment = before.segments[id]
+        if (!segment) throw new Error(`removeSegments.invert: segment ${id} does not exist`)
+        return segment
+      })
+      return addSegments(restored)
+    },
+  }
+}
+
 /** Remove an existing segment. */
 export function removeSegment(id: SegmentId): Command {
   return {
