@@ -3,7 +3,7 @@
 |                |                          |
 | -------------- | ------------------------ |
 | **Phase**      | 2 — Stained glass domain |
-| **Status**     | draft                    |
+| **Status**     | in-progress              |
 | **Depends on** | F-010, F-011             |
 | **Complexity** | XL                       |
 
@@ -87,6 +87,10 @@ piece of glass — I never trace or fill shapes manually.
 
 ## Open questions
 
-1. Tolerance for near-miss junction detection (proposal: report anything < 0.5 mm;
+1. ~~Tolerance for near-miss junction detection (proposal: report anything < 0.5 mm;
    auto-weld anything < 0.01 mm silently?) — auto-welding is convenient but mutates
-   user data; supervisor call.
+   user data; supervisor call.~~ **Resolved (Mathieu, 2026-07-18): "report, never
+   mutate."** Detect near-misses `< 0.5 mm` as diagnostics carrying their measured
+   distance; use the sub-`0.01 mm` epsilon only internally for face-tracing topology
+   (never rewrite document endpoints); leave any actual auto-weld to an explicit,
+   undoable command as an F-030 concern. No silent mutation of user segments.

@@ -115,6 +115,9 @@ export {
 // Intersection
 export { intersect, type Intersection } from './intersect'
 
+// Polygon booleans
+export { overlapArea } from './clip'
+
 // Offset
 export {
   offsetArc,

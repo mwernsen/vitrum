@@ -60,6 +60,26 @@ export {
   type ToolStep,
 } from './tools'
 export {
+  DETECT_DEFAULTS,
+  PieceDetector,
+  buildGraph,
+  contentId,
+  detectPieces,
+  matchIds,
+  type BoundarySpan,
+  type DetectionResult,
+  type DetectOptions,
+  type Diagnostic,
+  type DiagnosticKind,
+  type GraphEdge,
+  type Piece,
+  type PieceGeometry,
+  type PieceId,
+  type PieceSegment,
+  type PieceSegmentRole,
+  type PlanarGraph,
+} from './pieces'
+export {
   buildPickScene,
   marqueeMode,
   marqueeSelect,

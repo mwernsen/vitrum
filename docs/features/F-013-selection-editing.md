@@ -1,11 +1,11 @@
 # F-013: Selection, node editing & transforms
 
-|                |                                                                |
-| -------------- | -------------------------------------------------------------- |
-| **Phase**      | 1 — Sketcher                                                   |
-| **Status**     | done                                                          |
-| **Depends on** | F-011                                                          |
-| **Complexity** | L                                                              |
+|                |              |
+| -------------- | ------------ |
+| **Phase**      | 1 — Sketcher |
+| **Status**     | done         |
+| **Depends on** | F-011        |
+| **Complexity** | L            |
 
 ## Summary
 
