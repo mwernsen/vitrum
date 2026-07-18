@@ -46,6 +46,30 @@ export function arcEnd(a: Arc): Vec2 {
 }
 
 /**
+ * Approximate the whole arc as a **single** cubic Bézier that matches the arc's two
+ * endpoints and end tangents exactly. Used when an arc must keep its identity as one
+ * segment while it stops being circular — F-013 node-editing demotes an arc to a free
+ * cubic when one of its endpoints is dragged off the circle. The single-cubic fit is
+ * excellent up to ~120° and degrades gracefully beyond (endpoints and tangents stay
+ * exact); {@link arcToCubics} remains the choice when full-circle fidelity is required.
+ */
+export function arcToCubic(a: Arc): CubicBezier {
+  const total = arcSweep(a)
+  const dir = a.ccw ? 1 : -1
+  // Clamp the handle magnitude near a full turn, where tan(Δ/4) → ∞ would blow up.
+  const k = (4 / 3) * Math.tan(Math.min(total, Math.PI * 1.999) / 4)
+  const a0 = a.startAngle
+  const a1 = arcAngleAt(a, 1)
+  const p0 = add(a.center, scale(vec2(Math.cos(a0), Math.sin(a0)), a.radius))
+  const p3 = add(a.center, scale(vec2(Math.cos(a1), Math.sin(a1)), a.radius))
+  const t0 = vec2(-Math.sin(a0), Math.cos(a0))
+  const t1 = vec2(-Math.sin(a1), Math.cos(a1))
+  const p1 = add(p0, scale(t0, dir * k * a.radius))
+  const p2 = add(p3, scale(t1, -dir * k * a.radius))
+  return cubic(p0, p1, p2, p3)
+}
+
+/**
  * Approximate an arc as a chain of cubic Béziers, one per ≤90° sub-sweep. This is the
  * bridge used to intersect and offset arcs against Béziers, and to feed SVG-style
  * consumers. The classic control-point magnitude `k = 4/3·tan(Δ/4)` keeps each sub-arc

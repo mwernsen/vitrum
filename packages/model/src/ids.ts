@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 
-import type { GlassId, LayerId, SegmentId } from './types'
+import type { GlassId, LayerId, NodeId, SegmentId } from './types'
 
 /**
  * Stable-id generation. IDs are opaque strings, never reused and never derived from an
@@ -9,6 +9,10 @@ import type { GlassId, LayerId, SegmentId } from './types'
  * of command application so commands stay pure and deterministic for property tests.
  */
 export function newSegmentId(): SegmentId {
+  return nanoid()
+}
+
+export function newNodeId(): NodeId {
   return nanoid()
 }
 

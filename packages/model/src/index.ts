@@ -11,6 +11,8 @@ export {
   type Glass,
   type GlassId,
   type LayerId,
+  type Node,
+  type NodeId,
   type Project,
   type ProjectSettings,
   type ReferenceLayer,
@@ -22,17 +24,34 @@ export {
 } from './types'
 
 // Ids and factories
-export { newGlassId, newLayerId, newSegmentId } from './ids'
-export { createSegment } from './factory'
+export { newGlassId, newLayerId, newNodeId, newSegmentId } from './ids'
+export { createSegment, weldSegments } from './factory'
+
+// Node helpers (F-013)
+export {
+  geometryEndpoints,
+  incidentEndpoints,
+  reconcileNodes,
+  reconcileProjectNodes,
+  referencedNodeIds,
+  setGeometryEndpoint,
+  synthesizeNodes,
+  transformGeometry,
+} from './nodes'
 
 // Commands
 export {
   addSegment,
   addSegments,
+  deleteNode,
+  mergeNodes,
+  moveNode,
   removeSegment,
   removeSegments,
   replaceSegments,
   setSegmentRole,
+  splitSegmentAtNode,
+  transformSegments,
   updateSegmentGeometry,
   updateSettings,
   type Command,

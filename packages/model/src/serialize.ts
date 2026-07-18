@@ -1,4 +1,5 @@
-import type { Project } from './types'
+import { synthesizeNodes } from './nodes'
+import type { Project, Segment } from './types'
 
 /**
  * Persistence (F-002). A `.vitrum` file is JSON: a small envelope carrying a
@@ -10,7 +11,7 @@ import type { Project } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -28,7 +29,30 @@ export interface Migration {
   migrate(file: VitrumFile): VitrumFile
 }
 
-export const MIGRATIONS: readonly Migration[] = []
+/**
+ * v1 → v2 (F-013): the stored-node model. v1 files carry segments with no endpoint node
+ * refs and no `nodes` map. Synthesise nodes by welding endpoints that share a coordinate
+ * exactly — the same coincidence relation F-011/F-012 maintained at draw time — so every
+ * junction that was value-equal becomes a shared node id, and the endpoint-integrity
+ * invariant (FR-1) holds from the first load onward.
+ */
+const migrateV1ToV2: Migration = {
+  from: 1,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'nodes' | 'segments'> & {
+      segments: Record<string, Omit<Segment, 'endpoints'>>
+    }
+    const raw = Object.values(project.segments).map((s) => ({
+      id: s.id,
+      geometry: s.geometry,
+      role: s.role,
+    }))
+    const { segments, nodes } = synthesizeNodes(raw)
+    return { schemaVersion: 2, project: { ...project, segments, nodes } }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
 export class SchemaVersionError extends Error {

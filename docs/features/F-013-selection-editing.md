@@ -3,7 +3,7 @@
 |                |              |
 | -------------- | ------------ |
 | **Phase**      | 1 — Sketcher |
-| **Status**     | agreed       |
+| **Status**     | in-progress  |
 | **Depends on** | F-011        |
 | **Complexity** | L            |
 

@@ -1,4 +1,4 @@
-import type { Arc, CubicBezier, Line } from '@vitrum/geometry'
+import type { Arc, CubicBezier, Line, Vec2 } from '@vitrum/geometry'
 
 /**
  * The document model (F-002). This is the single source of truth for a stained glass
@@ -16,18 +16,36 @@ import type { Arc, CubicBezier, Line } from '@vitrum/geometry'
 export type SegmentId = string
 export type GlassId = string
 export type LayerId = string
+/** A stable id for a network node — the shared junction two welded endpoints reference. */
+export type NodeId = string
 
 /** The geometry a segment can carry. Circular arcs only in v1 (see F-010). */
 export type SegmentGeometry = Line | Arc | CubicBezier
 
 /**
+ * A network node: the authoritative position of a junction (F-013). Segment endpoints
+ * reference a node by id; two endpoints are *welded* exactly when they name the same
+ * node, so junction integrity (F-013 FR-1) is a structural invariant — moving the node
+ * moves every incident endpoint together, and no edit can drift them apart. The node's
+ * `pos` is the single source of truth; each incident segment's geometry endpoint is kept
+ * bit-identical to it by the node commands.
+ */
+export interface Node {
+  readonly pos: Vec2
+}
+
+/**
  * One edge of the lead-line network. `role` distinguishes real lead lines from
- * construction guides (which never become lead) and the panel border.
+ * construction guides (which never become lead) and the panel border. `endpoints` are the
+ * `[start, end]` node ids its geometry welds to: for a `Line` these are `a`/`b`, for a
+ * `CubicBezier` `p0`/`p3` (handles stay free), for an `Arc` the computed start/end points.
+ * The referenced nodes' positions equal those geometry endpoints exactly.
  */
 export interface Segment {
   readonly id: SegmentId
   readonly geometry: SegmentGeometry
   readonly role: SegmentRole
+  readonly endpoints: readonly [NodeId, NodeId]
 }
 
 export type SegmentRole = 'lead' | 'construction' | 'border'
@@ -71,6 +89,12 @@ export interface Project {
    * order, which JSON round-trips preserve.
    */
   readonly segments: Readonly<Record<SegmentId, Segment>>
+  /**
+   * The network nodes, keyed by id (F-013). Exactly the set of node ids referenced by
+   * segment endpoints — no orphans: adding/removing segments reconciles this map. A record
+   * (not a `Map`) for the same lossless-JSON reasons as `segments`.
+   */
+  readonly nodes: Readonly<Record<NodeId, Node>>
   readonly glasses: Readonly<Record<GlassId, Glass>>
   readonly layers: readonly ReferenceLayer[]
 }
@@ -84,6 +108,7 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     settings: { ...DEFAULT_SETTINGS, ...settings },
     technique: DEFAULT_TECHNIQUE,
     segments: {},
+    nodes: {},
     glasses: {},
     layers: [],
   }
