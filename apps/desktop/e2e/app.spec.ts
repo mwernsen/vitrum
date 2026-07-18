@@ -7,7 +7,10 @@ test.beforeEach(async () => {
 })
 
 test.afterEach(async () => {
-  await app.close()
+  // Force-exit rather than graceful close: on macOS the app deliberately stays alive
+  // after its last window closes (see main's window-all-closed handler), which can make
+  // `app.close()` hang under load. `app.exit(0)` terminates deterministically.
+  await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
 })
 
 test('opens a window titled Vitrum', async () => {
