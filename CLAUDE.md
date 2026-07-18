@@ -42,10 +42,12 @@ F-004). Non-negotiables for implementing agents:
   use tokens; rendered document content (glass, lead) is data-driven and exempt.
 - Copy in sentence case, no emoji, no exclamation marks; numbers in mono. See the
   design project's `readme.md` for voice rules.
-- Missing a design? Don't invent it in code — flag it to Mathieu so it's added to
-  the Claude Design project first, then port it. The design project is canonical;
-  changes flow design → repo via the re-sync procedure in
-  `packages/ui/src/design/README.md`, never the reverse.
+- Missing a design? You may design and build the screen or component in code, but it
+  **must match the Vitrum Design System**: compose it from `components/core`
+  primitives, style it through tokens only, and follow the `ui_kits/studio` chrome
+  and voice rules. Note any net-new screen so it can be back-ported to the Claude
+  Design project. The design project stays canonical; established designs still flow
+  design → repo via the re-sync procedure in `packages/ui/src/design/README.md`.
 
 ## Commands (run from the repo root)
 

@@ -10,6 +10,8 @@ import {
 } from '@vitrum/model'
 import type { Project } from '@vitrum/model'
 
+import { stressScene } from '../canvas/scene'
+
 import type { AppHost, MenuAction } from './host'
 
 /**
@@ -70,6 +72,12 @@ export class DocumentController {
   addDebugSegment = (): void => {
     const y = this.segmentCount * 10
     this.#store.execute(addSegment(createSegment(line(vec2(0, y), vec2(100, y)))))
+  }
+
+  /** Debug-only: load a dense generated scene to stress-test canvas pan/zoom (F-003 FR-4). */
+  loadStressScene = (count = 5000): void => {
+    this.#store.load(stressScene(count))
+    this.currentPath = null
   }
 
   newDocument = async (): Promise<void> => {

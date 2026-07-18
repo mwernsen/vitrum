@@ -10,6 +10,9 @@
     "check": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@vitrum/geometry": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

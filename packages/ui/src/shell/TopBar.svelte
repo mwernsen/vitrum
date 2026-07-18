@@ -14,9 +14,11 @@
     title: string
     /** When present, undo/redo become live and the badge reflects save state (F-002). */
     controller?: DocumentController
+    /** Zoom the canvas to fit the document (F-003). */
+    onZoomFit?: () => void
   }
 
-  let { title, controller }: Props = $props()
+  let { title, controller, onZoomFit }: Props = $props()
 </script>
 
 <header class="topbar">
@@ -53,8 +55,8 @@
       <Redo2 size={18} />
     </IconButton>
   </Tooltip>
-  <Tooltip label="Zoom" side="bottom">
-    <IconButton label="Zoom"><ZoomIn size={18} /></IconButton>
+  <Tooltip label="Zoom to fit" side="bottom">
+    <IconButton label="Zoom to fit" onclick={() => onZoomFit?.()}><ZoomIn size={18} /></IconButton>
   </Tooltip>
   <Tooltip label="Export cut list" side="bottom">
     <IconButton label="Export" variant="outline"><Download size={18} /></IconButton>

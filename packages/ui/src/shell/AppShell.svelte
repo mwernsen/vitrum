@@ -1,6 +1,9 @@
 <script lang="ts">
-  import type { LengthUnit, Panel } from '@vitrum/core'
+  import type { Panel } from '@vitrum/core'
 
+  import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
+  import { documentBounds } from '../canvas/scene'
+  import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
 
   import Canvas from './Canvas.svelte'
@@ -17,24 +20,33 @@
 
   let { panel, controller }: Props = $props()
 
-  // Shell-level UI state. Real document/viewport state arrives with F-002/F-003;
-  // for now the cursor position and display unit are enough to make the four
-  // regions functional and testable.
-  let unit = $state<LengthUnit>('mm')
-  let cursor = $state<{ x: number; y: number } | null>(null)
+  // The viewport (F-003) is independent of the document controller, so the shell always
+  // owns one — tests render without a controller, the app renders with one.
+  const viewport = new ViewportController()
 
-  function toggleUnit() {
-    unit = unit === 'mm' ? 'in' : 'mm'
-  }
+  const segments = $derived(controller ? Object.values(controller.doc.segments) : [])
+  const bounds = $derived(controller ? documentBounds(controller.doc) : null)
+
+  let calibrationOpen = $state(false)
 </script>
 
 <div class="shell">
-  <TopBar title={panel.name} {controller} />
+  <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
   <Toolbar />
-  <Canvas onmove={(position) => (cursor = position)} onleave={() => (cursor = null)} />
-  <Inspector {panel} {unit} />
-  <StatusBar {cursor} {unit} ontoggleunit={toggleUnit} />
+  <Canvas {viewport} {segments} {bounds} />
+  <Inspector {panel} unit={viewport.unit} />
+  <StatusBar
+    {viewport}
+    onfit={() => viewport.zoomToFit(bounds)}
+    oncalibrate={() => (calibrationOpen = true)}
+  />
 </div>
+
+<CalibrationDialog
+  bind:open={calibrationOpen}
+  {viewport}
+  onClose={() => (calibrationOpen = false)}
+/>
 
 <style>
   .shell {

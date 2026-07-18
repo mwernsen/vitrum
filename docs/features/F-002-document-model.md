@@ -115,7 +115,7 @@ a `no-restricted-imports` boundary was added to `eslint.config.js` mirroring `co
   with pure `apply` + `invert(before)`; `DocumentStore.execute` is the only mutator (FR-1,
   no raw setters exported). Undo/redo is unlimited and exact — `invert` rebuilds the reverse
   command from the pre-state rather than snapshotting. Drag coalescing (FR): `execute(cmd,
-  {coalesceKey})` merges consecutive same-key commands into one history entry while keeping
+{coalesceKey})` merges consecutive same-key commands into one history entry while keeping
   the earliest inverse, so a drag is a single undo step. Commands: `addSegment`,
   `removeSegment`, `updateSegmentGeometry` (mergeable), `setSegmentRole`, `updateSettings`.
 - **Persistence** (`serialize.ts`): `.vitrum` = `{ schemaVersion, project }` JSON.
@@ -150,7 +150,7 @@ plus `lint`/`format:check`/`check`.
 
 **Pending Mathieu (native-dialog flows, not automatable in Playwright):** manual check of
 Open/Save/Save-As dialogs and the on-startup crash-recovery prompt. The round-trip and
-recovery *logic* are covered by unit tests; only the native dialog UX is manual.
+recovery _logic_ are covered by unit tests; only the native dialog UX is manual.
 
 **Merge coordination — F-010 vendored.** `@vitrum/model` needs `@vitrum/geometry`'s types,
 which were in-flight on the `f-010-geometry-kernel` branch and not yet committed. Per
