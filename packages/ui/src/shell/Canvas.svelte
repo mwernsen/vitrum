@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Diagnostic, Piece } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
   import type { Segment } from '@vitrum/model'
@@ -7,8 +8,11 @@
   import {
     RULER_SIZE,
     drawContent,
+    drawDiagnostics,
     drawGrid,
     drawOverlay,
+    drawPieceFills,
+    drawPieceHighlight,
     drawRuler,
     drawSnapMarker,
     drawToolPreview,
@@ -37,9 +41,29 @@
     edit?: EditController
     /** The selection model (F-013), for highlighting selected segments. */
     selection?: SelectionController
+    /** Detected pieces to overlay (F-020 dev visualization). Empty ⇒ nothing drawn. */
+    pieces?: readonly Piece[]
+    /** Network diagnostics to mark (F-020). */
+    diagnostics?: readonly Diagnostic[]
+    /** Whether the piece overlay is on (F-020 dev toggle). */
+    showPieces?: boolean
+    /** Id of the piece under the cursor, for hover highlight (F-020). */
+    hoveredPieceId?: string | null
   }
 
-  let { viewport, segments = [], bounds = null, tools, snap, edit, selection }: Props = $props()
+  let {
+    viewport,
+    segments = [],
+    bounds = null,
+    tools,
+    snap,
+    edit,
+    selection,
+    pieces = [],
+    diagnostics = [],
+    showPieces = false,
+    hoveredPieceId = null,
+  }: Props = $props()
 
   /** True when the inert select tool is active and editing is wired in. */
   function editing(): boolean {
@@ -80,12 +104,17 @@
     }
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
+      if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
       drawContent(ctx, viewport.transform, size, segments, palette)
       dirty.content = false
     }
     if (dirty.overlay) {
       const ctx = prepareContext(overlayCanvas, size, dpr)
       drawOverlay(ctx, size, viewport.cursorScreen, palette)
+      if (showPieces) {
+        drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
+        drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
+      }
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       if (edit && selection && editing()) {
@@ -147,6 +176,8 @@
     void viewport.height
     void viewport.gridVisible
     void segments
+    void pieces
+    void showPieces
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {
@@ -164,6 +195,10 @@
     void edit?.nodeMarkers
     void edit?.bezierHandles
     void segments
+    void pieces
+    void diagnostics
+    void showPieces
+    void hoveredPieceId
     schedule('overlay', 'rulers')
   })
 

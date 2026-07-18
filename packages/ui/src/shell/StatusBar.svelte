@@ -45,6 +45,15 @@
     >
       Grid
     </button>
+    <button
+      type="button"
+      class="chip"
+      aria-pressed={viewport.piecesVisible}
+      aria-label={`Piece overlay ${viewport.piecesVisible ? 'on' : 'off'}. Click to toggle.`}
+      onclick={() => viewport.togglePieces()}
+    >
+      Pieces
+    </button>
     {#if snap}
       <SnapSettings {snap} {viewport} {onClearGuides} />
     {/if}

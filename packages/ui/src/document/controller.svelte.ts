@@ -1,4 +1,4 @@
-import { curveEndpoints } from '@vitrum/core'
+import { curveEndpoints, PieceDetector, type DetectionResult } from '@vitrum/core'
 import { line, vec2 } from '@vitrum/geometry'
 import {
   Autosaver,
@@ -8,6 +8,7 @@ import {
   createSegment,
   deserialize,
   DocumentStore,
+  outputSegments,
   removeSegments,
   serialize,
 } from '@vitrum/model'
@@ -28,6 +29,7 @@ export class DocumentController {
   readonly #store: DocumentStore
   readonly #host: AppHost
   readonly #autosaver: Autosaver
+  readonly #detector = new PieceDetector()
   #offMenu: (() => void) | undefined
 
   doc = $state<Project>(createEmptyProject())
@@ -78,6 +80,15 @@ export class DocumentController {
     this.#offMenu?.()
   }
 
+  /**
+   * Derive the glass pieces and diagnostics from the current network (F-020). Computed on
+   * demand rather than reactively, so it stays off the hot path of the debug stress scene;
+   * callers memoise it against `doc` (the dev overlay and the debug palette both do). Uses
+   * the incremental `PieceDetector`, so redrawing one line reuses unchanged components and
+   * keeps piece ids stable across the session (FR-3/FR-5).
+   */
+  detect = (): DetectionResult => this.#detector.update(outputSegments(this.doc))
+
   undo = (): void => this.#store.undo()
   redo = (): void => this.#store.redo()
 
@@ -108,12 +119,14 @@ export class DocumentController {
 
   /** Debug-only: load a dense generated scene to stress-test canvas pan/zoom (F-003 FR-4). */
   loadStressScene = (count = 5000): void => {
+    this.#detector.reset()
     this.#store.load(stressScene(count))
     this.currentPath = null
   }
 
   newDocument = async (): Promise<void> => {
     if (!(await this.#confirmDiscard())) return
+    this.#detector.reset()
     this.#store.load(createEmptyProject())
     this.currentPath = null
     await this.#host.storage.clearAutosave()
@@ -123,6 +136,7 @@ export class DocumentController {
     if (!(await this.#confirmDiscard())) return
     const file = await this.#host.storage.openFile()
     if (!file) return
+    this.#detector.reset()
     this.#store.load(deserialize(file.contents))
     this.currentPath = file.path
     await this.#host.storage.clearAutosave()
@@ -152,6 +166,7 @@ export class DocumentController {
 
   /** Restore an autosave snapshot after a crash. The result is treated as unsaved. */
   recover = (contents: string): void => {
+    this.#detector.reset()
     this.#store.load(deserialize(contents))
     this.currentPath = null
   }
