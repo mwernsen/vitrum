@@ -51,7 +51,7 @@ describe('schema versioning (FR-4)', () => {
   })
 
   it('runs a chain of registered forward migrations for an older schema version', () => {
-    // A synthetic v0 file; the injected chain must reach CURRENT_SCHEMA_VERSION (2).
+    // A synthetic v0 file; the injected chain must reach CURRENT_SCHEMA_VERSION (3).
     const legacy = JSON.stringify({
       schemaVersion: 0,
       project: { ...createEmptyProject({ name: 'legacy-name' }) },
@@ -65,6 +65,7 @@ describe('schema versioning (FR-4)', () => {
         }),
       },
       { from: 1, migrate: (file) => ({ schemaVersion: 2, project: file.project }) },
+      { from: 2, migrate: (file) => ({ schemaVersion: 3, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -88,6 +89,23 @@ describe('schema versioning (FR-4)', () => {
     expect(Object.keys(project.nodes)).toHaveLength(3)
     expect(project.segments.s1!.endpoints[1]).toBe(project.segments.s2!.endpoints[0])
     expect(project.nodes[project.segments.s1!.endpoints[1]]!.pos).toEqual(vec2(100, 0))
+  })
+
+  it('v2 → v3 expands the placeholder technique into the full lead/foil model (F-021)', () => {
+    // A legacy v2 file carrying only the technique placeholder `{ kind: 'foil' }`.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'foil' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      layers: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 2, project: legacyProject }))
+    expect(project.technique.kind).toBe('foil') // chosen kind preserved
+    expect(project.technique.lead.defaultProfileId).toBe('came-h-5')
+    expect(project.technique.lead.profiles['came-h-5']).toBeDefined()
+    expect(project.technique.foil.foilWidthMm).toBeCloseTo(5.6)
   })
 
   it('throws when no migration path exists for an older version', () => {

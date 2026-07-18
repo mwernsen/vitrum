@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 
+import type { CameProfileId } from './technique'
 import type { GlassId, LayerId, NodeId, SegmentId } from './types'
 
 /**
@@ -22,4 +23,9 @@ export function newGlassId(): GlassId {
 
 export function newLayerId(): LayerId {
   return nanoid()
+}
+
+/** A fresh came-profile id for a user-added library entry (seed profiles use readable slugs). */
+export function newCameProfileId(): CameProfileId {
+  return `came-${nanoid(8)}`
 }

@@ -80,6 +80,26 @@ export {
   type PlanarGraph,
 } from './pieces'
 export {
+  CutContourCache,
+  computeCutContour,
+  computeCutContours,
+  cutContourFor,
+  edgeAllowanceMm,
+  leadFlangeMm,
+  resolveCame,
+  type AllowanceResolver,
+  type CameKind,
+  type CameOverride,
+  type CameProfile,
+  type CutContour,
+  type FoilSettings,
+  type LeadSettings,
+  type ResolvedCame,
+  type SolderFinish,
+  type TechniqueKind,
+  type TechniqueSettings,
+} from './technique'
+export {
   buildPickScene,
   marqueeMode,
   marqueeSelect,

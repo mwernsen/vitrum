@@ -54,6 +54,15 @@
     >
       Pieces
     </button>
+    <button
+      type="button"
+      class="chip"
+      aria-pressed={viewport.cutsVisible}
+      aria-label={`Cut-contour overlay ${viewport.cutsVisible ? 'on' : 'off'}. Click to toggle.`}
+      onclick={() => viewport.toggleCuts()}
+    >
+      Cuts
+    </button>
     {#if snap}
       <SnapSettings {snap} {viewport} {onClearGuides} />
     {/if}

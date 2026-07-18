@@ -1,6 +1,7 @@
 export { detectPieces, PieceDetector, type PlanarGraph } from './detect'
 export { buildGraph, type GraphEdge } from './graph'
 export { contentId, matchIds } from './identity'
+export { spanPoints } from './properties'
 export {
   DETECT_DEFAULTS,
   type BoundarySpan,

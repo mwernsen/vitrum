@@ -16,6 +16,15 @@ import {
   transformGeometry,
 } from './nodes'
 import type {
+  CameOverride,
+  CameProfile,
+  CameProfileId,
+  FoilSettings,
+  LeadSettings,
+  TechniqueKind,
+  TechniqueSettings,
+} from './technique'
+import type {
   Node,
   NodeId,
   Project,
@@ -607,6 +616,118 @@ function mergeSettings(base: ProjectSettings, patch: Partial<ProjectSettings>): 
   const name = patch.name ?? base.name
   const panelSize = 'panelSize' in patch ? patch.panelSize : base.panelSize
   return panelSize ? { units, name, panelSize } : { units, name }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Technique commands (F-021)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Replace the whole technique block. The primitive every technique edit is expressed in: its
+ * inverse restores the exact previous technique, so a technique switch, a came-library edit or a
+ * per-segment override change is always a single, precise undo entry (FR-4). Not exported —
+ * callers use the intent-named builders below so DRC/versioning can reason about the change.
+ */
+function replaceTechnique(next: TechniqueSettings, kind = 'replaceTechnique'): Command {
+  return {
+    kind,
+    apply: (doc) => ({ ...doc, technique: next }),
+    invert: (before) => replaceTechnique(before.technique, kind),
+  }
+}
+
+/** Switch the construction technique lead⇄foil, preserving both parameter blocks (FR-4). */
+export function setTechniqueKind(kind: TechniqueKind): Command {
+  return {
+    kind: 'setTechniqueKind',
+    apply: (doc) => replaceTechnique({ ...doc.technique, kind }).apply(doc),
+    invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/** Patch the lead-came parameters (default profile, cutting tolerance). */
+export function updateLeadSettings(patch: Partial<LeadSettings>): Command {
+  return {
+    kind: 'updateLeadSettings',
+    apply: (doc) =>
+      replaceTechnique({ ...doc.technique, lead: { ...doc.technique.lead, ...patch } }).apply(doc),
+    invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/** Patch the copper-foil parameters (foil width, piece gap, solder finish). */
+export function updateFoilSettings(patch: Partial<FoilSettings>): Command {
+  return {
+    kind: 'updateFoilSettings',
+    apply: (doc) =>
+      replaceTechnique({ ...doc.technique, foil: { ...doc.technique.foil, ...patch } }).apply(doc),
+    invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/** Add a came profile to the library, or replace an existing one with the same id. */
+export function upsertCameProfile(profile: CameProfile): Command {
+  return {
+    kind: 'upsertCameProfile',
+    apply: (doc) => {
+      const profiles = { ...doc.technique.lead.profiles, [profile.id]: profile }
+      return replaceTechnique({
+        ...doc.technique,
+        lead: { ...doc.technique.lead, profiles },
+      }).apply(doc)
+    },
+    invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/**
+ * Remove a came profile from the library. Fails for the default profile (removing it would leave
+ * segments with no came to resolve) — repoint the default first. Segment overrides that named the
+ * removed profile fall back to the default at resolve time.
+ */
+export function removeCameProfile(profileId: CameProfileId): Command {
+  return {
+    kind: 'removeCameProfile',
+    apply: (doc) => {
+      const lead = doc.technique.lead
+      if (profileId === lead.defaultProfileId) {
+        throw new Error(`removeCameProfile: cannot remove the default profile ${profileId}`)
+      }
+      if (!(profileId in lead.profiles)) {
+        throw new Error(`removeCameProfile: profile ${profileId} does not exist`)
+      }
+      const profiles = { ...lead.profiles }
+      delete profiles[profileId]
+      return replaceTechnique({ ...doc.technique, lead: { ...lead, profiles } }).apply(doc)
+    },
+    invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/**
+ * Set (or clear, with `override === null`) the per-segment came override for one segment. Only the
+ * two pieces adjacent to that segment change, on the shared edge only (FR-2) — the override is
+ * consumed edge-locally by cut-contour computation. An empty override is stored as a clear.
+ */
+export function setCameOverride(segmentId: SegmentId, override: CameOverride | null): Command {
+  return {
+    kind: 'setCameOverride',
+    apply: (doc) => {
+      const overrides = { ...doc.technique.lead.overrides }
+      const empty =
+        !override ||
+        (override.profileId === undefined &&
+          override.flangeMm === undefined &&
+          override.heartMm === undefined)
+      if (empty) delete overrides[segmentId]
+      else overrides[segmentId] = override
+      return replaceTechnique({
+        ...doc.technique,
+        lead: { ...doc.technique.lead, overrides },
+      }).apply(doc)
+    },
+    invert: (before) => replaceTechnique(before.technique),
+  }
 }
 
 /* -------------------------------------------------------------------------- */

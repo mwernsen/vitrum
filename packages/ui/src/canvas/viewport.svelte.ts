@@ -36,6 +36,8 @@ export class ViewportController {
   guidesVisible = $state(true)
   /** Detected-piece overlay (F-020, dev visualization). Off by default; on ⇒ pieces run. */
   piecesVisible = $state(false)
+  /** Cut-contour overlay (F-021, dev visualization): where the glass is actually cut. */
+  cutsVisible = $state(false)
   /** Calibrated CSS px per mm for this display, used to report 1:1 physical zoom. */
   pxPerMm = $state(defaultPxPerMm())
   /** Cursor position in drawing-area CSS px, or `null` when the pointer is away. */
@@ -123,6 +125,10 @@ export class ViewportController {
 
   togglePieces(): void {
     this.piecesVisible = !this.piecesVisible
+  }
+
+  toggleCuts(): void {
+    this.cutsVisible = !this.cutsVisible
   }
 
   /** Apply a new physical calibration (CSS px per mm) from the calibration dialog. */

@@ -1,4 +1,11 @@
-import { curveEndpoints, PieceDetector, type DetectionResult } from '@vitrum/core'
+import {
+  CutContourCache,
+  curveEndpoints,
+  PieceDetector,
+  type CutContour,
+  type DetectionResult,
+  type Piece,
+} from '@vitrum/core'
 import { line, vec2 } from '@vitrum/geometry'
 import {
   Autosaver,
@@ -30,6 +37,7 @@ export class DocumentController {
   readonly #host: AppHost
   readonly #autosaver: Autosaver
   readonly #detector = new PieceDetector()
+  readonly #cutCache = new CutContourCache()
   #offMenu: (() => void) | undefined
 
   doc = $state<Project>(createEmptyProject())
@@ -89,6 +97,16 @@ export class DocumentController {
    */
   detect = (): DetectionResult => this.#detector.update(outputSegments(this.doc))
 
+  /**
+   * Derive the technique-aware cut contours for the given pieces (F-021), inset from the drawn
+   * boundary by the lead-came heart / copper-foil allowance. Cached alongside piece detection: an
+   * unchanged piece with unchanged came settings reuses its contour; a technique switch or a
+   * per-segment override recomputes only the affected pieces. Callers pass the pieces from
+   * {@link detect} so the two stay in sync.
+   */
+  cutContours = (pieces: readonly Piece[]): CutContour[] =>
+    this.#cutCache.update(pieces, outputSegments(this.doc), this.doc.technique)
+
   undo = (): void => this.#store.undo()
   redo = (): void => this.#store.redo()
 
@@ -120,6 +138,7 @@ export class DocumentController {
   /** Debug-only: load a dense generated scene to stress-test canvas pan/zoom (F-003 FR-4). */
   loadStressScene = (count = 5000): void => {
     this.#detector.reset()
+    this.#cutCache.reset()
     this.#store.load(stressScene(count))
     this.currentPath = null
   }
@@ -127,6 +146,7 @@ export class DocumentController {
   newDocument = async (): Promise<void> => {
     if (!(await this.#confirmDiscard())) return
     this.#detector.reset()
+    this.#cutCache.reset()
     this.#store.load(createEmptyProject())
     this.currentPath = null
     await this.#host.storage.clearAutosave()
@@ -137,6 +157,7 @@ export class DocumentController {
     const file = await this.#host.storage.openFile()
     if (!file) return
     this.#detector.reset()
+    this.#cutCache.reset()
     this.#store.load(deserialize(file.contents))
     this.currentPath = file.path
     await this.#host.storage.clearAutosave()
@@ -167,6 +188,7 @@ export class DocumentController {
   /** Restore an autosave snapshot after a crash. The result is treated as unsaved. */
   recover = (contents: string): void => {
     this.#detector.reset()
+    this.#cutCache.reset()
     this.#store.load(deserialize(contents))
     this.currentPath = null
   }

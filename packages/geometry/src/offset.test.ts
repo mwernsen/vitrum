@@ -9,7 +9,7 @@ import {
   offsetLine,
   signedArea,
 } from './index'
-import { offsetPolygon, offsetPolyline } from './offset'
+import { offsetPolygon, offsetPolyline, offsetRingVariable } from './offset'
 import { pointInPolygon } from './polygon'
 import { arc, cubic, line, polygon, polyline } from './types'
 import { distance, vec2 } from './vec2'
@@ -113,6 +113,34 @@ describe('offsetPolygon (FR-3)', () => {
       perimeter += distance(pts[i]!, pts[(i + 1) % pts.length]!)
     }
     expect(perimeter).toBeCloseTo(64)
+  })
+})
+
+describe('offsetRingVariable', () => {
+  // CCW unit square, 10 mm on a side. Edges: 0 bottom, 1 right, 2 top, 3 left.
+  const square = [vec2(0, 0), vec2(10, 0), vec2(10, 10), vec2(0, 10)]
+
+  it('insets every edge by the same distance (uniform case = FR-1 shape)', () => {
+    const { contour, selfIntersects } = offsetRingVariable(square, [-1, -1, -1, -1])
+    expect(selfIntersects).toBe(false)
+    expect(contour).toEqual([vec2(1, 1), vec2(9, 1), vec2(9, 9), vec2(1, 9)])
+  })
+
+  it('insets one edge more than the others (per-edge distances, FR-2)', () => {
+    // Bottom edge inset by 2, the rest by 1: only the bottom edge (y) moves further.
+    const { contour } = offsetRingVariable(square, [-2, -1, -1, -1])
+    expect(contour).toEqual([vec2(1, 2), vec2(9, 2), vec2(9, 9), vec2(1, 9)])
+  })
+
+  it('flags a self-intersecting result when a feature is inset past its half-width (FR-3)', () => {
+    const small = [vec2(0, 0), vec2(2, 0), vec2(2, 2), vec2(0, 2)]
+    const { selfIntersects } = offsetRingVariable(small, [-1.5, -1.5, -1.5, -1.5])
+    expect(selfIntersects).toBe(true)
+  })
+
+  it('returns the ring unchanged when the distances array is mismatched', () => {
+    const { contour } = offsetRingVariable(square, [-1, -1])
+    expect(contour).toEqual(square)
   })
 })
 
