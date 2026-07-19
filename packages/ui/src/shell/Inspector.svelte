@@ -10,9 +10,14 @@
   } from '@vitrum/core'
   import { curveLength, vec2 } from '@vitrum/geometry'
   import {
+    cloneGlass,
     geometryEndpoints,
+    newGlassId,
+    removeGlass,
     setCameOverride,
+    upsertGlass,
     type Command,
+    type Glass,
     type Project,
     type Segment,
   } from '@vitrum/model'
@@ -20,6 +25,9 @@
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
   import Select from '../components/Select.svelte'
+  import GlassPalette from '../glass/GlassPalette.svelte'
+  import type { GlassLibraryController } from '../glass/library.svelte'
+  import type { GlassScopeActions } from '../glass/types'
   import type { EditController } from '../tools/edit.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
 
@@ -38,9 +46,44 @@
     pieces?: readonly Piece[]
     /** Command sink (F-021 technique edits). Absent ⇒ technique panel is read-only/hidden. */
     execute?: (command: Command) => void
+    /** The global glass library controller (F-022). Absent ⇒ the glass palette is hidden. */
+    glassLibrary?: GlassLibraryController
   }
 
-  let { panel, unit, edit, selection, doc, pieces = [], execute }: Props = $props()
+  let { panel, unit, edit, selection, doc, pieces = [], execute, glassLibrary }: Props = $props()
+
+  // Glass palette wiring (F-022). Library edits go through the library controller; project edits go
+  // through document commands so they are undoable and serialized with the file (self-contained, FR-1).
+  const libraryActions = $derived<GlassScopeActions | undefined>(
+    glassLibrary
+      ? {
+          upsert: (g) => void glassLibrary.upsert(g),
+          remove: (id) => void glassLibrary.remove(id),
+          duplicate: (id) => void glassLibrary.duplicate(id),
+          newId: () => glassLibrary.newId(),
+        }
+      : undefined,
+  )
+  const projectActions = $derived<GlassScopeActions | undefined>(
+    doc && execute
+      ? {
+          upsert: (g) => execute(upsertGlass(g)),
+          remove: (id) => execute(removeGlass(id)),
+          duplicate: (id) => {
+            const src = doc.glasses[id]
+            if (src)
+              execute(
+                upsertGlass({ ...cloneGlass(src), id: newGlassId(), name: `${src.name} copy` }),
+              )
+          },
+          newId: () => newGlassId(),
+        }
+      : undefined,
+  )
+  const projectGlasses = $derived<Glass[] | undefined>(doc ? Object.values(doc.glasses) : undefined)
+  function addToProject(g: Glass): void {
+    execute?.(upsertGlass({ ...cloneGlass(g), id: newGlassId() }))
+  }
 
   const width = $derived(formatLength(panel.widthMm, unit))
   const height = $derived(formatLength(panel.heightMm, unit))
@@ -258,6 +301,18 @@
         <dd data-testid="inspector-piece-count">{pieces.length}</dd>
       </div>
     </dl>
+
+    {#if glassLibrary && libraryActions}
+      <GlassPalette
+        library={glassLibrary.glasses}
+        {libraryActions}
+        project={projectGlasses}
+        {projectActions}
+        onAddToProject={execute ? addToProject : undefined}
+        onImport={() => void glassLibrary.importLibrary()}
+        onExport={() => void glassLibrary.exportLibrary()}
+      />
+    {/if}
 
     {#if doc && execute}
       <TechniquePanel technique={doc.technique} {execute} />

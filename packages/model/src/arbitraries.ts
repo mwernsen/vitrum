@@ -4,7 +4,16 @@ import fc from 'fast-check'
 
 import { synthesizeNodes } from './nodes'
 import { createEmptyProject } from './types'
-import type { NodeId, Project, ProjectSettings, SegmentGeometry, SegmentRole } from './types'
+import type {
+  Glass,
+  NodeId,
+  Project,
+  ProjectSettings,
+  SegmentGeometry,
+  SegmentRole,
+  TextureTag,
+  TransparencyClass,
+} from './types'
 
 /**
  * Shared fast-check generators for the property-based suites (FR-2 undo/redo exactness,
@@ -37,6 +46,71 @@ export const geometryArb: fc.Arbitrary<SegmentGeometry> = fc.oneof(
 
 export const roleArb: fc.Arbitrary<SegmentRole> = fc.constantFrom('lead', 'construction', 'border')
 
+const hexColorArb: fc.Arbitrary<string> = fc
+  .integer({ min: 0, max: 0xffffff })
+  .map((n) => `#${n.toString(16).padStart(6, '0')}`)
+
+/** An arbitrary glass, exercising the full `Glass` shape (all optional commercial fields). */
+export const glassArb: fc.Arbitrary<Glass> = fc
+  .record({
+    id: fc.string({ minLength: 1 }),
+    name: fc.string(),
+    color: hexColorArb,
+    transparency: fc.constantFrom(
+      'transparent',
+      'translucent',
+      'opalescent',
+      'opaque',
+    ) as fc.Arbitrary<TransparencyClass>,
+    texture: fc.constantFrom(
+      'smooth',
+      'hammered',
+      'seedy',
+      'streaky',
+      'ripple',
+      'granite',
+    ) as fc.Arbitrary<TextureTag>,
+    thicknessMm: finite().map((n) => Math.abs(n) + 0.1),
+    manufacturer: fc.option(fc.string(), { nil: undefined }),
+    sku: fc.option(fc.string(), { nil: undefined }),
+    pricePerM2: fc.option(finite().map(Math.abs), { nil: undefined }),
+    sheetSizes: fc.option(
+      fc.array(
+        fc.record({
+          widthMm: finite().map((n) => Math.abs(n) + 1),
+          heightMm: finite().map((n) => Math.abs(n) + 1),
+          label: fc.option(fc.string(), { nil: undefined }),
+        }),
+        { maxLength: 3 },
+      ),
+      { nil: undefined },
+    ),
+    swatch: fc.option(fc.string(), { nil: undefined }),
+  })
+  .map((g) => {
+    // Strip undefined optionals so the round-trip (JSON drops undefined) compares equal.
+    const out: Record<string, unknown> = {
+      id: g.id,
+      name: g.name,
+      color: g.color,
+      transparency: g.transparency,
+      texture: g.texture,
+      thicknessMm: g.thicknessMm,
+    }
+    if (g.manufacturer !== undefined) out['manufacturer'] = g.manufacturer
+    if (g.sku !== undefined) out['sku'] = g.sku
+    if (g.pricePerM2 !== undefined) out['pricePerM2'] = g.pricePerM2
+    if (g.sheetSizes !== undefined) {
+      out['sheetSizes'] = g.sheetSizes.map((s) => {
+        const sheet: Record<string, unknown> = { widthMm: s.widthMm, heightMm: s.heightMm }
+        if (s.label !== undefined) sheet['label'] = s.label
+        return sheet
+      })
+    }
+    if (g.swatch !== undefined) out['swatch'] = g.swatch
+    return out as unknown as Glass
+  })
+
 export const settingsArb: fc.Arbitrary<ProjectSettings> = fc
   .record({
     units: fc.constantFrom('mm', 'in') as fc.Arbitrary<'mm' | 'in'>,
@@ -61,8 +135,12 @@ export const settingsArb: fc.Arbitrary<ProjectSettings> = fc
  * node position matches its geometry endpoint.
  */
 export const projectArb: fc.Arbitrary<Project> = fc
-  .tuple(settingsArb, fc.array(fc.tuple(geometryArb, roleArb), { maxLength: 12 }))
-  .map(([settings, segs]) => {
+  .tuple(
+    settingsArb,
+    fc.array(fc.tuple(geometryArb, roleArb), { maxLength: 12 }),
+    fc.array(glassArb, { maxLength: 6 }),
+  )
+  .map(([settings, segs, glassList]) => {
     const base = createEmptyProject(settings)
     let counter = 0
     const mint = (): NodeId => `node-${counter++}`
@@ -70,7 +148,12 @@ export const projectArb: fc.Arbitrary<Project> = fc
       segs.map(([geometry, role], i) => ({ id: `seg-${i}`, geometry, role })),
       mint,
     )
-    return { ...base, segments, nodes }
+    // Key glasses by a synthesised id so duplicate arbitrary ids don't collapse the record.
+    const glasses: Record<string, Glass> = {}
+    glassList.forEach((g, i) => {
+      glasses[`glass-${i}`] = { ...g, id: `glass-${i}` }
+    })
+    return { ...base, segments, nodes, glasses }
   })
 
 /**

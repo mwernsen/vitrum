@@ -1,4 +1,4 @@
-import type { OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
 import type { AppHost } from './host'
 
@@ -9,6 +9,7 @@ import type { AppHost } from './host'
  * desktop host lives in `apps/desktop`.
  */
 const AUTOSAVE_KEY = 'vitrum:autosave'
+const GLASS_LIBRARY_KEY = 'vitrum:glass-library'
 
 export function createBrowserHost(): AppHost {
   let dirty = false
@@ -40,8 +41,21 @@ export function createBrowserHost(): AppHost {
     },
   }
 
+  const glassLibrary: GlassLibraryPort = {
+    load: async () => safeLocalStorage()?.getItem(GLASS_LIBRARY_KEY) ?? null,
+    save: async (contents) => {
+      safeLocalStorage()?.setItem(GLASS_LIBRARY_KEY, contents)
+    },
+    exportLibrary: async (suggestedName, contents) => {
+      downloadFile(suggestedName, contents)
+      return suggestedName
+    },
+    importLibrary: () => pickFile().then((f) => f?.contents ?? null),
+  }
+
   return {
     storage,
+    glassLibrary,
     reportDirty: (value) => {
       dirty = value
     },

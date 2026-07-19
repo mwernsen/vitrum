@@ -143,3 +143,10 @@ this file steers every future feature.
 - (F-020, 2026-07-18) A full circle/ellipse is emitted as one closed arc with coincident start/end;
   `buildGraph` must inject interior (quarter-point) splits or it drops the loop as a zero-length
   self-loop (`from === to`) and the shape vanishes from detection.
+- (F-022, 2026-07-19) App-level state that isn't part of the document/undo model (e.g. the global
+  glass library) gets its own `*Port` on `AppHost` (stubbed in `browserHost`/`fakeHost`, backed by
+  `userData` on desktop with a `VITRUM_*_PATH` env override for E2E isolation) + a runes controller
+  in `ui` — mirror the F-002 `StoragePort` split rather than routing through `DocumentStore`.
+- (F-022, 2026-07-19) Shipped seed data (starter catalogs) must be `Object.freeze`d deeply and
+  handed out via a `fresh-copy()` accessor; "copy-on-write" is then provable by a frozen-constant
+  test plus immutable library ops.
