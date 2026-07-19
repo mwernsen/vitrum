@@ -22,11 +22,16 @@
   import { SelectionController } from '../tools/selection.svelte'
   import { SnapController } from '../tools/snap.svelte'
 
+  import ActivityRail from './ActivityRail.svelte'
   import Canvas from './Canvas.svelte'
+  import { type DockSection } from './dock'
+  import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
+  import ReadinessStrip from './ReadinessStrip.svelte'
   import StatusBar from './StatusBar.svelte'
   import Toolbar from './Toolbar.svelte'
   import TopBar from './TopBar.svelte'
+  import { type ViewMode } from './viewmode'
 
   interface Props {
     panel: Panel
@@ -161,11 +166,14 @@
   )
 
   let calibrationOpen = $state(false)
+
+  // Cockpit shell state (Portal "2b"). Only the "design" view and the "glass" dock section are
+  // backed by completed features today; the rest render as disabled placeholders.
+  let viewMode = $state<ViewMode>('design')
+  let dockSection = $state<DockSection>('glass')
 </script>
 
-<div class="shell">
-  <TopBar title={panel.name} {controller} onZoomFit={() => viewport.zoomToFit(bounds)} />
-  <Toolbar {tools} {paint} />
+{#snippet glassPanel()}
   {#if glassLibrary}
     <GlassDock
       {glassLibrary}
@@ -175,38 +183,64 @@
       execute={controller ? (command) => controller.execute(command) : undefined}
     />
   {/if}
-  <Canvas
-    {viewport}
-    segments={shownSegments}
-    {bounds}
-    {tools}
-    {snap}
-    {edit}
-    {selection}
-    {paint}
-    {pieces}
-    {diagnostics}
-    showGlass={viewport.glassVisible}
-    glassAssignments={assignments.effective}
-    glasses={projectGlasses}
-    selectedPieces={paint.selectedPieces}
-    showPieces={viewport.piecesVisible}
-    {hoveredPieceId}
-    technique={techniqueRender}
-    {cutContours}
-    showCuts={viewport.cutsVisible}
+{/snippet}
+
+<div class="shell">
+  <TopBar
+    title={panel.name}
+    {controller}
+    {viewMode}
+    onViewMode={(mode) => (viewMode = mode)}
+    onZoomFit={() => viewport.zoomToFit(bounds)}
   />
-  <Inspector
-    {panel}
-    unit={viewport.unit}
-    {edit}
-    {selection}
-    {paint}
-    {assignments}
-    doc={controller?.doc}
-    {pieces}
-    execute={controller ? (command) => controller.execute(command) : undefined}
-  />
+  <ReadinessStrip pieceCount={pieces.length} {unassignedCount} />
+  <div class="body">
+    <ActivityRail
+      active={dockSection}
+      onSelect={(section) => (dockSection = section)}
+      attentionCount={unassignedCount}
+    />
+    <DockPanel
+      section={dockSection}
+      onSelect={(section) => (dockSection = section)}
+      glass={glassLibrary ? glassPanel : undefined}
+    />
+    <div class="stage">
+      <Toolbar {tools} {paint} />
+      <Canvas
+        {viewport}
+        segments={shownSegments}
+        {bounds}
+        {tools}
+        {snap}
+        {edit}
+        {selection}
+        {paint}
+        {pieces}
+        {diagnostics}
+        showGlass={viewport.glassVisible}
+        glassAssignments={assignments.effective}
+        glasses={projectGlasses}
+        selectedPieces={paint.selectedPieces}
+        showPieces={viewport.piecesVisible}
+        {hoveredPieceId}
+        technique={techniqueRender}
+        {cutContours}
+        showCuts={viewport.cutsVisible}
+      />
+    </div>
+    <Inspector
+      {panel}
+      unit={viewport.unit}
+      {edit}
+      {selection}
+      {paint}
+      {assignments}
+      doc={controller?.doc}
+      {pieces}
+      execute={controller ? (command) => controller.execute(command) : undefined}
+    />
+  </div>
   <StatusBar
     {viewport}
     {snap}
@@ -226,14 +260,29 @@
 <style>
   .shell {
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
-      'menu menu menu menu'
-      'tools dock canvas inspector'
-      'status status status status';
+      'menu'
+      'readiness'
+      'body'
+      'status';
     height: 100vh;
     width: 100vw;
     overflow: hidden;
+  }
+
+  .body {
+    grid-area: body;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* Canvas stage: the positioned ancestor for the floating tool palette. */
+  .stage {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    display: flex;
   }
 </style>

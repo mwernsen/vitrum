@@ -350,7 +350,8 @@
 <style>
   .inspector {
     grid-area: inspector;
-    width: clamp(14rem, 20vw, 20rem);
+    flex: none;
+    width: 236px;
     padding: var(--space-4);
     background: var(--paper-0);
     border-left: 1px solid var(--border-subtle);

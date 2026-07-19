@@ -498,7 +498,9 @@
 
 <style>
   .canvas {
-    grid-area: canvas;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
     position: relative;
     overflow: hidden;
   }

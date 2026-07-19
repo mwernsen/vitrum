@@ -55,7 +55,7 @@
   }
 </script>
 
-<div class="toolbar" role="toolbar" aria-orientation="vertical" aria-label="Tools">
+<div class="palette" role="toolbar" aria-orientation="vertical" aria-label="Tools">
   {#each items as tool (tool.id)}
     {@const Icon = tool.icon}
     <IconButton
@@ -90,19 +90,26 @@
 </div>
 
 <style>
-  .toolbar {
-    grid-area: tools;
+  /* Floating tool palette overlaid on the canvas (Portal cockpit "2b"). The enclosing
+     canvas stage is the positioned ancestor. */
+  .palette {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    z-index: 6;
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
-    padding: var(--space-2);
-    background: var(--paper-50);
-    border-right: 1px solid var(--border-subtle);
+    gap: 3px;
+    padding: 5px;
+    background: var(--paper-0);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-pop);
   }
 
   .divider {
     height: 1px;
-    margin: var(--space-1) var(--space-2);
+    margin: 2px 4px;
     background: var(--border-subtle);
   }
 </style>
