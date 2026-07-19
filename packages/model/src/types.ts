@@ -18,6 +18,11 @@ import { defaultTechnique, type TechniqueSettings } from './technique'
 export type SegmentId = string
 export type GlassId = string
 export type LayerId = string
+/**
+ * A detected glass piece's id (F-020). Pieces are derived, not stored; assignments key off the
+ * piece's *content id* (a reproducible hash of its ring), so a saved colour resolves after reload.
+ */
+export type PieceId = string
 /** A stable id for a network node — the shared junction two welded endpoints reference. */
 export type NodeId = string
 
@@ -129,6 +134,14 @@ export interface Project {
    */
   readonly nodes: Readonly<Record<NodeId, Node>>
   readonly glasses: Readonly<Record<GlassId, Glass>>
+  /**
+   * Glass assigned to pieces (F-023), keyed by a piece's **content id** (F-020) → a project
+   * {@link GlassId}. Pieces are derived from the network, so only the assignment intent is
+   * persisted; a piece with no entry renders as "unassigned". Keys are content ids (reproducible
+   * from geometry) so colours survive a save/reload; assignments the save-time normaliser
+   * materialises inherit across splits/merges via the detector's lineage.
+   */
+  readonly assignments: Readonly<Record<PieceId, GlassId>>
   readonly layers: readonly ReferenceLayer[]
 }
 
@@ -142,6 +155,7 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     segments: {},
     nodes: {},
     glasses: {},
+    assignments: {},
     layers: [],
   }
 }

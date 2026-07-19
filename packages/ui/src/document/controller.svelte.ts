@@ -47,6 +47,14 @@ export class DocumentController {
   currentPath = $state<string | null>(null)
   paletteOpen = $state(false)
 
+  /**
+   * Optional hook run immediately before a file save (F-023): the shell sets it to materialise
+   * inherited glass assignments under each live piece's current content id, so colours reshaped or
+   * split mid-session persist across reload (FR-5). Runs synchronously through {@link execute}, so
+   * the serialized document reflects it.
+   */
+  onBeforeSave: (() => void) | undefined
+
   segmentCount = $derived(Object.keys(this.doc.segments).length)
 
   /**
@@ -169,12 +177,14 @@ export class DocumentController {
       await this.saveAs()
       return
     }
+    this.onBeforeSave?.()
     await this.#host.storage.saveFile(this.currentPath, serialize(this.#store.document))
     this.#store.markSaved()
     await this.#host.storage.clearAutosave()
   }
 
   saveAs = async (): Promise<void> => {
+    this.onBeforeSave?.()
     const path = await this.#host.storage.saveFileAs(
       this.#suggestedName(),
       serialize(this.#store.document),

@@ -34,6 +34,8 @@ export class ViewportController {
   gridVisible = $state(true)
   /** Construction-guide visibility (F-012). Hidden guides neither render nor snap. */
   guidesVisible = $state(true)
+  /** Coloured-glass panel render (F-023). On by default — this is the panel, not a dev overlay. */
+  glassVisible = $state(true)
   /** Detected-piece overlay (F-020, dev visualization). Off by default; on ⇒ pieces run. */
   piecesVisible = $state(false)
   /** Cut-contour overlay (F-021, dev visualization): where the glass is actually cut. */
@@ -121,6 +123,10 @@ export class ViewportController {
 
   toggleGuides(): void {
     this.guidesVisible = !this.guidesVisible
+  }
+
+  toggleGlass(): void {
+    this.glassVisible = !this.glassVisible
   }
 
   togglePieces(): void {

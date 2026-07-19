@@ -29,6 +29,7 @@ import type {
   GlassId,
   Node,
   NodeId,
+  PieceId,
   Project,
   ProjectSettings,
   Segment,
@@ -775,6 +776,39 @@ function restoreGlass(id: GlassId, prior: Glass | undefined): Command {
       return { ...doc, glasses }
     },
     invert: (before) => restoreGlass(id, before.glasses[id]),
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Glass assignment (F-023)                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Assign (or clear) glass on one or more pieces in a single undo step (FR-1). The `patch` maps a
+ * piece's content id (F-020) to a project {@link GlassId}, or to `null` to unassign it. One command
+ * expresses every gesture — paint a piece, drag-paint many, bulk-assign a selection, eyedrop-then-
+ * paint, unassign, and the save-time inheritance normalisation — so each is atomically reversible.
+ * Self-inverting: the inverse restores exactly the prior value (a glass or absence) of every touched
+ * key. Editing geometry never routes through here, so assignments only change on explicit intent.
+ */
+export function setGlassAssignments(patch: Readonly<Record<PieceId, GlassId | null>>): Command {
+  return {
+    kind: 'setGlassAssignments',
+    apply: (doc) => {
+      const assignments = { ...doc.assignments }
+      for (const [pieceId, glassId] of Object.entries(patch)) {
+        if (glassId === null) delete assignments[pieceId]
+        else assignments[pieceId] = glassId
+      }
+      return { ...doc, assignments }
+    },
+    invert: (before) => {
+      const inverse: Record<PieceId, GlassId | null> = {}
+      for (const pieceId of Object.keys(patch)) {
+        inverse[pieceId] = before.assignments[pieceId] ?? null
+      }
+      return setGlassAssignments(inverse)
+    },
   }
 }
 

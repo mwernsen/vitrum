@@ -11,7 +11,7 @@ import {
   type RawCycles,
 } from './faces'
 import { buildGraph, type GraphEdge, type PlanarGraph } from './graph'
-import { contentId, matchIds } from './identity'
+import { contentId, matchIdsWithLineage } from './identity'
 import { buildPiece } from './properties'
 import {
   DETECT_DEFAULTS,
@@ -19,6 +19,7 @@ import {
   type DetectionResult,
   type DetectOptions,
   type Piece,
+  type PieceId,
   type PieceSegment,
 } from './types'
 
@@ -110,7 +111,12 @@ export function detectPieces(
   const faces = tracePieces(graph, weld)
 
   let pieces = canonicalSort(faces.map((f) => buildWithId(f, graph.segmentsById, flatten)))
-  if (options.previous) pieces = matchIds(pieces, options.previous)
+  let lineage: Record<PieceId, PieceId> = {}
+  if (options.previous) {
+    const matched = matchIdsWithLineage(pieces, options.previous)
+    pieces = matched.pieces
+    lineage = matched.lineage
+  }
 
   const diagnostics = collectDiagnostics(
     graph,
@@ -118,7 +124,7 @@ export function detectPieces(
     weld,
     nearMiss,
   )
-  return { pieces, diagnostics }
+  return { pieces, diagnostics, lineage }
 }
 
 /** One connected component: the graph edges reachable from each other via shared vertices. */
@@ -224,7 +230,7 @@ export class PieceDetector {
       weld,
     )
     const previous = options.previous ?? this.#previous
-    const pieces = matchIds(
+    const { pieces, lineage } = matchIdsWithLineage(
       canonicalSort(faces.map((f) => buildWithId(f, graph.segmentsById, flatten))),
       previous,
     )
@@ -237,7 +243,7 @@ export class PieceDetector {
 
     this.#cache = nextCache
     this.#previous = pieces
-    return { pieces, diagnostics }
+    return { pieces, diagnostics, lineage }
   }
 
   /** Discard cached state (e.g. on loading a new document). */

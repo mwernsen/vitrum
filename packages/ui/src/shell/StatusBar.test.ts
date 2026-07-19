@@ -46,4 +46,16 @@ describe('StatusBar', () => {
     await user.click(screen.getByRole('button', { name: 'Calibrate physical size' }))
     expect(oncalibrate).toHaveBeenCalledOnce()
   })
+
+  it('toggles the glass render and reports the unassigned-piece count (F-023)', async () => {
+    const user = userEvent.setup()
+    const viewport = new ViewportController()
+    render(StatusBar, { viewport, unassignedCount: 3 })
+
+    expect(screen.getByTestId('unassigned-count')).toHaveTextContent('Unassigned: 3')
+
+    expect(viewport.glassVisible).toBe(true)
+    await user.click(screen.getByRole('button', { name: /Glass/ }))
+    expect(viewport.glassVisible).toBe(false)
+  })
 })

@@ -12,7 +12,7 @@ import type { Glass, Project, Segment } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 4
+export const CURRENT_SCHEMA_VERSION = 5
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -108,7 +108,30 @@ const migrateV3ToV4: Migration = {
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2, migrateV2ToV3, migrateV3ToV4]
+/**
+ * v4 → v5 (F-023): glass assignments. v4 files have no `assignments` map; add an empty one so a
+ * pre-F-023 project loads cleanly with every piece unassigned. Any assignments a pre-release v4
+ * file might carry are preserved.
+ */
+const migrateV4ToV5: Migration = {
+  from: 4,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'assignments'> & {
+      assignments?: Record<string, string>
+    }
+    return {
+      schemaVersion: 5,
+      project: { ...project, assignments: project.assignments ?? {} },
+    }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [
+  migrateV1ToV2,
+  migrateV2ToV3,
+  migrateV3ToV4,
+  migrateV4ToV5,
+]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
 export class SchemaVersionError extends Error {

@@ -120,6 +120,26 @@ describe('GlassPalette (F-022)', () => {
     expect(screen.queryByText('Ruby cathedral')).not.toBeInTheDocument()
   })
 
+  it('selects a glass for painting instead of editing when onSelect is provided (F-023)', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(GlassPalette, { library, libraryActions: actions(), onSelect, selectedId: 'ruby' })
+
+    // Clicking the swatch selects rather than opening the editor.
+    await user.click(screen.getByRole('button', { name: 'Ruby cathedral' }))
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect((onSelect.mock.calls[0]![0] as Glass).id).toBe('ruby')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    // The selected swatch is marked pressed; editing moves to a dedicated button.
+    expect(screen.getByRole('button', { name: 'Ruby cathedral' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await user.click(screen.getByRole('button', { name: 'Edit Emerald cathedral' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   it('adds a library glass to the project by value', async () => {
     const user = userEvent.setup()
     const onAddToProject = vi.fn()

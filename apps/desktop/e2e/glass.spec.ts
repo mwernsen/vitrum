@@ -30,22 +30,21 @@ function launch(): Promise<ElectronApplication> {
   })
 }
 
-// Drives F-022 end to end from the glass palette in the inspector: the starter catalog loads on
+// Drives F-022 end to end from the glass palette dock: the starter catalog loads on
 // first run, search/filter narrows it, and a newly-created glass persists to the global library
 // (userData) across an app relaunch — the copy-on-write + self-contained-persistence mechanism.
 test('glass catalog: starter loads, search filters, new glass persists across relaunch', async () => {
   let window = await app.firstWindow()
-  const inspector = window.getByRole('complementary', { name: 'Inspector' })
   const palette = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette).toBeVisible()
 
   // Starter catalog loaded (60 shipped glasses).
-  await expect(inspector.getByTestId('glass-count')).toHaveText('60 of 60')
+  await expect(palette.getByTestId('glass-count')).toHaveText('60 of 60')
   await expect(palette.getByText('Ruby cathedral')).toBeVisible()
 
   // Free-text search narrows the list (FR-3).
   await palette.getByPlaceholder('Search glass…').fill('emerald')
-  await expect(inspector.getByTestId('glass-count')).toHaveText('1 of 60')
+  await expect(palette.getByTestId('glass-count')).toHaveText('1 of 60')
   await expect(palette.getByText('Emerald cathedral')).toBeVisible()
   await palette.getByPlaceholder('Search glass…').fill('')
 
@@ -56,7 +55,7 @@ test('glass catalog: starter loads, search filters, new glass persists across re
   await dialog.getByLabel('Name').fill('My studio blue')
   await dialog.getByRole('button', { name: 'Save' }).click()
 
-  await expect(inspector.getByTestId('glass-count')).toHaveText('61 of 61')
+  await expect(palette.getByTestId('glass-count')).toHaveText('61 of 61')
   await expect(palette.getByText('My studio blue')).toBeVisible()
 
   // Relaunch the app against the same library file: the new glass persists (FR-2 copy-on-write,
@@ -66,7 +65,5 @@ test('glass catalog: starter loads, search filters, new glass persists across re
   window = await app.firstWindow()
   const palette2 = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette2.getByText('My studio blue')).toBeVisible()
-  await expect(
-    window.getByRole('complementary', { name: 'Inspector' }).getByTestId('glass-count'),
-  ).toHaveText('61 of 61')
+  await expect(palette2.getByTestId('glass-count')).toHaveText('61 of 61')
 })

@@ -51,7 +51,7 @@ describe('schema versioning (FR-4)', () => {
   })
 
   it('runs a chain of registered forward migrations for an older schema version', () => {
-    // A synthetic v0 file; the injected chain must reach CURRENT_SCHEMA_VERSION (3).
+    // A synthetic v0 file; the injected chain must reach CURRENT_SCHEMA_VERSION.
     const legacy = JSON.stringify({
       schemaVersion: 0,
       project: { ...createEmptyProject({ name: 'legacy-name' }) },
@@ -67,6 +67,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 1, migrate: (file) => ({ schemaVersion: 2, project: file.project }) },
       { from: 2, migrate: (file) => ({ schemaVersion: 3, project: file.project }) },
       { from: 3, migrate: (file) => ({ schemaVersion: 4, project: file.project }) },
+      { from: 4, migrate: (file) => ({ schemaVersion: 5, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -128,6 +129,37 @@ describe('schema versioning (FR-4)', () => {
       texture: 'smooth',
       thicknessMm: 3,
     })
+  })
+
+  it('v4 → v5 adds an empty assignments map (F-023)', () => {
+    // A legacy v4 file with a rich glass but no assignments map.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {
+        g1: {
+          id: 'g1',
+          name: 'Ruby',
+          color: '#900',
+          transparency: 'transparent',
+          texture: 'smooth',
+          thicknessMm: 3,
+        },
+      },
+      layers: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 4, project: legacyProject }))
+    expect(project.assignments).toEqual({})
+    // A pre-release v4 file carrying assignments keeps them.
+    const withAssignments = deserialize(
+      JSON.stringify({
+        schemaVersion: 4,
+        project: { ...legacyProject, assignments: { 'p-x': 'g1' } },
+      }),
+    )
+    expect(withAssignments.assignments).toEqual({ 'p-x': 'g1' })
   })
 
   it('throws when no migration path exists for an older version', () => {

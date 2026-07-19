@@ -190,3 +190,10 @@ visual/bench checks listed below).
   here; needs a real bench check on target hardware.
 - Follow-ups (out of scope): true crossing-locality in the incremental path; optional
   explicit "weld near-miss" command (F-030); moving detection to a worker if needed.
+
+**Additive change for F-023 (2026-07-19).** Added `matchIdsWithLineage` alongside `matchIds`
+(unchanged) plus a `lineage` field on `DetectionResult`: a many-to-one map `contentId(current.ring)
+→ contentId(ancestor.ring)` giving each piece the previous-generation piece it overlaps most. This
+lets glass assignment (F-023) inherit across a split (both fragments point at the parent) and a
+merge (the merged piece points at its larger contributor) without a second identity system. Purely
+additive — `detectPieces`/`PieceDetector` now populate `lineage`; no existing caller changed.
