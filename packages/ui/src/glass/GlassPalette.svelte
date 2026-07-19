@@ -1,0 +1,324 @@
+<script lang="ts">
+  import {
+    filterGlasses,
+    HUE_BUCKETS,
+    TEXTURE_TAGS,
+    TRANSPARENCY_CLASSES,
+    type Glass,
+    type GlassFilter,
+    type HueBucket,
+    type TextureTag,
+    type TransparencyClass,
+  } from '@vitrum/model'
+
+  import Button from '../components/Button.svelte'
+  import Card from '../components/Card.svelte'
+  import IconButton from '../components/IconButton.svelte'
+  import Input from '../components/Input.svelte'
+  import Select from '../components/Select.svelte'
+  import Tabs from '../components/Tabs.svelte'
+
+  import GlassEditorDialog from './GlassEditorDialog.svelte'
+  import type { GlassScopeActions } from './types'
+
+  interface Props {
+    /** The global glass library (F-022). */
+    library: Glass[]
+    libraryActions: GlassScopeActions
+    onImport?: () => void
+    onExport?: () => void
+    /** The current project's glass catalog. Absent ⇒ only the library scope is shown. */
+    project?: Glass[]
+    projectActions?: GlassScopeActions
+    /** Copy a library glass into the project by value (consume-by-value, FR-1). */
+    onAddToProject?: (glass: Glass) => void
+  }
+
+  let {
+    library,
+    libraryActions,
+    onImport,
+    onExport,
+    project,
+    projectActions,
+    onAddToProject,
+  }: Props = $props()
+
+  const hasProject = $derived(project !== undefined && projectActions !== undefined)
+
+  let scope = $state<'library' | 'project'>('library')
+
+  let query = $state('')
+  let hue = $state<HueBucket | ''>('')
+  let transparency = $state<TransparencyClass | ''>('')
+  let texture = $state<TextureTag | ''>('')
+
+  const filter = $derived<GlassFilter>({
+    query,
+    ...(hue ? { hue } : {}),
+    ...(transparency ? { transparency } : {}),
+    ...(texture ? { texture } : {}),
+  })
+
+  const activeGlasses = $derived(scope === 'project' && project ? project : library)
+  const activeActions = $derived(
+    scope === 'project' && projectActions ? projectActions : libraryActions,
+  )
+  const shown = $derived(filterGlasses(activeGlasses, filter))
+
+  const hueOptions = [
+    { value: '', label: 'Any hue' },
+    ...HUE_BUCKETS.map((h) => ({ value: h, label: cap(h) })),
+  ]
+  const transparencyOptions = [
+    { value: '', label: 'Any transparency' },
+    ...TRANSPARENCY_CLASSES.map((t) => ({ value: t, label: cap(t) })),
+  ]
+  const textureOptions = [
+    { value: '', label: 'Any texture' },
+    ...TEXTURE_TAGS.map((t) => ({ value: t, label: cap(t) })),
+  ]
+
+  function cap(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+
+  // Editor state.
+  let editorOpen = $state(false)
+  let editing = $state<Glass | null>(null)
+
+  function openNew(): void {
+    editing = null
+    editorOpen = true
+  }
+
+  function openEdit(glass: Glass): void {
+    editing = glass
+    editorOpen = true
+  }
+
+  function closeEditor(): void {
+    editorOpen = false
+  }
+
+  function onSave(glass: Glass): void {
+    activeActions.upsert(glass)
+    editorOpen = false
+  }
+
+  function onDelete(id: string): void {
+    activeActions.remove(id)
+    editorOpen = false
+  }
+
+  function onDuplicate(id: string): void {
+    activeActions.duplicate(id)
+    editorOpen = false
+  }
+
+  function swatchStyle(glass: Glass): string {
+    if (glass.swatch) return `background-image: url(${glass.swatch}); background-size: cover;`
+    return `background-color: ${glass.color};`
+  }
+</script>
+
+<section class="palette" aria-label="Glass palette">
+  <div class="head">
+    <h3>Glass</h3>
+    <Button size="sm" variant="secondary" onclick={openNew}>New glass</Button>
+  </div>
+
+  {#if hasProject}
+    <Tabs
+      size="sm"
+      items={[
+        { value: 'library', label: 'Library' },
+        { value: 'project', label: 'Project' },
+      ]}
+      value={scope}
+      onchange={(v) => (scope = v as 'library' | 'project')}
+    />
+  {/if}
+
+  <Input size="sm" placeholder="Search glass…" value={query} onchange={(v) => (query = v)} />
+
+  <div class="filters">
+    <Select
+      size="sm"
+      options={hueOptions}
+      value={hue}
+      onchange={(v) => (hue = v as HueBucket | '')}
+    />
+    <Select
+      size="sm"
+      options={transparencyOptions}
+      value={transparency}
+      onchange={(v) => (transparency = v as TransparencyClass | '')}
+    />
+    <Select
+      size="sm"
+      options={textureOptions}
+      value={texture}
+      onchange={(v) => (texture = v as TextureTag | '')}
+    />
+  </div>
+
+  <p class="count" data-testid="glass-count">{shown.length} of {activeGlasses.length}</p>
+
+  {#if shown.length === 0}
+    <p class="empty">No glass matches these filters.</p>
+  {:else}
+    <ul class="grid">
+      {#each shown as glass (glass.id)}
+        <li>
+          <Card interactive padding="var(--space-2)">
+            <button
+              class="glass"
+              type="button"
+              aria-label={glass.name}
+              onclick={() => openEdit(glass)}
+            >
+              <span class="swatch" style={swatchStyle(glass)} aria-hidden="true"></span>
+              <span class="meta">
+                <span class="name">{glass.name}</span>
+                <span class="sub">{cap(glass.transparency)} · {cap(glass.texture)}</span>
+              </span>
+            </button>
+            {#if scope === 'library' && onAddToProject}
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Add ${glass.name} to project`}
+                onclick={() => onAddToProject(glass)}
+              >
+                +
+              </IconButton>
+            {/if}
+          </Card>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
+  {#if scope === 'library' && (onImport || onExport)}
+    <div class="io">
+      {#if onImport}<Button size="sm" variant="ghost" onclick={onImport}>Import…</Button>{/if}
+      {#if onExport}<Button size="sm" variant="ghost" onclick={onExport}>Export…</Button>{/if}
+    </div>
+  {/if}
+</section>
+
+<GlassEditorDialog
+  open={editorOpen}
+  glass={editing}
+  newId={activeActions.newId}
+  scopeLabel={scope === 'project' ? 'Project glass' : 'Library glass'}
+  {onSave}
+  onDelete={editing ? onDelete : undefined}
+  onDuplicate={editing ? onDuplicate : undefined}
+  onClose={closeEditor}
+/>
+
+<style>
+  .palette {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  h3 {
+    margin: 0;
+    font: var(--text-eyebrow);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--text-muted);
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  .count {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .empty {
+    margin: 0;
+    font: var(--text-small);
+    color: var(--text-muted);
+  }
+
+  .grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2);
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+
+  .grid :global(.card) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .glass {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .swatch {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .name {
+    font: var(--text-small);
+    color: var(--text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .io {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+</style>

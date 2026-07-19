@@ -11,10 +11,18 @@ import {
 } from 'electron'
 
 const FILE_FILTERS = [{ name: 'Vitrum design', extensions: ['vitrum'] }]
+const LIBRARY_FILTERS = [{ name: 'Glass library', extensions: ['json'] }]
 
 /** Where the crash-recovery snapshot lives (overridable so E2E runs stay isolated). */
 function autosavePath(): string {
   return process.env['VITRUM_AUTOSAVE_PATH'] ?? join(app.getPath('userData'), 'autosave.vitrum')
+}
+
+/** Where the global glass library is persisted (overridable so E2E runs stay isolated). */
+function glassLibraryPath(): string {
+  return (
+    process.env['VITRUM_GLASS_LIBRARY_PATH'] ?? join(app.getPath('userData'), 'glass-library.json')
+  )
 }
 
 // Unsaved-changes state, reported by the renderer, used to guard window close (F-002).
@@ -172,6 +180,38 @@ function registerIpc(): void {
 
   ipcMain.handle('autosave:clear', async () => {
     await rm(autosavePath(), { force: true })
+  })
+
+  ipcMain.handle('glassLib:load', async () => {
+    try {
+      return await readFile(glassLibraryPath(), 'utf8')
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('glassLib:save', async (_event, contents: string) => {
+    await writeFile(glassLibraryPath(), contents, 'utf8')
+  })
+
+  ipcMain.handle('glassLib:export', async (_event, suggestedName: string, contents: string) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: suggestedName,
+      filters: LIBRARY_FILTERS,
+    })
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, contents, 'utf8')
+    return result.filePath
+  })
+
+  ipcMain.handle('glassLib:import', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: LIBRARY_FILTERS,
+    })
+    const path = result.filePaths[0]
+    if (result.canceled || !path) return null
+    return readFile(path, 'utf8')
   })
 
   ipcMain.handle('confirm:discard', async () => {

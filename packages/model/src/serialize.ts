@@ -1,6 +1,6 @@
 import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
-import type { Project, Segment } from './types'
+import type { Glass, Project, Segment } from './types'
 
 /**
  * Persistence (F-002). A `.vitrum` file is JSON: a small envelope carrying a
@@ -12,7 +12,7 @@ import type { Project, Segment } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -76,7 +76,39 @@ const migrateV2ToV3: Migration = {
   },
 }
 
-export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2, migrateV2ToV3]
+/**
+ * v3 → v4 (F-022): the rich glass catalog. v3 files carry `glasses` keyed by a placeholder
+ * `{ id, name }` (never populated before F-022, since no glass command existed). Expand each entry
+ * to the full `Glass` shape, filling colour/transparency/texture/thickness defaults so the file
+ * loads cleanly; any already-rich field a pre-release file might carry is preserved.
+ */
+const migrateV3ToV4: Migration = {
+  from: 3,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'glasses'> & {
+      glasses?: Record<string, Partial<Glass> & { id: string; name: string }>
+    }
+    const glasses: Record<string, Glass> = {}
+    for (const [id, g] of Object.entries(project.glasses ?? {})) {
+      glasses[id] = {
+        id: g.id ?? id,
+        name: g.name ?? 'Untitled glass',
+        color: g.color ?? '#cccccc',
+        transparency: g.transparency ?? 'transparent',
+        texture: g.texture ?? 'smooth',
+        thicknessMm: g.thicknessMm ?? 3,
+        ...(g.manufacturer !== undefined ? { manufacturer: g.manufacturer } : {}),
+        ...(g.sku !== undefined ? { sku: g.sku } : {}),
+        ...(g.pricePerM2 !== undefined ? { pricePerM2: g.pricePerM2 } : {}),
+        ...(g.sheetSizes !== undefined ? { sheetSizes: g.sheetSizes } : {}),
+        ...(g.swatch !== undefined ? { swatch: g.swatch } : {}),
+      }
+    }
+    return { schemaVersion: 4, project: { ...project, glasses } }
+  },
+}
+
+export const MIGRATIONS: readonly Migration[] = [migrateV1ToV2, migrateV2ToV3, migrateV3ToV4]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
 export class SchemaVersionError extends Error {

@@ -66,6 +66,7 @@ describe('schema versioning (FR-4)', () => {
       },
       { from: 1, migrate: (file) => ({ schemaVersion: 2, project: file.project }) },
       { from: 2, migrate: (file) => ({ schemaVersion: 3, project: file.project }) },
+      { from: 3, migrate: (file) => ({ schemaVersion: 4, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -106,6 +107,27 @@ describe('schema versioning (FR-4)', () => {
     expect(project.technique.lead.defaultProfileId).toBe('came-h-5')
     expect(project.technique.lead.profiles['came-h-5']).toBeDefined()
     expect(project.technique.foil.foilWidthMm).toBeCloseTo(5.6)
+  })
+
+  it('v3 → v4 expands placeholder glasses into the full catalog shape (F-022)', () => {
+    // A legacy v3 file carrying a placeholder glass `{ id, name }` only.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: { g1: { id: 'g1', name: 'Old ruby' } },
+      layers: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 3, project: legacyProject }))
+    expect(project.glasses['g1']).toMatchObject({
+      id: 'g1',
+      name: 'Old ruby',
+      color: expect.any(String),
+      transparency: 'transparent',
+      texture: 'smooth',
+      thicknessMm: 3,
+    })
   })
 
   it('throws when no migration path exists for an older version', () => {

@@ -29,6 +29,13 @@ const api = {
     readAutosave: (): Promise<string | null> => ipcRenderer.invoke('autosave:read'),
     clearAutosave: (): Promise<void> => ipcRenderer.invoke('autosave:clear'),
   },
+  glassLibrary: {
+    load: (): Promise<string | null> => ipcRenderer.invoke('glassLib:load'),
+    save: (contents: string): Promise<void> => ipcRenderer.invoke('glassLib:save', contents),
+    exportLibrary: (suggestedName: string, contents: string): Promise<string | null> =>
+      ipcRenderer.invoke('glassLib:export', suggestedName, contents),
+    importLibrary: (): Promise<string | null> => ipcRenderer.invoke('glassLib:import'),
+  },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)
     ipcRenderer.on('menu:action', listener)

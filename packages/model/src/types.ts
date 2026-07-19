@@ -60,10 +60,49 @@ export interface ProjectSettings {
   readonly panelSize?: { readonly width: number; readonly height: number }
 }
 
-/** A glass assignment target. Placeholder until F-022 (glass catalog). */
+/**
+ * How light passes through a glass. Ordered roughly clear → solid; drives F-023
+ * rendering and is a catalog filter facet (F-022 FR-3).
+ */
+export type TransparencyClass = 'transparent' | 'translucent' | 'opalescent' | 'opaque'
+
+/** Surface texture of a glass. A catalog filter facet (F-022 FR-3). */
+export type TextureTag = 'smooth' | 'hammered' | 'seedy' | 'streaky' | 'ripple' | 'granite'
+
+/** A commercial sheet dimension a glass is sold in (mm). Dimensions only — no per-size price in v1. */
+export interface SheetSize {
+  readonly widthMm: number
+  readonly heightMm: number
+  /** Optional human label, e.g. "full sheet", "quarter". */
+  readonly label?: string
+}
+
+/**
+ * A glass in the catalog (F-022): the material a piece can be cut from. Instances are
+ * copied by value into the project (`Project.glasses`) so a shared file is self-contained
+ * and renders identically without the author's global library. User edits never mutate the
+ * shipped starter catalog (copy-on-write). The optional commercial block feeds F-042/F-056
+ * and keeps the shape ready for F-058 manufacturer catalogs.
+ */
 export interface Glass {
   readonly id: GlassId
   readonly name: string
+  /** Base colour as an sRGB hex string, e.g. "#3a7bd5". The vitrail-palette swatch colour. */
+  readonly color: string
+  readonly transparency: TransparencyClass
+  readonly texture: TextureTag
+  /** Nominal thickness in mm (default 3). */
+  readonly thicknessMm: number
+  readonly manufacturer?: string
+  readonly sku?: string
+  /** Price per square metre, in the project's currency. Area-based costing only in v1. */
+  readonly pricePerM2?: number
+  readonly sheetSizes?: readonly SheetSize[]
+  /**
+   * Optional user-uploaded texture/photo swatch, embedded as a data URL. Downscaled on
+   * import (cap ~512 px, F-022 FR-5) so project files stay small.
+   */
+  readonly swatch?: string
 }
 
 /** A reference-image underlay. Placeholder until F-051. */

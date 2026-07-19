@@ -1,4 +1,4 @@
-import type { StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, StoragePort } from '@vitrum/model'
 
 /**
  * How the UI reaches its host environment (F-002). The desktop app supplies an
@@ -13,6 +13,12 @@ export type MenuAction = 'new' | 'open' | 'save' | 'saveAs' | 'undo' | 'redo' | 
 export interface AppHost {
   /** File dialogs, disk I/O and crash-recovery snapshots. */
   readonly storage: StoragePort
+  /**
+   * The global glass library's persistent storage and JSON import/export (F-022). Absent means the
+   * host does not persist a global library — the UI then keeps an in-memory starter library for
+   * the session only.
+   */
+  readonly glassLibrary?: GlassLibraryPort
   /** Subscribe to native-menu commands. Returns an unsubscribe function. */
   onMenuAction?(handler: (action: MenuAction) => void): () => void
   /** Report unsaved-changes state so the host can guard window close. */

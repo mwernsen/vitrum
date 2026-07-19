@@ -25,6 +25,8 @@ import type {
   TechniqueSettings,
 } from './technique'
 import type {
+  Glass,
+  GlassId,
   Node,
   NodeId,
   Project,
@@ -727,6 +729,52 @@ export function setCameOverride(segmentId: SegmentId, override: CameOverride | n
       }).apply(doc)
     },
     invert: (before) => replaceTechnique(before.technique),
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Glass commands (F-022) — project scope                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Add a glass to the project catalog, or replace an existing one with the same id. The glass is a
+ * self-contained *copy* (consume-by-value), so the saved file renders identically on a machine with
+ * an empty global library (FR-1). Reversible: its inverse restores whatever was at that id before —
+ * a prior glass, or nothing.
+ */
+export function upsertGlass(glass: Glass): Command {
+  return {
+    kind: 'upsertGlass',
+    apply: (doc) => ({ ...doc, glasses: { ...doc.glasses, [glass.id]: glass } }),
+    invert: (before) => restoreGlass(glass.id, before.glasses[glass.id]),
+  }
+}
+
+/** Remove a glass from the project catalog. Reversible — its inverse re-adds the removed glass. */
+export function removeGlass(id: GlassId): Command {
+  return {
+    kind: 'removeGlass',
+    apply: (doc) => {
+      if (!(id in doc.glasses)) throw new Error(`removeGlass: glass ${id} does not exist`)
+      const glasses = { ...doc.glasses }
+      delete glasses[id]
+      return { ...doc, glasses }
+    },
+    invert: (before) => restoreGlass(id, before.glasses[id]),
+  }
+}
+
+/** Restore a glass id to an exact prior value (or absence) — the inverse primitive for glass edits. */
+function restoreGlass(id: GlassId, prior: Glass | undefined): Command {
+  return {
+    kind: 'restoreGlass',
+    apply: (doc) => {
+      const glasses = { ...doc.glasses }
+      if (prior) glasses[id] = prior
+      else delete glasses[id]
+      return { ...doc, glasses }
+    },
+    invert: (before) => restoreGlass(id, before.glasses[id]),
   }
 }
 

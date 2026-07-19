@@ -1,4 +1,4 @@
-import type { OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
 import type { AppHost, MenuAction } from './host'
 
@@ -11,6 +11,12 @@ export interface FakeHost extends AppHost {
   nextSaveAsPath: string | null
   discardAnswer: boolean
   recoverAnswer: boolean
+  /** Persisted global glass library JSON (null = first run). */
+  glassLibraryStore: string | null
+  /** The JSON returned by the next `importLibrary()` call. */
+  nextImportLibrary: string | null
+  /** The most recent library JSON handed to `exportLibrary()`. */
+  lastExportedLibrary: string | null
   emitMenu(action: MenuAction): void
 }
 
@@ -26,6 +32,9 @@ export function createFakeHost(): FakeHost {
     nextSaveAsPath: '/tmp/design.vitrum',
     discardAnswer: true,
     recoverAnswer: false,
+    glassLibraryStore: null,
+    nextImportLibrary: null,
+    lastExportedLibrary: null,
     storage: {
       openFile: async () => host.nextOpen,
       saveFile: async (path, contents) => {
@@ -43,6 +52,17 @@ export function createFakeHost(): FakeHost {
         host.autosave = null
       },
     } satisfies StoragePort,
+    glassLibrary: {
+      load: async () => host.glassLibraryStore,
+      save: async (contents) => {
+        host.glassLibraryStore = contents
+      },
+      exportLibrary: async (name, contents) => {
+        host.lastExportedLibrary = contents
+        return name
+      },
+      importLibrary: async () => host.nextImportLibrary,
+    } satisfies GlassLibraryPort,
     onMenuAction: (handler) => {
       menuHandler = handler
       return () => {

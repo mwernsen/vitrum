@@ -20,7 +20,46 @@ export {
   type SegmentGeometry,
   type SegmentId,
   type SegmentRole,
+  type SheetSize,
+  type TextureTag,
+  type TransparencyClass,
 } from './types'
+
+// Glass catalog (F-022)
+export {
+  cloneGlass,
+  filterGlasses,
+  fitWithin,
+  hexToHsl,
+  hueBucket,
+  HUE_BUCKETS,
+  matchesGlass,
+  parseHex,
+  starterGlasses,
+  STARTER_GLASSES,
+  SWATCH_MAX_PX,
+  TEXTURE_TAGS,
+  TRANSPARENCY_CLASSES,
+  type GlassFilter,
+  type HueBucket,
+} from './glass'
+
+// Global glass library (F-022)
+export {
+  createStarterLibrary,
+  deserializeLibrary,
+  duplicateGlassInLibrary,
+  emptyLibrary,
+  GLASS_LIBRARY_VERSION,
+  GlassLibraryVersionError,
+  libraryGlasses,
+  mergeLibrary,
+  removeGlassFromLibrary,
+  serializeLibrary,
+  upsertGlassInLibrary,
+  type GlassLibrary,
+  type GlassLibraryPort,
+} from './glassLibrary'
 
 // Technique model (F-021)
 export {
@@ -66,6 +105,7 @@ export {
   mergeNodes,
   moveNode,
   removeCameProfile,
+  removeGlass,
   removeSegment,
   removeSegments,
   replaceSegments,
@@ -80,6 +120,7 @@ export {
   updateSegmentsGeometry,
   updateSettings,
   upsertCameProfile,
+  upsertGlass,
   type Command,
 } from './commands'
 

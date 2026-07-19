@@ -8,6 +8,7 @@
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
+  import type { GlassLibraryController } from '../glass/library.svelte'
   import { ToolController } from '../tools/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
   import { SelectionController } from '../tools/selection.svelte'
@@ -23,9 +24,11 @@
     panel: Panel
     /** The document controller (F-002). Optional so the shell renders in isolation tests. */
     controller?: DocumentController
+    /** The global glass library controller (F-022). Optional so the shell renders in isolation. */
+    glassLibrary?: GlassLibraryController
   }
 
-  let { panel, controller }: Props = $props()
+  let { panel, controller, glassLibrary }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -129,6 +132,7 @@
     {selection}
     doc={controller?.doc}
     {pieces}
+    {glassLibrary}
     execute={controller ? (command) => controller.execute(command) : undefined}
   />
   <StatusBar

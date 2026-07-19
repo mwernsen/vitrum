@@ -6,6 +6,7 @@
   import { DocumentController } from './document/controller.svelte'
   import DebugPalette from './document/DebugPalette.svelte'
   import type { AppHost } from './document/host'
+  import { GlassLibraryController } from './glass/library.svelte'
   import AppShell from './shell/AppShell.svelte'
 
   interface Props {
@@ -19,6 +20,10 @@
   // controller from its initial value is intentional, not a missed reactive dependency.
   // svelte-ignore state_referenced_locally
   const controller = new DocumentController(host)
+
+  // The global glass library (F-022), persisted through the host's library port.
+  // svelte-ignore state_referenced_locally
+  const glassLibrary = new GlassLibraryController(host.glassLibrary)
 
   // Placeholder panel providing the inspector's name and size only. Pieces are no longer
   // mocked here — the inspector lists the *real* pieces F-020 detects from the live network
@@ -62,6 +67,7 @@
 
   onMount(() => {
     void offerRecovery()
+    void glassLibrary.init()
     return () => controller.dispose()
   })
 
@@ -76,7 +82,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<AppShell {panel} {controller} />
+<AppShell {panel} {controller} {glassLibrary} />
 <DebugPalette {controller} />
 
 <style>
