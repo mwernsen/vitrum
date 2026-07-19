@@ -178,6 +178,16 @@ this file steers every future feature.
   generation" base only when geometry actually changes — gate it on a **generation token** (the
   `DetectionResult` object identity), or a re-run triggered by a mere assignment edit resolves
   against the wrong base and drops inherited colours.
+- (F-030, 2026-07-19) DRC is a pure `packages/drc` (`runChecks(input)`) that reuses F-020's
+  `diagnostics` for the network-imperfection rules (dangling/near-miss/duplicate) rather than
+  recomputing them; the other rules derive from pieces + effective assignments. Persisted DRC state
+  lives on `Project.drc` in `@vitrum/model` (so the dependency stays `model ← drc`, never a cycle),
+  and waivers key off rule-id + **stable entity ids** so they survive edits that keep those entities.
+- (F-030, 2026-07-19) Vite/Electron gotcha: a `{ type: 'module' }` worker is **blocked under
+  `file://`** in the packaged renderer — it loads on the `dev:ui` http server but silently never
+  responds in the build. Use a **classic** worker (`new Worker(url)` with no `type`) so Vite bundles
+  a self-contained IIFE, and keep a synchronous fallback in the controller so checks never hang.
+  Only the E2E (which runs the real `file://` build) catches this — jsdom/dev never will.
 - (Portal redesign, 2026-07-19) The shell follows the Portal cockpit, **turn-3 IA** (canonical)
   (`shell/{TopBar,ReadinessStrip,ActivityRail,DockPanel,LayersPanel,Toolbar,Inspector,StatusBar}.svelte`,
   composed in `AppShell.svelte`). Load-bearing IA rules — respect them or you recreate the mess it fixed:
