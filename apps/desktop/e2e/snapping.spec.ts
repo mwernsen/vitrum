@@ -37,6 +37,17 @@ test('welds a second line to an existing endpoint via endpoint snap', async () =
   await expect(window.getByRole('button', { name: 'Construction guide (G)' })).toBeVisible()
   await expect(window.getByRole('button', { name: /Snapping/ })).toBeVisible()
 
+  // Isolate endpoint snap from the zoom-adaptive grid: with grid snap on, the first line's
+  // endpoints jump to grid nodes (spacing varies with zoom), which makes a fixed-pixel near-miss
+  // brittle. Turn grid off so this test proves *endpoint* welding specifically.
+  await window.getByRole('button', { name: /Snapping/ }).click()
+  const snapSettings = window.getByRole('dialog', { name: 'Snap settings' })
+  const gridSwitch = snapSettings.getByLabel('Grid')
+  await expect(gridSwitch).toBeChecked()
+  await snapSettings.getByText('Grid').click()
+  await expect(gridSwitch).not.toBeChecked()
+  await window.keyboard.press('Escape')
+
   // First line: L, click, double-click → one span, endpoints at (200,200) and (300,200).
   await window.keyboard.press('l')
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())

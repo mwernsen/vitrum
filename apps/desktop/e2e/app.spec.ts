@@ -29,21 +29,22 @@ test('opens a window titled Vitrum', async () => {
   await expect(window).toHaveTitle('Vitrum')
 })
 
-test('renders the four-region app shell', async () => {
+test('renders the cockpit shell regions', async () => {
   const window = await app.firstWindow()
   await expect(window.getByRole('banner')).toBeVisible()
   await expect(window.getByRole('toolbar', { name: 'Tools' })).toBeVisible()
   await expect(window.getByRole('main', { name: 'Design canvas' })).toBeVisible()
-  await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeVisible()
+  await expect(window.getByRole('complementary', { name: 'Panel dock' })).toBeVisible()
   await expect(window.getByRole('region', { name: 'Status bar' })).toBeVisible()
+  // The inspector is present but collapses with no selection (turn-3 IA), so assert it exists.
+  await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeAttached()
 })
 
-test('shows the panel and no detected pieces for an empty document', async () => {
+test('opens the sample panel on an empty document', async () => {
   const window = await app.firstWindow()
-  await expect(window.getByRole('heading', { level: 2, name: 'Sample panel' })).toBeVisible()
-  // The inspector reflects real F-020 detection now; a fresh document has zero pieces.
-  await expect(window.getByTestId('inspector-piece-count')).toHaveText('0')
-  await expect(window.getByText('Draw a closed region to detect a piece.')).toBeVisible()
+  // Panel name in the top bar; the readiness strip reflects real F-020 detection (no geometry yet).
+  await expect(window.getByText('Sample panel')).toBeVisible()
+  await expect(window.getByText('in progress')).toBeVisible()
 })
 
 test('toggles the measurement unit from the status bar', async () => {

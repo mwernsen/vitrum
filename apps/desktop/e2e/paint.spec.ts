@@ -38,7 +38,7 @@ test.afterEach(async () => {
 
 // Drives F-023 end to end: draw a closed border (one piece), pick a glass from the palette dock
 // (auto-imported into the project by value), paint the piece, then save and reopen the file — the
-// colour survives the round-trip (FR-5), read from the status bar's unassigned-piece counter.
+// colour survives the round-trip (FR-5), read from the readiness strip's glass indicator.
 test('paint a piece, then reload the file with the colour intact', async () => {
   const window = await app.firstWindow()
   const canvas = window.getByRole('main', { name: 'Design canvas' })
@@ -46,7 +46,7 @@ test('paint a piece, then reload the file with the colour intact', async () => {
   const box = (await canvas.boundingBox())!
   const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
 
-  const unassigned = window.getByTestId('unassigned-count')
+  const glassReadiness = window.getByTestId('glass-readiness')
   const palette = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette).toBeVisible()
 
@@ -55,18 +55,18 @@ test('paint a piece, then reload the file with the colour intact', async () => {
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
-  await expect(unassigned).toHaveText('Unassigned: 1')
+  await expect(glassReadiness).toContainText('1 left')
 
   // Pick a glass: selecting a library swatch imports a project copy and enters paint mode.
   await palette.locator('button.glass').first().click()
 
   // Paint the piece: click inside the border.
   await window.mouse.click(...at(240, 210))
-  await expect(unassigned).toHaveText('Unassigned: 0')
+  await expect(glassReadiness).toContainText('100%')
 
   // Save to a file, then reopen it: the assignment survives the serialize/deserialize round-trip.
   await window.keyboard.press('Control+s')
-  await expect(unassigned).toHaveText('Unassigned: 0')
+  await expect(glassReadiness).toContainText('100%')
   await window.keyboard.press('Control+o')
-  await expect(unassigned).toHaveText('Unassigned: 0')
+  await expect(glassReadiness).toContainText('100%')
 })

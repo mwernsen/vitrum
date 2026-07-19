@@ -32,7 +32,7 @@
   </span>
 
   <!-- Glass — live (F-023) -->
-  <span class="pill">
+  <span class="pill" data-testid="glass-readiness">
     <span
       class="ring"
       style={`background:conic-gradient(var(--cobalt-600) ${glassPercent}%, var(--paper-300) 0)`}

@@ -36,7 +36,7 @@
     { label: 'Glass', icon: SquareStack, section: 'glass' },
     { label: 'Design rules', icon: ShieldCheck, section: 'rules' },
     { label: 'Manufacturing', icon: List, section: 'make' },
-    { label: 'Versions', icon: History, feature: 'F-055' },
+    { label: 'Versions', icon: History, section: 'versions' },
   ]
 </script>
 
@@ -52,6 +52,7 @@
         class="rail-btn"
         class:active={item.section === active}
         aria-pressed={item.section === active}
+        aria-label={item.label}
         {disabled}
         onclick={() => item.section && onSelect(item.section)}
       >

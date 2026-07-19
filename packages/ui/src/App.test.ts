@@ -13,11 +13,11 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Status bar' })).toBeInTheDocument()
   })
 
-  it('shows the panel and no detected pieces for an empty document', () => {
+  it('opens the sample panel on an empty document with no geometry yet', () => {
     render(App)
-    expect(screen.getByRole('heading', { level: 2, name: 'Sample panel' })).toBeInTheDocument()
-    // The inspector now reflects real F-020 detection; an empty document has zero pieces.
-    expect(screen.getByTestId('inspector-piece-count')).toHaveTextContent('0')
-    expect(screen.getByText('Draw a closed region to detect a piece.')).toBeInTheDocument()
+    // Panel name lives in the top bar; the readiness strip reflects real F-020 detection —
+    // an empty document has no completed geometry.
+    expect(screen.getByText('Sample panel')).toBeInTheDocument()
+    expect(screen.getByText('in progress')).toBeInTheDocument()
   })
 })

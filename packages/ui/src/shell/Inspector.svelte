@@ -6,7 +6,6 @@
     resolveCame,
     toMillimetres,
     type LengthUnit,
-    type Panel,
     type Piece,
   } from '@vitrum/core'
   import { curveLength, vec2 } from '@vitrum/geometry'
@@ -27,10 +26,7 @@
   import type { PaintController } from '../tools/paint.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
 
-  import TechniquePanel from './TechniquePanel.svelte'
-
   interface Props {
-    panel: Panel
     unit: LengthUnit
     /** Editing controller (F-013). Absent ⇒ inspector shows the panel summary only. */
     edit?: EditController
@@ -48,17 +44,7 @@
     execute?: (command: Command) => void
   }
 
-  let {
-    panel,
-    unit,
-    edit,
-    selection,
-    paint,
-    assignments,
-    doc,
-    pieces = [],
-    execute,
-  }: Props = $props()
+  let { unit, edit, selection, paint, assignments, doc, pieces = [], execute }: Props = $props()
 
   // Pieces selected in piece-select mode (F-023), resolved from their content keys.
   const selectedPieceList = $derived<Piece[]>(
@@ -76,9 +62,6 @@
     if (glassId) paint?.assignSelected(glassId as GlassId)
   }
 
-  const width = $derived(formatLength(panel.widthMm, unit))
-  const height = $derived(formatLength(panel.heightMm, unit))
-
   /** Piece area in the active unit's squared measure (mm → cm², in → in²). */
   function formatArea(mm2: number): string {
     return unit === 'in' ? `${(mm2 / 645.16).toFixed(2)} in²` : `${(mm2 / 100).toFixed(1)} cm²`
@@ -91,6 +74,12 @@
   const single = $derived<Segment | null>(
     selectedSegments.length === 1 ? selectedSegments[0]! : null,
   )
+
+  // Turn-3 IA: the inspector shows the current selection only, and collapses when nothing is
+  // selected — no feature panel lives here (those are in the dock).
+  const pieceSelected = $derived(!!paint && selectedPieceList.length > 0)
+  const segmentSelected = $derived(!!edit && !!selection && selectedSegments.length > 0)
+  const collapsed = $derived(!pieceSelected && !segmentSelected)
 
   // Display a mm value in the active unit as a plain, trimmed number string (FR-5: the number
   // the user types round-trips exactly, since editing converts straight back to mm).
@@ -173,8 +162,8 @@
   }
 </script>
 
-<aside class="inspector" aria-label="Inspector">
-  {#if paint && selectedPieceList.length > 0}
+<aside class="inspector" class:collapsed aria-label="Inspector">
+  {#if pieceSelected}
     <h2>{selectedPieceList.length === 1 ? 'Piece' : `${selectedPieceList.length} pieces`}</h2>
 
     {#if selectedPieceList.length === 1}
@@ -203,10 +192,11 @@
     <div class="fields">
       <Select size="sm" options={glassOptions} value="" onchange={assignToSelection} />
       <div class="actions">
-        <Button size="sm" variant="ghost" onclick={() => paint.unassignSelected()}>Unassign</Button>
+        <Button size="sm" variant="ghost" onclick={() => paint?.unassignSelected()}>Unassign</Button
+        >
       </div>
     </div>
-  {:else if edit && selection && selectedSegments.length > 0}
+  {:else if segmentSelected}
     <h2>{single ? 'Segment' : `${selectedSegments.length} selected`}</h2>
 
     {#if single && ends}
@@ -300,50 +290,18 @@
 
     <h3>Transform</h3>
     <div class="actions">
-      <Button size="sm" variant="secondary" onclick={() => edit.mirror('horizontal')}>
+      <Button size="sm" variant="secondary" onclick={() => edit?.mirror('horizontal')}>
         Mirror horizontal
       </Button>
-      <Button size="sm" variant="secondary" onclick={() => edit.mirror('vertical')}>
+      <Button size="sm" variant="secondary" onclick={() => edit?.mirror('vertical')}>
         Mirror vertical
       </Button>
-      <Button size="sm" variant="secondary" onclick={() => edit.rotateBy(90)}>Rotate 90°</Button>
-      <Button size="sm" variant="secondary" onclick={() => edit.duplicate()}>Duplicate</Button>
+      <Button size="sm" variant="secondary" onclick={() => edit?.rotateBy(90)}>Rotate 90°</Button>
+      <Button size="sm" variant="secondary" onclick={() => edit?.duplicate()}>Duplicate</Button>
     </div>
     <div class="actions">
-      <Button size="sm" variant="ghost" onclick={() => edit.deleteSelection()}>Delete</Button>
+      <Button size="sm" variant="ghost" onclick={() => edit?.deleteSelection()}>Delete</Button>
     </div>
-  {:else}
-    <h2>{panel.name}</h2>
-    <dl class="props">
-      <div>
-        <dt>Size</dt>
-        <dd>{width} × {height}</dd>
-      </div>
-      <div>
-        <dt>Pieces</dt>
-        <dd data-testid="inspector-piece-count">{pieces.length}</dd>
-      </div>
-    </dl>
-
-    {#if doc && execute}
-      <TechniquePanel technique={doc.technique} {execute} />
-    {/if}
-
-    <h3>Pieces</h3>
-    {#if pieces.length === 0}
-      <p class="empty">Draw a closed region to detect a piece.</p>
-    {:else}
-      <ul>
-        {#each pieces as piece (piece.id)}
-          <li class="piece">
-            <span class="pid">{piece.id}</span>
-            <span class="pmeta">
-              {formatArea(piece.area)} · {formatLength(piece.perimeter, unit)}
-            </span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
   {/if}
 </aside>
 
@@ -356,6 +314,14 @@
     background: var(--paper-0);
     border-left: 1px solid var(--border-subtle);
     overflow-y: auto;
+  }
+
+  /* Turn-3 IA: with no selection the inspector collapses so the canvas gets the room. */
+  .inspector.collapsed {
+    width: 0;
+    padding: 0;
+    border-left: none;
+    overflow: hidden;
   }
 
   h2 {
@@ -409,41 +375,5 @@
     margin: 0;
     font-family: var(--font-mono);
     color: var(--text-body);
-  }
-
-  ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .piece {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--space-2);
-    background: var(--surface-sunken);
-    border-radius: var(--radius-xs);
-  }
-
-  .pid {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text-strong);
-  }
-
-  .pmeta {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-
-  .empty {
-    margin: 0;
-    font: var(--text-small);
-    color: var(--text-muted);
   }
 </style>

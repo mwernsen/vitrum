@@ -19,7 +19,7 @@ test.afterEach(async () => {
 })
 
 // Drives F-021 end to end: draw a closed panel (one piece), then exercise the technique model
-// from the inspector — switch lead⇄foil (line weights change and the foil parameters appear) and
+// from the Layers dock — switch lead⇄foil (line weights change and the foil parameters appear) and
 // toggle the cut-contour overlay. The overlay pixels themselves are a manual/gallery check; here
 // we assert the DOM state that governs them.
 test('switches technique and toggles the cut-contour overlay', async () => {
@@ -36,29 +36,31 @@ test('switches technique and toggles the cut-contour overlay', async () => {
   await click(120, 120)
   await click(360, 300)
 
-  const inspector = window.getByRole('complementary', { name: 'Inspector' })
+  // Technique and overlay toggles live in the Layers dock (turn-3 IA); open it from the rail.
+  await window.getByRole('button', { name: 'Layers' }).click()
+  const dock = window.getByRole('complementary', { name: 'Panel dock' })
   // The project-level technique panel is present, defaulting to lead came.
-  await expect(inspector.getByRole('heading', { name: 'Technique' })).toBeVisible()
-  const leadTab = inspector.getByRole('tab', { name: 'Lead came' })
-  const foilTab = inspector.getByRole('tab', { name: 'Copper foil' })
+  await expect(dock.getByRole('heading', { name: 'Technique' })).toBeVisible()
+  const leadTab = dock.getByRole('tab', { name: 'Lead came' })
+  const foilTab = dock.getByRole('tab', { name: 'Copper foil' })
   await expect(leadTab).toHaveAttribute('aria-selected', 'true')
-  await expect(inspector.getByRole('heading', { name: 'Came library' })).toBeVisible()
+  await expect(dock.getByRole('heading', { name: 'Came library' })).toBeVisible()
 
   // Switch to copper foil: the foil parameters replace the came library.
   await foilTab.click()
   await expect(foilTab).toHaveAttribute('aria-selected', 'true')
-  await expect(inspector.getByLabel('Foil width (mm)')).toBeVisible()
-  await expect(inspector.getByLabel('Solder finish')).toBeVisible()
+  await expect(dock.getByLabel('Foil width (mm)')).toBeVisible()
+  await expect(dock.getByLabel('Solder finish')).toBeVisible()
 
   // Undo returns to lead came (one undo step, FR-4).
   await window.keyboard.press('Control+z')
-  await expect(inspector.getByRole('tab', { name: 'Lead came' })).toHaveAttribute(
+  await expect(dock.getByRole('tab', { name: 'Lead came' })).toHaveAttribute(
     'aria-selected',
     'true',
   )
 
-  // Toggle the cut-contour dev overlay from the status bar.
-  const cutsChip = window.getByRole('button', { name: /Cut-contour overlay/ })
+  // Toggle the cut-contour overlay from the Layers panel.
+  const cutsChip = dock.getByRole('button', { name: /Cut contours/ })
   await expect(cutsChip).toHaveAttribute('aria-pressed', 'false')
   await cutsChip.click()
   await expect(cutsChip).toHaveAttribute('aria-pressed', 'true')

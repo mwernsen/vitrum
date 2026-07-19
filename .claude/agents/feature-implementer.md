@@ -45,8 +45,9 @@ supervisor, and anything the spec doesn't settle gets asked, not assumed.
   (`3c259295-607a-4eba-8cad-3890f7e80063`, readable via DesignSync) later.
 - **Slot new surfaces into the cockpit shell, don't bolt panels on.** The app shell
   follows the **Portal redesign** design project
-  (`1ec655e3-ab21-4450-b3be-f2caaca64ea3`, file `Portal redesign.dc.html`, "turn 2 ·
-  refined" is canonical; read it via DesignSync). Its "2b" cockpit is implemented in
+  (`1ec655e3-ab21-4450-b3be-f2caaca64ea3`, file `Portal redesign.dc.html`, **"turn 3 ·
+  information architecture" is canonical** — it supersedes turns 1–2; read it via DesignSync).
+  Its cockpit (panels 3a–3e) is implemented in
   `packages/ui/src/shell/` (`AppShell.svelte` composes `TopBar` → `ReadinessStrip` →
   body[`ActivityRail` | `DockPanel` | canvas stage with the floating `Toolbar` |
   `Inspector`] → `StatusBar`). A new feature's UI almost always belongs in one of these
@@ -177,10 +178,18 @@ this file steers every future feature.
   generation" base only when geometry actually changes — gate it on a **generation token** (the
   `DetectionResult` object identity), or a re-run triggered by a mere assignment edit resolves
   against the wrong base and drops inherited colours.
-- (Portal redesign, 2026-07-19) The shell was re-laid-out to the Portal "2b" cockpit
-  (`shell/{TopBar,ReadinessStrip,ActivityRail,DockPanel,Toolbar,Inspector,StatusBar}.svelte`,
-  composed in `AppShell.svelte`). Unbuilt roadmap surfaces ship as disabled placeholders tagged
-  with their F-0XX id (see `shell/dock.ts`, `shell/viewmode.ts`, `ReadinessStrip`) — a new feature
-  activates its placeholder instead of adding chrome. The drawing `Toolbar` is now a floating card
-  over the canvas stage (`.stage` is its positioned ancestor); glass moved from a standalone column
-  into `DockPanel`'s glass tab, so `GlassDock` is content-only. The launch screen ("2a") is deferred.
+- (Portal redesign, 2026-07-19) The shell follows the Portal cockpit, **turn-3 IA** (canonical)
+  (`shell/{TopBar,ReadinessStrip,ActivityRail,DockPanel,LayersPanel,Toolbar,Inspector,StatusBar}.svelte`,
+  composed in `AppShell.svelte`). Load-bearing IA rules — respect them or you recreate the mess it fixed:
+  - **The activity rail is the *sole* panel switcher — no dock tabs.** Sections live in `shell/dock.ts`
+    (Layers/Glass/Rules/Make/Versions); `DockPanel` renders exactly the rail's active one.
+  - **The inspector shows the current *selection* only and collapses when empty.** Never park a
+    feature's standing panel there — it belongs in a dock section.
+  - **Overlay/visibility toggles live in the Layers panel** (`LayersPanel.svelte`), not the status bar;
+    the status bar is cursor · grid/snap · zoom · units only. Global technique (F-021) is in Layers too.
+  - Unbuilt roadmap surfaces ship as disabled placeholders tagged with their F-0XX id (`shell/dock.ts`,
+    `shell/viewmode.ts`, `ReadinessStrip`, `DockPanel` scaffolds) — a new feature activates its
+    placeholder instead of adding chrome.
+  - The drawing `Toolbar` is a floating card over the canvas stage (`.stage` is its positioned
+    ancestor); offset past the canvas rulers (`RULER_SIZE`). `GlassDock` is content-only inside the
+    dock's glass section. The launch screen ("2a") is deferred (needs a multi-panel store; see F-055).

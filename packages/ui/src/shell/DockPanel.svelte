@@ -1,53 +1,79 @@
 <script lang="ts">
+  import type { Command, Project } from '@vitrum/model'
   import type { Snippet } from 'svelte'
 
+  import type { ViewportController } from '../canvas/viewport.svelte'
+
   import { DOCK_SECTIONS, type DockSection } from './dock'
+  import LayersPanel from './LayersPanel.svelte'
 
   interface Props {
-    /** The open section. Mirrors the activity rail selection. */
+    /** The open section, chosen from the activity rail (the sole switcher — no tabs here). */
     section: DockSection
-    /** Change the open section (from the tab header). */
-    onSelect: (section: DockSection) => void
+    /** Viewport, for the Layers panel's overlay toggles. */
+    viewport: ViewportController
+    /** Document, for the Layers panel's global technique control (F-021). */
+    doc?: Project
+    /** Command sink for technique edits. */
+    execute?: (command: Command) => void
     /** Live glass content (F-022/F-023), rendered when the glass section is open. */
     glass?: Snippet
   }
 
-  let { section, onSelect, glass }: Props = $props()
+  let { section, viewport, doc, execute, glass }: Props = $props()
 
-  const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[1]!)
+  const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
+
+  // Placeholder section scaffolds — the as-designed structure of an unbuilt panel (turn 3
+  // 3c/3d/3e), shown disabled so the shell reads complete without faking data.
+  const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {
+    rules: {
+      note: 'Near-miss joints, slivers, dangling lines and unassigned glass are flagged here once the DRC engine lands.',
+      actions: ['Run checks'],
+    },
+    make: {
+      note: 'Piece numbering, the cutting list, the bill of materials and 1:1 export are generated here from the finished panel.',
+      sections: ['Numbering', 'Cutting list', 'Bill of materials'],
+      actions: ['Print cartoon 1:1', 'Export'],
+    },
+    versions: {
+      note: 'Named snapshots and auto-saves you can restore or open as a copy.',
+      actions: ['Save version…'],
+    },
+  }
+  const scaffold = $derived(scaffolds[section])
 </script>
 
 <aside class="dock" aria-label="Panel dock">
-  <div class="tabs" role="tablist">
-    {#each DOCK_SECTIONS as tab (tab.id)}
-      <button
-        class="tab"
-        class:active={tab.id === section}
-        role="tab"
-        aria-selected={tab.id === section}
-        onclick={() => onSelect(tab.id)}
-      >
-        {tab.label}
-      </button>
-    {/each}
+  <div class="header">
+    <span class="title">{current.label}</span>
   </div>
 
   <div class="body">
-    {#if section === 'glass'}
+    {#if section === 'layers'}
+      <LayersPanel {viewport} {doc} {execute} />
+    {:else if section === 'glass'}
       {@render glass?.()}
-    {:else}
+    {:else if scaffold}
       <div class="placeholder">
-        <span class="ph-title">{current.label}</span>
-        <p class="ph-note">
-          {#if section === 'layers'}
-            Panel layers and structure will live here.
-          {:else if section === 'rules'}
-            Design rule checks (near-miss joints, slivers, unassigned glass) surface here once the
-            DRC engine lands.
-          {:else}
-            Cut lists and the bill of materials are generated here from the finished panel.
-          {/if}
-        </p>
+        {#if scaffold.actions}
+          <div class="actions">
+            {#each scaffold.actions as action (action)}
+              <button class="ghost" disabled>{action}</button>
+            {/each}
+          </div>
+        {/if}
+        {#if scaffold.sections}
+          <div class="scaffold-sections">
+            {#each scaffold.sections as label (label)}
+              <div class="scaffold-row">
+                <span class="eyebrow">{label}</span>
+                <span class="dash">—</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <p class="ph-note">{scaffold.note}</p>
         {#if current.feature}
           <span class="ph-feature">Coming with {current.feature}</span>
         {/if}
@@ -68,31 +94,17 @@
     border-right: 1px solid var(--border-subtle);
   }
 
-  .tabs {
+  .header {
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 8px 10px;
+    justify-content: space-between;
+    padding: 13px 14px 10px;
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  .tab {
-    padding: 5px 10px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--ink-600);
-    font: 600 12px/1 var(--font-sans);
-    cursor: pointer;
-  }
-
-  .tab:hover {
-    color: var(--ink-800);
-  }
-
-  .tab.active {
-    color: var(--ink-950);
-    background: var(--paper-100);
+  .title {
+    font: var(--text-h4);
+    color: var(--text-strong);
   }
 
   .body {
@@ -105,13 +117,52 @@
   .placeholder {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
     align-items: flex-start;
   }
 
-  .ph-title {
-    font: var(--text-h4);
-    color: var(--text-strong);
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .ghost {
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    color: var(--ink-700);
+    font: 600 12px/1 var(--font-sans);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .scaffold-sections {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .scaffold-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--paper-100);
+  }
+
+  .eyebrow {
+    font: var(--text-eyebrow);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--text-muted);
+  }
+
+  .dash {
+    font-family: var(--font-mono);
+    color: var(--paper-400);
   }
 
   .ph-note {

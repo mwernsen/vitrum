@@ -90,12 +90,13 @@
 </div>
 
 <style>
-  /* Floating tool palette overlaid on the canvas (Portal cockpit "2b"). The enclosing
-     canvas stage is the positioned ancestor. */
+  /* Floating tool palette overlaid on the canvas (Portal cockpit). The enclosing canvas stage
+     is the positioned ancestor. Offset clears the canvas rulers (RULER_SIZE = 22px) so the
+     palette floats over the drawing area, not the ruler strips. */
   .palette {
     position: absolute;
-    left: 14px;
-    top: 14px;
+    left: 34px;
+    top: 34px;
     z-index: 6;
     display: flex;
     flex-direction: column;

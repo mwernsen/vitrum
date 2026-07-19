@@ -47,15 +47,14 @@ describe('StatusBar', () => {
     expect(oncalibrate).toHaveBeenCalledOnce()
   })
 
-  it('toggles the glass render and reports the unassigned-piece count (F-023)', async () => {
-    const user = userEvent.setup()
-    const viewport = new ViewportController()
-    render(StatusBar, { viewport, unassignedCount: 3 })
-
-    expect(screen.getByTestId('unassigned-count')).toHaveTextContent('Unassigned: 3')
-
-    expect(viewport.glassVisible).toBe(true)
-    await user.click(screen.getByRole('button', { name: /Glass/ }))
-    expect(viewport.glassVisible).toBe(false)
+  it('no longer owns the overlay toggles — those moved to the Layers panel (turn-3 IA)', () => {
+    render(StatusBar, { viewport: new ViewportController() })
+    // Glass / Pieces / Cuts visibility and the unassigned counter live in the Layers dock and
+    // the readiness strip now; the status bar keeps only cursor · grid/snap · zoom · units.
+    expect(screen.queryByRole('button', { name: /Glass/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Piece overlay/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Cut-contour/ })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('unassigned-count')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Grid/ })).toBeInTheDocument()
   })
 })

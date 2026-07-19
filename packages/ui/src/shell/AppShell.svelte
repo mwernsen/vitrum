@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { leadFlangeMm, pieceKey, type Panel } from '@vitrum/core'
+  import { formatLength, leadFlangeMm, pieceKey, type Panel } from '@vitrum/core'
   import { pointInPolygon, polygon } from '@vitrum/geometry'
   import {
     createEmptyProject,
@@ -113,6 +113,12 @@
   const projectGlasses = $derived(controller?.doc.glasses ?? {})
   const unassignedCount = $derived(pieces.filter((p) => !assignments.glassFor(p)).length)
 
+  // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
+  const dimText = $derived(
+    `${formatLength(panel.widthMm, viewport.unit)} × ${formatLength(panel.heightMm, viewport.unit)}`,
+  )
+  const zoomText = $derived(`${Math.round(viewport.zoomFactor * 100)}%`)
+
   // Materialise inherited/reshaped assignments under each live piece's current content id right
   // before a save, so colours split or reshaped this session persist across reload (FR-5).
   function normalizeAssignments(): void {
@@ -202,7 +208,9 @@
     />
     <DockPanel
       section={dockSection}
-      onSelect={(section) => (dockSection = section)}
+      {viewport}
+      doc={controller?.doc}
+      execute={controller ? (command) => controller.execute(command) : undefined}
       glass={glassLibrary ? glassPanel : undefined}
     />
     <div class="stage">
@@ -228,9 +236,12 @@
         {cutContours}
         showCuts={viewport.cutsVisible}
       />
+      <div class="dims" aria-label="Panel dimensions">
+        <span>{dimText}</span>
+        <span class="zoom">{zoomText}</span>
+      </div>
     </div>
     <Inspector
-      {panel}
       unit={viewport.unit}
       {edit}
       {selection}
@@ -244,7 +255,6 @@
   <StatusBar
     {viewport}
     {snap}
-    {unassignedCount}
     onfit={() => viewport.zoomToFit(bounds)}
     oncalibrate={() => (calibrationOpen = true)}
     onClearGuides={controller ? () => controller.clearGuides() : undefined}
@@ -284,5 +294,28 @@
     min-height: 0;
     position: relative;
     display: flex;
+  }
+
+  /* Panel dimensions + zoom, centered at the base of the canvas (Portal cockpit). */
+  .dims {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--space-2);
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    border: 1px solid var(--border-subtle);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-600);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .dims .zoom {
+    color: var(--ink-500);
   }
 </style>
