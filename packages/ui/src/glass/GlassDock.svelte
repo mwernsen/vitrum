@@ -136,13 +136,9 @@
 </aside>
 
 <style>
+  /* Content-only: the enclosing DockPanel (Portal cockpit "2b") owns the column chrome
+     (width, border, scroll). This just lays out the glass controls. */
   .dock {
-    grid-area: dock;
-    width: clamp(13rem, 17vw, 17rem);
-    padding: var(--space-4);
-    background: var(--paper-0);
-    border-right: 1px solid var(--border-subtle);
-    overflow-y: auto;
     display: grid;
     gap: var(--space-3);
     align-content: start;

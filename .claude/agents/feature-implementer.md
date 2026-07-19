@@ -43,6 +43,24 @@ supervisor, and anything the spec doesn't settle gets asked, not assumed.
   patterns over inventing new ones, and note any net-new screen in the spec's
   Implementation notes so it can be back-ported to the Claude Design project
   (`3c259295-607a-4eba-8cad-3890f7e80063`, readable via DesignSync) later.
+- **Slot new surfaces into the cockpit shell, don't bolt panels on.** The app shell
+  follows the **Portal redesign** design project
+  (`1ec655e3-ab21-4450-b3be-f2caaca64ea3`, file `Portal redesign.dc.html`, "turn 2 ·
+  refined" is canonical; read it via DesignSync). Its "2b" cockpit is implemented in
+  `packages/ui/src/shell/` (`AppShell.svelte` composes `TopBar` → `ReadinessStrip` →
+  body[`ActivityRail` | `DockPanel` | canvas stage with the floating `Toolbar` |
+  `Inspector`] → `StatusBar`). A new feature's UI almost always belongs in one of these
+  existing homes rather than a new top-level region:
+  - workflow state a user should see at a glance → a pill in `ReadinessStrip`
+    (`shell/ReadinessStrip.svelte`);
+  - a new working panel (rules, layers, manufacturing) → a section in `shell/dock.ts`
+    + a body in `DockPanel.svelte`, reached from `ActivityRail.svelte`;
+  - a derived output view (cartoon/render/light) → a mode in `shell/viewmode.ts`,
+    switched from `TopBar`;
+  - per-selection editing → `Inspector.svelte`; canvas overlays → `Canvas.svelte`.
+  Placeholder entries already exist for the unbuilt roadmap features (each tagged with
+  its F-0XX id) — your feature turns its placeholder live rather than adding a new slot.
+  The Portal launch screen ("2a") is not built yet; see F-002/F-055 before adding it.
 - **Tests ship with the change**: core logic → Vitest unit tests (property-based
   where the spec says so), components → Testing Library, each user-facing flow → one
   Playwright E2E test. Specs name mandatory tests in their acceptance criteria.
@@ -159,3 +177,10 @@ this file steers every future feature.
   generation" base only when geometry actually changes — gate it on a **generation token** (the
   `DetectionResult` object identity), or a re-run triggered by a mere assignment edit resolves
   against the wrong base and drops inherited colours.
+- (Portal redesign, 2026-07-19) The shell was re-laid-out to the Portal "2b" cockpit
+  (`shell/{TopBar,ReadinessStrip,ActivityRail,DockPanel,Toolbar,Inspector,StatusBar}.svelte`,
+  composed in `AppShell.svelte`). Unbuilt roadmap surfaces ship as disabled placeholders tagged
+  with their F-0XX id (see `shell/dock.ts`, `shell/viewmode.ts`, `ReadinessStrip`) — a new feature
+  activates its placeholder instead of adding chrome. The drawing `Toolbar` is now a floating card
+  over the canvas stage (`.stage` is its positioned ancestor); glass moved from a standalone column
+  into `DockPanel`'s glass tab, so `GlassDock` is content-only. The launch screen ("2a") is deferred.
