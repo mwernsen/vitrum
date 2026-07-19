@@ -18,19 +18,17 @@
     execute?: (command: Command) => void
     /** Live glass content (F-022/F-023), rendered when the glass section is open. */
     glass?: Snippet
+    /** Live rules content (F-030), rendered when the rules section is open. */
+    rules?: Snippet
   }
 
-  let { section, viewport, doc, execute, glass }: Props = $props()
+  let { section, viewport, doc, execute, glass, rules }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
 
   // Placeholder section scaffolds — the as-designed structure of an unbuilt panel (turn 3
-  // 3c/3d/3e), shown disabled so the shell reads complete without faking data.
+  // 3d/3e), shown disabled so the shell reads complete without faking data.
   const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {
-    rules: {
-      note: 'Near-miss joints, slivers, dangling lines and unassigned glass are flagged here once the DRC engine lands.',
-      actions: ['Run checks'],
-    },
     make: {
       note: 'Piece numbering, the cutting list, the bill of materials and 1:1 export are generated here from the finished panel.',
       sections: ['Numbering', 'Cutting list', 'Bill of materials'],
@@ -49,11 +47,13 @@
     <span class="title">{current.label}</span>
   </div>
 
-  <div class="body">
+  <div class="body" class:flush={section === 'rules'}>
     {#if section === 'layers'}
       <LayersPanel {viewport} {doc} {execute} />
     {:else if section === 'glass'}
       {@render glass?.()}
+    {:else if section === 'rules'}
+      {@render rules?.()}
     {:else if scaffold}
       <div class="placeholder">
         {#if scaffold.actions}
@@ -112,6 +112,14 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-4);
+  }
+
+  /* The rules panel manages its own full-bleed rows and sticky footer. */
+  .body.flush {
+    padding: 0;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .placeholder {

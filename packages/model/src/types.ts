@@ -117,6 +117,44 @@ export interface ReferenceLayer {
   readonly visible: boolean
 }
 
+/**
+ * How serious a design-rule violation is (F-030), mirroring KiCad's ERC/DRC severities.
+ * Errors block a clean panel; warnings and info are advisory. Persisted here because a
+ * project may override a rule's default severity (FR-4).
+ */
+export type Severity = 'error' | 'warning' | 'info'
+
+/**
+ * A per-project override of a DRC rule (F-030 FR-4). Both fields are optional: an entry may
+ * change only the severity, only the enabled flag, or (rarely) both. A rule with no entry uses
+ * its built-in default severity and is enabled.
+ */
+export interface DrcRuleOverride {
+  readonly severity?: Severity
+  readonly enabled?: boolean
+}
+
+/**
+ * A waived DRC violation (F-030 FR-3), KiCad-style. Keyed in {@link DrcState.exclusions} by the
+ * violation's stable identity (rule id + involved entity ids), so it survives geometry edits as
+ * long as those entities still exist. The optional `note` records *why* it was waived.
+ */
+export interface DrcExclusion {
+  readonly note?: string
+}
+
+/**
+ * The persisted design-rule state of a project (F-030). Only *intent* is stored — never the
+ * derived violations themselves, which are recomputed from the network the way pieces are.
+ * `exclusions` are waivers keyed by violation identity; `rules` are per-rule severity/enable
+ * overrides keyed by rule id. Both default to empty (every rule at its shipped severity, nothing
+ * waived).
+ */
+export interface DrcState {
+  readonly exclusions: Readonly<Record<string, DrcExclusion>>
+  readonly rules: Readonly<Record<string, DrcRuleOverride>>
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -143,6 +181,11 @@ export interface Project {
    */
   readonly assignments: Readonly<Record<PieceId, GlassId>>
   readonly layers: readonly ReferenceLayer[]
+  /**
+   * Design-rule state (F-030): waivers and per-rule severity/enable overrides. Violations are
+   * derived (never stored); only this user intent is persisted.
+   */
+  readonly drc: DrcState
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -157,5 +200,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     glasses: {},
     assignments: {},
     layers: [],
+    drc: { exclusions: {}, rules: {} },
   }
 }

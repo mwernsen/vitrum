@@ -8,6 +8,9 @@
 // Domain types
 export {
   createEmptyProject,
+  type DrcExclusion,
+  type DrcRuleOverride,
+  type DrcState,
   type Glass,
   type GlassId,
   type LayerId,
@@ -21,6 +24,7 @@ export {
   type SegmentGeometry,
   type SegmentId,
   type SegmentRole,
+  type Severity,
   type SheetSize,
   type TextureTag,
   type TransparencyClass,
@@ -111,6 +115,8 @@ export {
   removeSegments,
   replaceSegments,
   setCameOverride,
+  setDrcExclusion,
+  setDrcRuleOverride,
   setGlassAssignments,
   setSegmentRole,
   setTechniqueKind,

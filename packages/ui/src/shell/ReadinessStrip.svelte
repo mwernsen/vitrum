@@ -6,14 +6,47 @@
     pieceCount?: number
     /** Pieces with no glass assigned (F-023). Drives the glass readiness ratio. */
     unassignedCount?: number
+    /** Whether the DRC engine has run at least once (F-030). */
+    checksRun?: boolean
+    /** Active error-severity violations (F-030). */
+    errorCount?: number
+    /** Active warning-severity violations (F-030). */
+    warningCount?: number
+    /** Active info-severity violations (F-030). */
+    infoCount?: number
   }
 
-  let { pieceCount = 0, unassignedCount = 0 }: Props = $props()
+  let {
+    pieceCount = 0,
+    unassignedCount = 0,
+    checksRun = false,
+    errorCount = 0,
+    warningCount = 0,
+    infoCount = 0,
+  }: Props = $props()
 
   const geometryComplete = $derived(pieceCount > 0)
   const glassAssigned = $derived(Math.max(0, pieceCount - unassignedCount))
   // Percent painted; a panel with no pieces yet reads 0 rather than NaN.
   const glassPercent = $derived(pieceCount > 0 ? Math.round((glassAssigned / pieceCount) * 100) : 0)
+
+  const issueCount = $derived(errorCount + warningCount + infoCount)
+  const checksClear = $derived(checksRun && issueCount === 0)
+  // The most urgent severity present tints the checks pill.
+  const checksDot = $derived(
+    errorCount > 0
+      ? 'var(--ruby-600)'
+      : warningCount > 0
+        ? 'var(--amber-600)'
+        : 'var(--cobalt-600)',
+  )
+  const checksMeta = $derived(
+    !checksRun
+      ? 'not run yet'
+      : issueCount === 0
+        ? 'clear'
+        : `${issueCount} ${issueCount === 1 ? 'issue' : 'issues'}`,
+  )
 </script>
 
 <div class="readiness" aria-label="Panel readiness">
@@ -44,16 +77,15 @@
     </span>
   </span>
 
-  <!-- Checks — placeholder until the DRC engine (F-030) lands -->
-  <span
-    class="pill"
-    data-placeholder
-    aria-disabled="true"
-    title="Design rule checks arrive with F-030"
-  >
-    <span class="dot" style="background:var(--paper-300)"></span>
+  <!-- Checks — live (F-030) -->
+  <span class="pill" class:done={checksClear} data-testid="checks-readiness">
+    {#if checksClear}
+      <span class="ic ok"><Check size={14} strokeWidth={2.4} /></span>
+    {:else}
+      <span class="dot" style={`background:${checksRun ? checksDot : 'var(--paper-300)'}`}></span>
+    {/if}
     Checks
-    <span class="meta">not run yet</span>
+    <span class="meta">{checksMeta}</span>
   </span>
 
   <!-- Outputs — placeholder until the cartoon view (F-040) lands -->
