@@ -2,6 +2,7 @@
   import {
     convertLength,
     formatLength,
+    pieceKey,
     resolveCame,
     toMillimetres,
     type LengthUnit,
@@ -10,14 +11,10 @@
   } from '@vitrum/core'
   import { curveLength, vec2 } from '@vitrum/geometry'
   import {
-    cloneGlass,
     geometryEndpoints,
-    newGlassId,
-    removeGlass,
     setCameOverride,
-    upsertGlass,
     type Command,
-    type Glass,
+    type GlassId,
     type Project,
     type Segment,
   } from '@vitrum/model'
@@ -25,10 +22,9 @@
   import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
   import Select from '../components/Select.svelte'
-  import GlassPalette from '../glass/GlassPalette.svelte'
-  import type { GlassLibraryController } from '../glass/library.svelte'
-  import type { GlassScopeActions } from '../glass/types'
+  import type { AssignmentController } from '../glass/assignment.svelte'
   import type { EditController } from '../tools/edit.svelte'
+  import type { PaintController } from '../tools/paint.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
 
   import TechniquePanel from './TechniquePanel.svelte'
@@ -40,49 +36,44 @@
     edit?: EditController
     /** Selection model (F-013). */
     selection?: SelectionController
+    /** The paint / piece-select controller (F-023). */
+    paint?: PaintController
+    /** The glass assignment resolver (F-023). */
+    assignments?: AssignmentController
     /** The current document, for reading selected geometry. */
     doc?: Project
     /** Detected pieces (F-020), derived from the live network. */
     pieces?: readonly Piece[]
     /** Command sink (F-021 technique edits). Absent ⇒ technique panel is read-only/hidden. */
     execute?: (command: Command) => void
-    /** The global glass library controller (F-022). Absent ⇒ the glass palette is hidden. */
-    glassLibrary?: GlassLibraryController
   }
 
-  let { panel, unit, edit, selection, doc, pieces = [], execute, glassLibrary }: Props = $props()
+  let {
+    panel,
+    unit,
+    edit,
+    selection,
+    paint,
+    assignments,
+    doc,
+    pieces = [],
+    execute,
+  }: Props = $props()
 
-  // Glass palette wiring (F-022). Library edits go through the library controller; project edits go
-  // through document commands so they are undoable and serialized with the file (self-contained, FR-1).
-  const libraryActions = $derived<GlassScopeActions | undefined>(
-    glassLibrary
-      ? {
-          upsert: (g) => void glassLibrary.upsert(g),
-          remove: (id) => void glassLibrary.remove(id),
-          duplicate: (id) => void glassLibrary.duplicate(id),
-          newId: () => glassLibrary.newId(),
-        }
-      : undefined,
+  // Pieces selected in piece-select mode (F-023), resolved from their content keys.
+  const selectedPieceList = $derived<Piece[]>(
+    paint ? pieces.filter((p) => paint.selectedPieces.has(pieceKey(p))) : [],
   )
-  const projectActions = $derived<GlassScopeActions | undefined>(
-    doc && execute
-      ? {
-          upsert: (g) => execute(upsertGlass(g)),
-          remove: (id) => execute(removeGlass(id)),
-          duplicate: (id) => {
-            const src = doc.glasses[id]
-            if (src)
-              execute(
-                upsertGlass({ ...cloneGlass(src), id: newGlassId(), name: `${src.name} copy` }),
-              )
-          },
-          newId: () => newGlassId(),
-        }
-      : undefined,
-  )
-  const projectGlasses = $derived<Glass[] | undefined>(doc ? Object.values(doc.glasses) : undefined)
-  function addToProject(g: Glass): void {
-    execute?.(upsertGlass({ ...cloneGlass(g), id: newGlassId() }))
+  const glassName = (piece: Piece): string => {
+    const id = assignments?.glassFor(piece)
+    return (id && doc?.glasses[id]?.name) || 'Unassigned'
+  }
+  const glassOptions = $derived([
+    { value: '', label: 'Choose glass…' },
+    ...Object.values(doc?.glasses ?? {}).map((g) => ({ value: g.id, label: g.name })),
+  ])
+  function assignToSelection(glassId: string): void {
+    if (glassId) paint?.assignSelected(glassId as GlassId)
   }
 
   const width = $derived(formatLength(panel.widthMm, unit))
@@ -183,7 +174,39 @@
 </script>
 
 <aside class="inspector" aria-label="Inspector">
-  {#if edit && selection && selectedSegments.length > 0}
+  {#if paint && selectedPieceList.length > 0}
+    <h2>{selectedPieceList.length === 1 ? 'Piece' : `${selectedPieceList.length} pieces`}</h2>
+
+    {#if selectedPieceList.length === 1}
+      {@const piece = selectedPieceList[0]!}
+      <dl class="props">
+        <div>
+          <dt>Glass</dt>
+          <dd>{glassName(piece)}</dd>
+        </div>
+        <div>
+          <dt>Number</dt>
+          <dd>—</dd>
+        </div>
+        <div>
+          <dt>Area</dt>
+          <dd>{formatArea(piece.area)}</dd>
+        </div>
+        <div>
+          <dt>Perimeter</dt>
+          <dd>{formatLength(piece.perimeter, unit)}</dd>
+        </div>
+      </dl>
+    {/if}
+
+    <h3>Assign glass</h3>
+    <div class="fields">
+      <Select size="sm" options={glassOptions} value="" onchange={assignToSelection} />
+      <div class="actions">
+        <Button size="sm" variant="ghost" onclick={() => paint.unassignSelected()}>Unassign</Button>
+      </div>
+    </div>
+  {:else if edit && selection && selectedSegments.length > 0}
     <h2>{single ? 'Segment' : `${selectedSegments.length} selected`}</h2>
 
     {#if single && ends}
@@ -301,18 +324,6 @@
         <dd data-testid="inspector-piece-count">{pieces.length}</dd>
       </div>
     </dl>
-
-    {#if glassLibrary && libraryActions}
-      <GlassPalette
-        library={glassLibrary.glasses}
-        {libraryActions}
-        project={projectGlasses}
-        {projectActions}
-        onAddToProject={execute ? addToProject : undefined}
-        onImport={() => void glassLibrary.importLibrary()}
-        onExport={() => void glassLibrary.exportLibrary()}
-      />
-    {/if}
 
     {#if doc && execute}
       <TechniquePanel technique={doc.technique} {execute} />

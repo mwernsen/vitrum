@@ -87,6 +87,12 @@ export interface Diagnostic {
 export interface DetectionResult {
   readonly pieces: readonly Piece[]
   readonly diagnostics: readonly Diagnostic[]
+  /**
+   * Piece ancestry across this generation (F-023): `contentId(current.ring)` →
+   * `contentId(ancestor.ring)`, so glass assignments inherit across splits/merges. Empty on a cold
+   * detection (no previous generation).
+   */
+  readonly lineage: Readonly<Record<PieceId, PieceId>>
 }
 
 /** Tuning knobs for detection. Every field has a documented default (see `DETECT_DEFAULTS`). */

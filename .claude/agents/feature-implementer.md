@@ -150,3 +150,12 @@ this file steers every future feature.
 - (F-022, 2026-07-19) Shipped seed data (starter catalogs) must be `Object.freeze`d deeply and
   handed out via a `fresh-copy()` accessor; "copy-on-write" is then provable by a frozen-constant
   test plus immutable library ops.
+- (F-023, 2026-07-19) Persisted glass assignments key off a piece's **content id**
+  (`contentId(ring)`), not the matched display id — content ids are reproduced by a cold detection,
+  so colours resolve after reload; F-020's matcher gained an additive `lineage` return (many-to-one,
+  current→ancestor) that split fragments/merge use to inherit, plus a save-time normaliser that
+  materialises inheritance under current content ids.
+- (F-023, 2026-07-19) A runes resolver that inherits across generations must advance its "previous
+  generation" base only when geometry actually changes — gate it on a **generation token** (the
+  `DetectionResult` object identity), or a re-run triggered by a mere assignment edit resolves
+  against the wrong base and drops inherited colours.

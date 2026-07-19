@@ -1,6 +1,7 @@
+export { pieceKey, resolveGeneration } from './assignment'
 export { detectPieces, PieceDetector, type PlanarGraph } from './detect'
 export { buildGraph, type GraphEdge } from './graph'
-export { contentId, matchIds } from './identity'
+export { contentId, matchIds, matchIdsWithLineage, type LineageResult } from './identity'
 export { spanPoints } from './properties'
 export {
   DETECT_DEFAULTS,

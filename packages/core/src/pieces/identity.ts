@@ -70,3 +70,46 @@ export function matchIds(pieces: readonly Piece[], previous: readonly Piece[]): 
     return matched && matched !== piece.id ? { ...piece, id: matched } : piece
   })
 }
+
+/**
+ * Piece ancestry across a generation, for glass-assignment inheritance (F-023). Unlike
+ * {@link matchIds} — which is a one-to-one id claim used to keep display ids stable — lineage is
+ * a **many-to-one** map from each current piece to the previous piece it overlaps most (its
+ * ancestor). A split therefore points *both* fragments at the parent (so both inherit its glass),
+ * and a merge points the merged piece at its largest contributor (so it inherits that glass,
+ * matching FR-3's "larger contributor keeps the id").
+ *
+ * Both sides are keyed by {@link contentId} of the ring (not the possibly-inherited display id),
+ * so the lineage — and the assignments that key off it — are reproducible from geometry alone and
+ * survive a save/reload (F-023 FR-5).
+ */
+export interface LineageResult {
+  /** The current pieces with stable display ids (identical to {@link matchIds}). */
+  readonly pieces: Piece[]
+  /** `contentId(current.ring)` → `contentId(ancestor.ring)` for each piece with an ancestor. */
+  readonly lineage: Record<PieceId, PieceId>
+}
+
+/** Relabel current pieces (as {@link matchIds}) *and* return their ancestry (F-023). */
+export function matchIdsWithLineage(
+  pieces: readonly Piece[],
+  previous: readonly Piece[],
+): LineageResult {
+  const relabeled = matchIds(pieces, previous)
+  const lineage: Record<PieceId, PieceId> = {}
+  if (previous.length === 0) return { pieces: relabeled, lineage }
+
+  for (const cur of pieces) {
+    let bestPrev = -1
+    let bestOverlap = OVERLAP_EPS
+    for (let p = 0; p < previous.length; p++) {
+      const overlap = overlapArea(previous[p]!.ring, cur.ring)
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap
+        bestPrev = p
+      }
+    }
+    if (bestPrev >= 0) lineage[contentId(cur.ring)] = contentId(previous[bestPrev]!.ring)
+  }
+  return { pieces: relabeled, lineage }
+}

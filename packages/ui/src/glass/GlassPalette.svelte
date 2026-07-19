@@ -32,6 +32,12 @@
     projectActions?: GlassScopeActions
     /** Copy a library glass into the project by value (consume-by-value, FR-1). */
     onAddToProject?: (glass: Glass) => void
+    /**
+     * Select a glass to paint with (F-023). When provided, clicking a swatch selects it (rather than
+     * opening the editor, which moves to a dedicated edit button); {@link selectedId} marks the choice.
+     */
+    onSelect?: (glass: Glass) => void
+    selectedId?: string | null
   }
 
   let {
@@ -42,6 +48,8 @@
     project,
     projectActions,
     onAddToProject,
+    onSelect,
+    selectedId = null,
   }: Props = $props()
 
   const hasProject = $derived(project !== undefined && projectActions !== undefined)
@@ -174,9 +182,11 @@
           <Card interactive padding="var(--space-2)">
             <button
               class="glass"
+              class:selected={onSelect && glass.id === selectedId}
               type="button"
               aria-label={glass.name}
-              onclick={() => openEdit(glass)}
+              aria-pressed={onSelect ? glass.id === selectedId : undefined}
+              onclick={() => (onSelect ? onSelect(glass) : openEdit(glass))}
             >
               <span class="swatch" style={swatchStyle(glass)} aria-hidden="true"></span>
               <span class="meta">
@@ -184,6 +194,16 @@
                 <span class="sub">{cap(glass.transparency)} · {cap(glass.texture)}</span>
               </span>
             </button>
+            {#if onSelect}
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Edit ${glass.name}`}
+                onclick={() => openEdit(glass)}
+              >
+                ✎
+              </IconButton>
+            {/if}
             {#if scope === 'library' && onAddToProject}
               <IconButton
                 size="sm"
@@ -285,6 +305,11 @@
     cursor: pointer;
     text-align: left;
     min-width: 0;
+  }
+
+  .glass.selected .swatch {
+    outline: 2px solid var(--cobalt-500);
+    outline-offset: 1px;
   }
 
   .swatch {

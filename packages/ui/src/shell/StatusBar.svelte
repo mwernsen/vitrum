@@ -16,9 +16,11 @@
     oncalibrate?: () => void
     /** Reversible "clear all guides" command (F-012). */
     onClearGuides?: () => void
+    /** Count of pieces with no glass assigned (F-023 FR-3; input to F-030's ERC). */
+    unassignedCount?: number
   }
 
-  let { viewport, snap, onfit, oncalibrate, onClearGuides }: Props = $props()
+  let { viewport, snap, onfit, oncalibrate, onClearGuides, unassignedCount = 0 }: Props = $props()
 
   const coords = $derived.by(() => {
     const world = viewport.cursorWorld
@@ -33,9 +35,26 @@
 <section class="statusbar" aria-label="Status bar">
   <div class="group">
     <span class="coords" aria-label="Cursor position">{coords}</span>
+    <span
+      class="unassigned"
+      class:warn={unassignedCount > 0}
+      aria-label={`${unassignedCount} unassigned pieces`}
+      data-testid="unassigned-count"
+    >
+      Unassigned: {unassignedCount}
+    </span>
   </div>
 
   <div class="group">
+    <button
+      type="button"
+      class="chip"
+      aria-pressed={viewport.glassVisible}
+      aria-label={`Glass ${viewport.glassVisible ? 'on' : 'off'}. Click to toggle.`}
+      onclick={() => viewport.toggleGlass()}
+    >
+      Glass
+    </button>
     <button
       type="button"
       class="chip"
@@ -121,6 +140,15 @@
   .zoom {
     font-family: var(--font-mono);
     color: var(--text-body);
+  }
+
+  .unassigned {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  .unassigned.warn {
+    color: var(--warning-600);
   }
 
   .zoom {

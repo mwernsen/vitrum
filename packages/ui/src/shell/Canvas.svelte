@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { CutContour, Diagnostic, Piece } from '@vitrum/core'
+  import { pieceKey, type CutContour, type Diagnostic, type Piece } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
-  import type { Segment } from '@vitrum/model'
+  import type { Glass, GlassId, PieceId, Segment } from '@vitrum/model'
   import { onMount } from 'svelte'
 
   import {
@@ -10,10 +10,12 @@
     drawContent,
     drawCutContours,
     drawDiagnostics,
+    drawGlassFills,
     drawGrid,
     drawOverlay,
     drawPieceFills,
     drawPieceHighlight,
+    drawPieceSelection,
     drawRuler,
     drawSnapMarker,
     drawToolPreview,
@@ -26,6 +28,7 @@
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ToolController } from '../tools/controller.svelte'
   import type { EditController } from '../tools/edit.svelte'
+  import type { PaintController } from '../tools/paint.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
   import type { SnapController } from '../tools/snap.svelte'
 
@@ -43,6 +46,16 @@
     edit?: EditController
     /** The selection model (F-013), for highlighting selected segments. */
     selection?: SelectionController
+    /** The paint / piece-select controller (F-023). Absent ⇒ no painting. */
+    paint?: PaintController
+    /** Whether the coloured-glass panel render is on (F-023, on by default). */
+    showGlass?: boolean
+    /** Effective glass per piece, keyed by content id (F-023). */
+    glassAssignments?: ReadonlyMap<PieceId, GlassId>
+    /** The project's glass catalog, for fill colours (F-023). */
+    glasses?: Readonly<Record<GlassId, Glass>>
+    /** Content ids of pieces selected in piece-select mode (F-023). */
+    selectedPieces?: ReadonlySet<PieceId>
     /** Detected pieces to overlay (F-020 dev visualization). Empty ⇒ nothing drawn. */
     pieces?: readonly Piece[]
     /** Network diagnostics to mark (F-020). */
@@ -67,6 +80,11 @@
     snap,
     edit,
     selection,
+    paint,
+    showGlass = true,
+    glassAssignments,
+    glasses = {},
+    selectedPieces,
     pieces = [],
     diagnostics = [],
     showPieces = false,
@@ -76,9 +94,19 @@
     showCuts = false,
   }: Props = $props()
 
-  /** True when the inert select tool is active and editing is wired in. */
+  /** Resolve a piece's effective glass id from the assignment map (F-023). */
+  function glassFor(piece: Piece): GlassId | undefined {
+    return glassAssignments?.get(pieceKey(piece))
+  }
+
+  /** True when the paint or piece-select layer (F-023) is driving. */
+  function painting(): boolean {
+    return !!paint && paint.active
+  }
+
+  /** True when the inert select tool is active, editing is wired in, and paint is off. */
   function editing(): boolean {
-    return !!edit && !!selection && (!tools || tools.activeId === 'select')
+    return !!edit && !!selection && !painting() && (!tools || tools.activeId === 'select')
   }
 
   let stackEl: HTMLDivElement
@@ -115,6 +143,9 @@
     }
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
+      if (showGlass) {
+        drawGlassFills(ctx, viewport.transform, size, pieces, glassFor, glasses, palette)
+      }
       if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
       drawContent(ctx, viewport.transform, size, segments, palette, technique)
       if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
@@ -123,10 +154,13 @@
     if (dirty.overlay) {
       const ctx = prepareContext(overlayCanvas, size, dpr)
       drawOverlay(ctx, size, viewport.cursorScreen, palette)
-      if (showPieces) {
-        drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
-        drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
+      if (painting() && selectedPieces) {
+        drawPieceSelection(ctx, viewport.transform, pieces, selectedPieces, palette)
       }
+      if (showPieces || painting()) {
+        drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
+      }
+      if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       if (edit && selection && editing()) {
@@ -190,6 +224,9 @@
     void segments
     void pieces
     void showPieces
+    void showGlass
+    void glassAssignments
+    void glasses
     void technique
     void cutContours
     void showCuts
@@ -214,6 +251,8 @@
     void diagnostics
     void showPieces
     void hoveredPieceId
+    void paint?.mode
+    void selectedPieces?.size
     schedule('overlay', 'rulers')
   })
 
@@ -270,6 +309,12 @@
       event.preventDefault()
       return
     }
+    // Left button with the paint / piece-select layer active (F-023) assigns glass.
+    if (event.button === 0 && painting()) {
+      paint!.pointerDown(localPoint(event), mods(event))
+      event.preventDefault()
+      return
+    }
     // Left button with a drawing tool active starts/continues a drawing gesture.
     if (event.button === 0 && tools && tools.activeId !== 'select') {
       updateSnap(event)
@@ -293,7 +338,9 @@
       lastPointer = { x: event.clientX, y: event.clientY }
       return
     }
-    if (tools && tools.activeId !== 'select') {
+    if (painting()) {
+      paint!.pointerMove(point)
+    } else if (tools && tools.activeId !== 'select') {
       updateSnap(event)
       tools.pointerMove(point, mods(event))
     } else if (editing()) {
@@ -304,7 +351,9 @@
 
   function handlePointerUp(event: PointerEvent) {
     if (!panning && event.button === 0) {
-      if (tools && tools.activeId !== 'select') {
+      if (painting()) {
+        paint!.pointerUp()
+      } else if (tools && tools.activeId !== 'select') {
         updateSnap(event)
         tools.pointerUp(localPoint(event), mods(event))
       } else if (editing()) {

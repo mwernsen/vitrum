@@ -13,6 +13,7 @@ import type {
 import {
   formatFractionalInch,
   gridStep,
+  pieceKey,
   rulerStepMm,
   ticksInRange,
   visibleWorldBounds,
@@ -20,7 +21,7 @@ import {
 } from '@vitrum/core'
 import type { BBox, Vec2 } from '@vitrum/geometry'
 import { bboxExpand, bboxOf, bboxOverlap, vec2 } from '@vitrum/geometry'
-import type { Segment } from '@vitrum/model'
+import type { Glass, GlassId, PieceId, Segment, TransparencyClass } from '@vitrum/model'
 
 import { segmentToWorldPoints } from './scene'
 
@@ -49,6 +50,10 @@ export interface CanvasPalette {
   /** Cycling fills for the F-020 dev piece overlay, drawn from the vitrail palette. */
   readonly pieceFills: readonly string[]
   readonly danger: string
+  /** Semantic status token for unassigned-piece hatching and counts (F-023). */
+  readonly warning: string
+  /** Sunken base fill an unassigned piece sits on (F-023). */
+  readonly unassignedBg: string
   /** Lead came line colour (F-021), and the three copper-foil solder-bead finishes. */
   readonly lead: string
   readonly solderSilver: string
@@ -83,6 +88,8 @@ const FALLBACK: CanvasPalette = {
   rulerText: '#6b6b68',
   pieceFills: ['#2f63e8', '#d97706', '#059669', '#e11d48', '#7c3aed'],
   danger: '#e11d48',
+  warning: '#c4860d',
+  unassignedBg: '#f0f0ea',
   lead: '#4a4a48',
   solderSilver: '#6b6b68',
   solderCopper: '#c4860d',
@@ -116,6 +123,8 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
       read('--violet-600', FALLBACK.pieceFills[4]!),
     ],
     danger: read('--danger-600', FALLBACK.danger),
+    warning: read('--warning-600', FALLBACK.warning),
+    unassignedBg: read('--surface-sunken', FALLBACK.unassignedBg),
     lead: read('--ink-600', FALLBACK.lead),
     solderSilver: read('--ink-500', FALLBACK.solderSilver),
     solderCopper: read('--amber-600', FALLBACK.solderCopper),
@@ -341,6 +350,116 @@ export function drawPieceFills(
     ctx.fillStyle = palette.rulerText
     ctx.fillText(piece.id, c.x, c.y)
   })
+}
+
+/** On-screen opacity per transparency class — the simple alpha/whiteness model of F-023 v1. */
+const TRANSPARENCY_ALPHA: Record<TransparencyClass, number> = {
+  transparent: 0.5,
+  translucent: 0.68,
+  opalescent: 0.85,
+  opaque: 1,
+}
+
+/** Trace a piece (outer ring plus holes) as one even-odd path in screen space. */
+function tracePiece(ctx: CanvasRenderingContext2D, vp: Viewport, piece: Piece): void {
+  ctx.beginPath()
+  traceRing(ctx, vp, piece.ring)
+  for (const hole of piece.holeRings) traceRing(ctx, vp, hole)
+}
+
+/**
+ * Hatch inside the current (already-traced) even-odd path: parallel 45° lines across the piece's
+ * screen bbox, clipped to the piece. Used for glass texture and unassigned-piece marking. The path
+ * must be current on entry; the clip is undone on return.
+ */
+function hatchInside(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  piece: Piece,
+  color: string,
+  alpha: number,
+  spacingPx: number,
+): void {
+  const a = worldToScreen(vp, piece.bbox.min)
+  const b = worldToScreen(vp, piece.bbox.max)
+  const x0 = Math.min(a.x, b.x)
+  const y0 = Math.min(a.y, b.y)
+  const x1 = Math.max(a.x, b.x)
+  const y1 = Math.max(a.y, b.y)
+  const span = x1 - x0 + (y1 - y0)
+  ctx.save()
+  ctx.clip('evenodd')
+  ctx.strokeStyle = color
+  ctx.globalAlpha = alpha
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  for (let d = 0; d <= span; d += spacingPx) {
+    ctx.moveTo(x0 + d, y0)
+    ctx.lineTo(x0 + d - (y1 - y0), y1)
+  }
+  ctx.stroke()
+  ctx.restore()
+  ctx.globalAlpha = 1
+}
+
+/**
+ * Draw the coloured panel (F-023): fill each piece with its glass base colour, dimmed by the glass's
+ * transparency class, with a light procedural hatch for textured glass; pieces with no glass get a
+ * sunken base plus a warning-token hatch so they are visually unmistakable (FR-3). This is the "flat"
+ * render — the lead/foil network (F-021) draws on top via {@link drawContent}. Culled to the visible
+ * region so cost tracks what is on screen (FR-4).
+ */
+export function drawGlassFills(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  size: ViewSize,
+  pieces: readonly Piece[],
+  glassFor: (piece: Piece) => GlassId | undefined,
+  glasses: Readonly<Record<GlassId, Glass>>,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || pieces.length === 0) return
+  const visible = bboxExpand(visibleWorldBounds(vp, size), 5)
+  for (const piece of pieces) {
+    if (!bboxOverlap(piece.bbox, visible)) continue
+    const glassId = glassFor(piece)
+    const glass = glassId ? glasses[glassId] : undefined
+    tracePiece(ctx, vp, piece)
+    if (glass) {
+      ctx.globalAlpha = TRANSPARENCY_ALPHA[glass.transparency]
+      ctx.fillStyle = glass.color
+      ctx.fill('evenodd')
+      ctx.globalAlpha = 1
+      if (glass.texture !== 'smooth') hatchInside(ctx, vp, piece, palette.content, 0.08, 6)
+    } else {
+      ctx.fillStyle = palette.unassignedBg
+      ctx.fill('evenodd')
+      // Re-trace (fill left the path current, but be explicit before clipping/hatching).
+      tracePiece(ctx, vp, piece)
+      hatchInside(ctx, vp, piece, palette.warning, 0.4, 7)
+    }
+  }
+}
+
+/** Outline the pieces selected in piece-select mode (F-023). Drawn on the overlay layer. */
+export function drawPieceSelection(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  pieces: readonly Piece[],
+  selected: ReadonlySet<PieceId>,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || selected.size === 0) return
+  ctx.save()
+  ctx.strokeStyle = palette.selection
+  ctx.lineWidth = 2
+  ctx.setLineDash([])
+  for (const piece of pieces) {
+    if (!selected.has(pieceKey(piece))) continue
+    tracePiece(ctx, vp, piece)
+    ctx.stroke()
+  }
+  ctx.restore()
 }
 
 /** Highlight the piece under the cursor (F-020 hover). Drawn on the overlay layer. */

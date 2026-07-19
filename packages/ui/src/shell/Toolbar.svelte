@@ -3,8 +3,10 @@
   import Circle from 'lucide-svelte/icons/circle'
   import Minus from 'lucide-svelte/icons/minus'
   import MousePointer2 from 'lucide-svelte/icons/mouse-pointer-2'
+  import PaintBucket from 'lucide-svelte/icons/paint-bucket'
   import PenTool from 'lucide-svelte/icons/pen-tool'
   import Ruler from 'lucide-svelte/icons/ruler'
+  import Shapes from 'lucide-svelte/icons/shapes'
   import Spline from 'lucide-svelte/icons/spline'
   import Square from 'lucide-svelte/icons/square'
   import SquareDashed from 'lucide-svelte/icons/square-dashed'
@@ -12,13 +14,16 @@
 
   import IconButton from '../components/IconButton.svelte'
   import type { ToolController } from '../tools/controller.svelte'
+  import type { PaintController } from '../tools/paint.svelte'
 
   interface Props {
     /** The drawing-tool controller (F-011). Optional so the shell renders in isolation. */
     tools?: ToolController
+    /** The paint / piece-select controller (F-023). Optional so the shell renders in isolation. */
+    paint?: PaintController
   }
 
-  let { tools }: Props = $props()
+  let { tools, paint }: Props = $props()
 
   // The palette and their single-key shortcuts (F-011). The border tool has no single-key
   // shortcut (the resolved set is L/A/B/R/C/P), so it is toolbar-only.
@@ -34,11 +39,19 @@
     { id: 'guide', label: 'Construction guide', key: 'G', icon: Ruler },
   ]
 
-  const activeId = $derived(tools?.activeId ?? 'select')
+  // A drawing/select tool is active only when the paint layer is off; picking one turns paint off.
+  const activeId = $derived(paint?.active ? '' : (tools?.activeId ?? 'select'))
 
   function select(id: ToolId | 'select') {
+    paint?.setMode('off')
     if (id === 'select') tools?.deactivate()
     else tools?.activate(id)
+  }
+
+  // Paint tools (F-023): activating one deactivates the drawing layer.
+  function paintMode(mode: 'paint' | 'select') {
+    tools?.deactivate()
+    paint?.setMode(paint.mode === mode ? 'off' : mode)
   }
 </script>
 
@@ -54,6 +67,26 @@
       <Icon size={18} />
     </IconButton>
   {/each}
+
+  {#if paint}
+    <div class="divider" aria-hidden="true"></div>
+    <IconButton
+      label="Paint glass"
+      variant={paint.mode === 'paint' ? 'outline' : 'ghost'}
+      aria-pressed={paint.mode === 'paint'}
+      onclick={() => paintMode('paint')}
+    >
+      <PaintBucket size={18} />
+    </IconButton>
+    <IconButton
+      label="Select pieces"
+      variant={paint.mode === 'select' ? 'outline' : 'ghost'}
+      aria-pressed={paint.mode === 'select'}
+      onclick={() => paintMode('select')}
+    >
+      <Shapes size={18} />
+    </IconButton>
+  {/if}
 </div>
 
 <style>
@@ -65,5 +98,11 @@
     padding: var(--space-2);
     background: var(--paper-50);
     border-right: 1px solid var(--border-subtle);
+  }
+
+  .divider {
+    height: 1px;
+    margin: var(--space-1) var(--space-2);
+    background: var(--border-subtle);
   }
 </style>
