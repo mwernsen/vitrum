@@ -8,11 +8,15 @@
     type PieceId,
   } from '@vitrum/model'
 
+  import type { DrcInput } from '@vitrum/drc'
+  import { onDestroy } from 'svelte'
+
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
+  import { DrcController } from '../drc/controller.svelte'
   import { AssignmentController } from '../glass/assignment.svelte'
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
@@ -28,6 +32,7 @@
   import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
   import ReadinessStrip from './ReadinessStrip.svelte'
+  import RulesPanel from './RulesPanel.svelte'
   import StatusBar from './StatusBar.svelte'
   import Toolbar from './Toolbar.svelte'
   import TopBar from './TopBar.svelte'
@@ -113,6 +118,28 @@
   const projectGlasses = $derived(controller?.doc.glasses ?? {})
   const unassignedCount = $derived(pieces.filter((p) => !assignments.glassFor(p)).length)
 
+  // Design rule checks (F-030). The engine runs off the main thread (debounced live, immediate on
+  // "Run checks"); this shell builds its input from the derived data and routes the results into the
+  // Rules panel, the canvas markers, the readiness strip and the activity-rail badge.
+  const drc = new DrcController({
+    execute: (command) => controller?.execute(command),
+    zoomTo: (at) => viewport.centerOn(at),
+  })
+  onDestroy(() => drc.dispose())
+
+  // Content ids of pieces with an *effective* glass (direct or inherited), so `unassigned-glass`
+  // respects F-023 inheritance rather than only the stored map.
+  const assignedKeys = $derived(
+    pieces.filter((p) => assignments.glassFor(p)).map((p) => pieceKey(p)),
+  )
+  const drcInput = $derived<DrcInput | null>(
+    controller ? { project: controller.doc, pieces, diagnostics, assignedKeys } : null,
+  )
+  // Live mode: re-run (debounced) whenever the document or its derived data changes.
+  $effect(() => {
+    if (drcInput) drc.schedule(drcInput)
+  })
+
   // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
   const dimText = $derived(
     `${formatLength(panel.widthMm, viewport.unit)} × ${formatLength(panel.heightMm, viewport.unit)}`,
@@ -191,6 +218,16 @@
   {/if}
 {/snippet}
 
+{#snippet rulesPanel()}
+  <RulesPanel
+    {drc}
+    doc={controller?.doc}
+    onRun={() => {
+      if (drcInput) void drc.runNow(drcInput)
+    }}
+  />
+{/snippet}
+
 <div class="shell">
   <TopBar
     title={panel.name}
@@ -199,12 +236,19 @@
     onViewMode={(mode) => (viewMode = mode)}
     onZoomFit={() => viewport.zoomToFit(bounds)}
   />
-  <ReadinessStrip pieceCount={pieces.length} {unassignedCount} />
+  <ReadinessStrip
+    pieceCount={pieces.length}
+    {unassignedCount}
+    checksRun={drc.hasRun}
+    errorCount={drc.result.counts.error}
+    warningCount={drc.result.counts.warning}
+    infoCount={drc.result.counts.info}
+  />
   <div class="body">
     <ActivityRail
       active={dockSection}
       onSelect={(section) => (dockSection = section)}
-      attentionCount={unassignedCount}
+      attentionCount={drc.result.counts.error + drc.result.counts.warning}
     />
     <DockPanel
       section={dockSection}
@@ -212,6 +256,7 @@
       doc={controller?.doc}
       execute={controller ? (command) => controller.execute(command) : undefined}
       glass={glassLibrary ? glassPanel : undefined}
+      rules={rulesPanel}
     />
     <div class="stage">
       <Toolbar {tools} {paint} />
@@ -235,6 +280,8 @@
         technique={techniqueRender}
         {cutContours}
         showCuts={viewport.cutsVisible}
+        violations={drc.markers}
+        selectedViolationKey={drc.selectedKey}
       />
       <div class="dims" aria-label="Panel dimensions">
         <span>{dimText}</span>

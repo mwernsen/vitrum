@@ -68,6 +68,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 2, migrate: (file) => ({ schemaVersion: 3, project: file.project }) },
       { from: 3, migrate: (file) => ({ schemaVersion: 4, project: file.project }) },
       { from: 4, migrate: (file) => ({ schemaVersion: 5, project: file.project }) },
+      { from: 5, migrate: (file) => ({ schemaVersion: 6, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -160,6 +161,32 @@ describe('schema versioning (FR-4)', () => {
       }),
     )
     expect(withAssignments.assignments).toEqual({ 'p-x': 'g1' })
+  })
+
+  it('v5 → v6 adds an empty DRC state (F-030)', () => {
+    // A legacy v5 file with assignments but no drc block.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 5, project: legacyProject }))
+    expect(project.drc).toEqual({ exclusions: {}, rules: {} })
+    // A pre-release v5 file carrying drc state keeps it.
+    const withDrc = deserialize(
+      JSON.stringify({
+        schemaVersion: 5,
+        project: {
+          ...legacyProject,
+          drc: { exclusions: { 'near-miss-joint#s1|s2': { note: 'ok as drawn' } }, rules: {} },
+        },
+      }),
+    )
+    expect(withDrc.drc.exclusions['near-miss-joint#s1|s2']).toEqual({ note: 'ok as drawn' })
   })
 
   it('throws when no migration path exists for an older version', () => {

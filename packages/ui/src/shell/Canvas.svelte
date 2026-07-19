@@ -19,10 +19,12 @@
     drawRuler,
     drawSnapMarker,
     drawToolPreview,
+    drawViolations,
     prepareContext,
     readCanvasPalette,
     type CanvasPalette,
     type TechniqueRender,
+    type ViolationMarker,
   } from '../canvas/render'
   import { drawEditLayer } from '../canvas/selectionRender'
   import type { ViewportController } from '../canvas/viewport.svelte'
@@ -70,6 +72,10 @@
     cutContours?: readonly CutContour[]
     /** Whether the cut-contour overlay is on (F-021 dev toggle). */
     showCuts?: boolean
+    /** DRC violation markers to draw on the overlay (F-030). */
+    violations?: readonly ViolationMarker[]
+    /** The selected violation's key, ringed on the canvas (F-030). */
+    selectedViolationKey?: string | null
   }
 
   let {
@@ -92,6 +98,8 @@
     technique,
     cutContours = [],
     showCuts = false,
+    violations = [],
+    selectedViolationKey = null,
   }: Props = $props()
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
@@ -161,6 +169,7 @@
         drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
       }
       if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
+      drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       if (edit && selection && editing()) {
@@ -253,6 +262,8 @@
     void hoveredPieceId
     void paint?.mode
     void selectedPieces?.size
+    void violations
+    void selectedViolationKey
     schedule('overlay', 'rulers')
   })
 

@@ -1,6 +1,6 @@
 import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
-import type { Glass, Project, Segment } from './types'
+import type { DrcState, Glass, Project, Segment } from './types'
 
 /**
  * Persistence (F-002). A `.vitrum` file is JSON: a small envelope carrying a
@@ -12,7 +12,7 @@ import type { Glass, Project, Segment } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 5
+export const CURRENT_SCHEMA_VERSION = 6
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -126,11 +126,31 @@ const migrateV4ToV5: Migration = {
   },
 }
 
+/**
+ * v5 → v6 (F-030): design-rule state. v5 files have no `drc` block; add an empty one so a
+ * pre-F-030 project loads with every rule at its default severity and nothing waived. Any
+ * `drc` a pre-release v5 file might carry is preserved, with its two maps defaulted.
+ */
+const migrateV5ToV6: Migration = {
+  from: 5,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'drc'> & {
+      drc?: Partial<DrcState>
+    }
+    const drc: DrcState = {
+      exclusions: project.drc?.exclusions ?? {},
+      rules: project.drc?.rules ?? {},
+    }
+    return { schemaVersion: 6, project: { ...project, drc } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
   migrateV3ToV4,
   migrateV4ToV5,
+  migrateV5ToV6,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

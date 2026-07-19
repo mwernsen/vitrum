@@ -59,6 +59,10 @@ export interface CanvasPalette {
   readonly solderSilver: string
   readonly solderCopper: string
   readonly solderBlack: string
+  /** DRC violation marker colours by severity (F-030): error/warning/info. */
+  readonly severityError: string
+  readonly severityWarning: string
+  readonly severityInfo: string
 }
 
 /**
@@ -94,6 +98,9 @@ const FALLBACK: CanvasPalette = {
   solderSilver: '#6b6b68',
   solderCopper: '#c4860d',
   solderBlack: '#121212',
+  severityError: '#e11d48',
+  severityWarning: '#d97706',
+  severityInfo: '#1d50cf',
 }
 
 /** Read the canvas palette from an element's resolved custom properties. */
@@ -129,6 +136,11 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     solderSilver: read('--ink-500', FALLBACK.solderSilver),
     solderCopper: read('--amber-600', FALLBACK.solderCopper),
     solderBlack: read('--ink-900', FALLBACK.solderBlack),
+    // Leaf tokens (not the semantic aliases) so the values resolve to real colours on the canvas
+    // (F-003), matching the Rules panel's severity dots.
+    severityError: read('--ruby-600', FALLBACK.severityError),
+    severityWarning: read('--amber-600', FALLBACK.severityWarning),
+    severityInfo: read('--cobalt-600', FALLBACK.severityInfo),
   }
 }
 
@@ -513,6 +525,54 @@ export function drawDiagnostics(
     } else {
       ctx.strokeRect(s.x - g, s.y - g, g * 2, g * 2)
     }
+  }
+  ctx.restore()
+}
+
+/** A canvas-drawable DRC violation marker: a located point with a severity. */
+export interface ViolationMarker {
+  readonly at: Vec2
+  readonly severity: 'error' | 'warning' | 'info'
+  readonly key: string
+}
+
+/**
+ * Draw DRC violation markers (F-030): a severity-coloured dot at each violation's anchor, with a
+ * ring around the currently-selected one so clicking a row and zooming-to reads as "this one". Drawn
+ * on the overlay layer, above content.
+ */
+export function drawViolations(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  markers: readonly ViolationMarker[],
+  selectedKey: string | null,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || markers.length === 0) return
+  const colorFor = (severity: ViolationMarker['severity']): string =>
+    severity === 'error'
+      ? palette.severityError
+      : severity === 'warning'
+        ? palette.severityWarning
+        : palette.severityInfo
+  ctx.save()
+  for (const m of markers) {
+    const s = worldToScreen(vp, m.at)
+    const color = colorFor(m.severity)
+    if (m.key === selectedKey) {
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, 9, 0, Math.PI * 2)
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+    ctx.beginPath()
+    ctx.arc(s.x, s.y, 4.5, 0, Math.PI * 2)
+    ctx.fillStyle = color
+    ctx.fill()
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = palette.rulerBg
+    ctx.stroke()
   }
   ctx.restore()
 }

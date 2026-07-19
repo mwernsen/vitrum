@@ -6,6 +6,7 @@ import {
   panByScreen,
   scaleAround,
   screenToWorld,
+  worldToScreen,
   zoomBy,
 } from '@vitrum/core'
 import type { BBox, Vec2 } from '@vitrum/geometry'
@@ -101,6 +102,15 @@ export class ViewportController {
   /** Snap to exact 1:1 physical size, anchored at the view centre. */
   zoomToActualSize(): void {
     this.transform = scaleAround(this.transform, this.pxPerMm, this.#center())
+  }
+
+  /** Pan (no zoom change) so a world point sits at the view centre — used to zoom-to a DRC
+   * violation (F-030 FR-2). A no-op before the canvas has a size. */
+  centerOn(world: Vec2): void {
+    if (this.width <= 0 || this.height <= 0) return
+    const screen = worldToScreen(this.transform, world)
+    const c = this.#center()
+    this.transform = panByScreen(this.transform, c.x - screen.x, c.y - screen.y)
   }
 
   /** Frame `bounds` (or the default panel region when empty) with a 5% margin (FR-5). */

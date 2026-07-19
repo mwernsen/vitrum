@@ -1,0 +1,119 @@
+import type { Diagnostic, Piece } from '@vitrum/core'
+import type { Project, Severity } from '@vitrum/model'
+import type { Vec2 } from '@vitrum/geometry'
+
+/**
+ * The DRC engine (F-030), modelled on KiCad's ERC/DRC: an extensible registry of {@link Rule}s
+ * that inspect the document plus its derived data and emit located, severity-graded, explained
+ * {@link Violation}s. This module is pure data + free functions — no DOM, no Svelte, no worker
+ * plumbing — so a full run is unit- and golden-file-testable and can be lifted onto a worker
+ * unchanged (FR-1). The topology (ERC) rule pack ships here; cuttability (F-031) and structural
+ * (F-032) packs plug into the same registry with no engine change.
+ */
+
+export type { Severity }
+
+/** The id of a shipped rule. Extending the pack adds to this union. */
+export type RuleId =
+  | 'open-border'
+  | 'dangling-line'
+  | 'near-miss-joint'
+  | 'duplicate-segment'
+  | 'unassigned-glass'
+  | 'orphan-region'
+
+/**
+ * The document + derived data a rule inspects. Everything here is plain, structured-cloneable
+ * data (no closures) so the whole input can be posted to a worker. `pieces` and `diagnostics`
+ * come from F-020's detection; `assignedKeys` are the content ids of pieces with an *effective*
+ * glass (F-023, direct or inherited) — resolving inheritance is the caller's job so the engine
+ * stays a pure function of its input.
+ */
+export interface DrcInput {
+  readonly project: Project
+  readonly pieces: readonly Piece[]
+  readonly diagnostics: readonly Diagnostic[]
+  readonly assignedKeys: readonly string[]
+}
+
+/**
+ * A one-click fix a rule can attach to a violation (F-030 open question 1: yes, with weld as the
+ * pilot). Kept as pure data — the id-only payload is turned into a document `Command` by
+ * {@link quickFixCommand}, so the engine never imports command machinery into a rule.
+ */
+export interface WeldQuickFix {
+  readonly kind: 'weld'
+  /** The node the two endpoints collapse onto. */
+  readonly keepNodeId: string
+  /** The node folded into `keepNodeId` and removed. */
+  readonly dropNodeId: string
+  readonly label: string
+}
+
+export type QuickFix = WeldQuickFix
+
+/**
+ * What a rule emits per problem, before the runner resolves effective severity and identity.
+ * `identity` are the stable tokens (entity ids, content ids) that make this violation unique
+ * within its rule; combined with the rule id they form the waiver key, so a waiver survives
+ * edits that leave those entities intact (FR-3).
+ */
+export interface RawViolation {
+  readonly at: Vec2
+  readonly message: string
+  readonly identity: readonly string[]
+  readonly segmentIds?: readonly string[]
+  readonly pieceIds?: readonly string[]
+  readonly distance?: number
+  readonly quickFix?: QuickFix
+}
+
+/** A located, severity-graded, explained problem — the engine's output unit. */
+export interface Violation {
+  readonly ruleId: RuleId
+  readonly title: string
+  /** Effective severity, after any per-project override (FR-4). */
+  readonly severity: Severity
+  readonly message: string
+  /** Why this matters when the panel is actually cut and built — craft education (Scope). */
+  readonly explain: string
+  readonly at: Vec2
+  readonly segmentIds: readonly string[]
+  readonly pieceIds: readonly string[]
+  readonly distance?: number
+  readonly quickFix?: QuickFix
+  /** Stable waiver identity (rule id + sorted `identity` tokens). */
+  readonly key: string
+  /** The waiver note, present only on an excluded violation. */
+  readonly note?: string
+}
+
+/**
+ * One design rule. `check` is pure: same input, same violations, in a deterministic order.
+ * `defaultSeverity` and `explain` are the rule's shipped defaults; a project can override the
+ * severity or disable the rule (FR-4).
+ */
+export interface Rule {
+  readonly id: RuleId
+  readonly title: string
+  readonly defaultSeverity: Severity
+  readonly explain: string
+  check(input: DrcInput): RawViolation[]
+}
+
+export interface SeverityCounts {
+  readonly error: number
+  readonly warning: number
+  readonly info: number
+}
+
+/**
+ * The result of a full run: `violations` are active (shown on the canvas and in the panel),
+ * `excluded` are currently-matching waivers (listed in the "excluded" tab, FR-3). Both are
+ * ranked most-severe first with a deterministic tiebreak, so the UI and golden files are stable.
+ */
+export interface RunResult {
+  readonly violations: readonly Violation[]
+  readonly excluded: readonly Violation[]
+  readonly counts: SeverityCounts
+}

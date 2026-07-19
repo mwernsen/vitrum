@@ -3,7 +3,7 @@
 |                |                        |
 | -------------- | ---------------------- |
 | **Phase**      | 3 — Design rule checks |
-| **Status**     | draft                  |
+| **Status**     | done                   |
 | **Depends on** | F-020, F-021           |
 | **Complexity** | L                      |
 
@@ -59,11 +59,14 @@ it is Vitrum's core differentiator. This feature builds the engine plus the
 
 ## Design
 
-The violations panel has **no design in `ui_kits/studio` yet** — per the F-004
-workflow, design it in the Claude Design project with Mathieu before implementation
-(candidates: `Tabs` for grouped rules, `Badge` for severity, `Tooltip` for canvas
-markers). Severity colors map to the design system's semantic tokens
-(error/warning/info), never the vitrail palette.
+The Rules dock panel **is** designed — in the **Portal redesign** project
+(`1ec655e3-ab21-4450-b3be-f2caaca64ea3`, turn-3 IA, the "Design rules" panel in the
+cockpit's Rules dock section): a "Run checks" pill, a severity summary, severity-dotted
+violation rows, a selected-violation state with a quick-fix in `--cobalt-50`, a per-row
+"Waive…" affordance, a "n waived · View excluded" footer, and severity-coloured DRC markers
+on the canvas. (The earlier "no design yet" note predated the Portal redesign.) Severity
+colours map to leaf tokens — error `--ruby-600`, warning `--amber-600`, info `--cobalt-600`
+— never the vitrail palette.
 
 ## Functional requirements
 
@@ -96,3 +99,62 @@ markers). Severity colors map to the design system's semantic tokens
 1. Should `near-miss-joint` offer a one-click "weld it" quick-fix? (Quick-fix actions
    on violations generally — powerful, but adds surface. Recommendation: yes, one
    quick-fix API in the engine, weld as its pilot.)
+   **Resolved (Mathieu, 2026-07-19): yes** — the canonical Portal design already includes the
+   "Weld it" button. Shipped as a single `QuickFix` data type + `quickFixCommand()` seam, with
+   weld (reusing F-013's `mergeNodes`) as the pilot; F-031/F-032 fixes add a variant, not plumbing.
+
+## Implementation notes
+
+Delivered on branch `f-030-drc-framework` (2026-07-19).
+
+**What shipped**
+
+- New pure package **`packages/drc`** (`@vitrum/drc`, deps `core` + `model` + `geometry`; `ui`
+  now depends on it): `Rule`/`Violation`/`DrcInput`/`RunResult` types, a rule registry, the pure
+  `runChecks(input)` runner, an `exclusionKey` identity seam, and the `quickFixCommand` seam.
+- **Topology (ERC) rule pack** — all six rules: `open-border`, `dangling-line`,
+  `near-miss-joint` (with weld quick-fix), `duplicate-segment` (titled "Overlapping segments"),
+  `unassigned-glass`, `orphan-region`. The three network-imperfection rules reuse F-020's
+  diagnostics (near-miss additionally resolves the two nodes for the weld); the other three derive
+  from the project + pieces + effective assignments.
+- **Persistence**: `Project.drc = { exclusions, rules }` added to the model (schema v5→v6 migration
+  - `setDrcExclusion` / `setDrcRuleOverride` commands). Exclusions key off rule id + stable entity
+    ids, so waivers survive edits that keep those entities (FR-3); rule severity/enable overrides
+    persist per project (FR-4).
+- **UI (F-030 in the Portal cockpit)**: the `rules` dock section is now live
+  (`shell/RulesPanel.svelte` + `drc/controller.svelte.ts`), the ReadinessStrip "Checks" pill and
+  the activity-rail badge are DRC-driven, and the canvas draws severity-coloured violation markers
+  (`drawViolations`, with a ring on the selected one; `viewport.centerOn` handles zoom-to, FR-2).
+- **Worker runner (FR-1)**: `drc.worker.ts` + `WorkerDrcRunner` run checks off the main thread,
+  debounced in live mode; explicit "Run checks" runs immediately.
+
+**Deviations / decisions**
+
+- The rule-settings "dialog" is an inline collapsible section in the Rules panel (gear toggle),
+  not a modal — lighter and matches the dock idiom. Severity/enable per rule via `Select`/`Checkbox`.
+- **Worker is a _classic_ (IIFE) worker, not `{ type: 'module' }`.** A module worker is blocked
+  under `file://` in the packaged Electron renderer (it loaded fine on the `dev:ui` http server but
+  silently never responded in the build). Vite bundles the classic worker self-contained, which
+  loads under `file://`. The `DrcController` also falls back to a synchronous run if the worker ever
+  errors, so checks never hang regardless of platform.
+- `unassigned-glass` uses an `assignedKeys` list (content ids of pieces with _effective_ glass)
+  passed into the engine, so it respects F-023 inheritance in-session while the pure engine stays a
+  function of its input (golden path derives the keys from stored assignments).
+
+**Testing**
+
+- `packages/drc`: per-rule + runner unit tests, a **golden `.vitrum` fixture suite** (checked into
+  `src/fixtures/`, one per scene incl. the clean reference — silent per FR-5), and an FR-1 benchmark
+  (~200-piece grid, well under 500 ms).
+- `packages/model`: v5→v6 migration test + DRC command tests.
+- `packages/ui`: `DrcController` and `RulesPanel` component tests, ReadinessStrip checks-pill test.
+- E2E: `apps/desktop/e2e/drc.spec.ts` drives draw → run checks → see violations + readiness → waive
+  with a note → excluded tab. All gates green (`lint`, `format:check`, `check`, `test`, `test:e2e`).
+
+**Handed to Mathieu / follow-ups**
+
+- Net-new **Rules panel** was built in code to the Portal turn-3 design; back-port it into the
+  Claude Design project when convenient (it currently lives only as the cockpit mock, not as a
+  `components/`/`ui_kits` asset).
+- The canvas violation markers are a manual/gallery check (pixels aren't asserted in E2E).
+- Quick-fix currently has one variant (weld); F-031/F-032 will add more via the same seam.

@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 6,
+  "project": {
+    "settings": {
+      "units": "mm",
+      "name": "Untitled"
+    },
+    "technique": {
+      "kind": "lead",
+      "lead": {
+        "defaultProfileId": "came-h-5",
+        "cuttingToleranceMm": 0,
+        "profiles": {
+          "came-h-4": {
+            "id": "came-h-4",
+            "name": "H 4 mm",
+            "kind": "H",
+            "flangeMm": 4,
+            "heartMm": 1.4
+          },
+          "came-h-5": {
+            "id": "came-h-5",
+            "name": "H 5 mm",
+            "kind": "H",
+            "flangeMm": 5,
+            "heartMm": 1.5
+          },
+          "came-h-6": {
+            "id": "came-h-6",
+            "name": "H 6 mm",
+            "kind": "H",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-h-7": {
+            "id": "came-h-7",
+            "name": "H 7 mm",
+            "kind": "H",
+            "flangeMm": 7,
+            "heartMm": 1.7
+          },
+          "came-h-9": {
+            "id": "came-h-9",
+            "name": "H 9 mm",
+            "kind": "H",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          },
+          "came-h-12": {
+            "id": "came-h-12",
+            "name": "H 12 mm",
+            "kind": "H",
+            "flangeMm": 12,
+            "heartMm": 2
+          },
+          "came-u-6": {
+            "id": "came-u-6",
+            "name": "U 6 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-u-9": {
+            "id": "came-u-9",
+            "name": "U 9 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          }
+        },
+        "overrides": {}
+      },
+      "foil": {
+        "foilWidthMm": 5.6,
+        "pieceGapMm": 0.8,
+        "solderFinish": "silver"
+      }
+    },
+    "segments": {
+      "626-we_WMegzUaCg2begs": {
+        "id": "626-we_WMegzUaCg2begs",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 0
+          },
+          "b": {
+            "x": 50,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "L2_xOlD4904pIrORFm_wc",
+          "19jkV5DRPI3_dm-0_-o-K"
+        ]
+      },
+      "uCs6vPZm8QPyaf3Zh3JaN": {
+        "id": "uCs6vPZm8QPyaf3Zh3JaN",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 50,
+            "y": 0
+          },
+          "b": {
+            "x": 100,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "19jkV5DRPI3_dm-0_-o-K",
+          "BfTh1ZZH_busL91iR1xWj"
+        ]
+      },
+      "nq9yQzv1KeHuY5PdvBums": {
+        "id": "nq9yQzv1KeHuY5PdvBums",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 100,
+            "y": 0
+          },
+          "b": {
+            "x": 100,
+            "y": 80
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "BfTh1ZZH_busL91iR1xWj",
+          "cBH1h4HAJEGEGnArpPaYk"
+        ]
+      },
+      "qF130lSwfwSZPMg-Bx34s": {
+        "id": "qF130lSwfwSZPMg-Bx34s",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 100,
+            "y": 80
+          },
+          "b": {
+            "x": 50,
+            "y": 80
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "cBH1h4HAJEGEGnArpPaYk",
+          "nS3vefuTEi_5WA1has4T0"
+        ]
+      },
+      "yHj2_VofetJOs-4Wx5YwF": {
+        "id": "yHj2_VofetJOs-4Wx5YwF",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 50,
+            "y": 80
+          },
+          "b": {
+            "x": 0,
+            "y": 80
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "nS3vefuTEi_5WA1has4T0",
+          "9iyAKPXT1yhXCRsBR01tp"
+        ]
+      }
+    },
+    "nodes": {
+      "L2_xOlD4904pIrORFm_wc": {
+        "pos": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "19jkV5DRPI3_dm-0_-o-K": {
+        "pos": {
+          "x": 50,
+          "y": 0
+        }
+      },
+      "BfTh1ZZH_busL91iR1xWj": {
+        "pos": {
+          "x": 100,
+          "y": 0
+        }
+      },
+      "cBH1h4HAJEGEGnArpPaYk": {
+        "pos": {
+          "x": 100,
+          "y": 80
+        }
+      },
+      "nS3vefuTEi_5WA1has4T0": {
+        "pos": {
+          "x": 50,
+          "y": 80
+        }
+      },
+      "9iyAKPXT1yhXCRsBR01tp": {
+        "pos": {
+          "x": 0,
+          "y": 80
+        }
+      }
+    },
+    "glasses": {},
+    "assignments": {},
+    "layers": [],
+    "drc": {
+      "exclusions": {},
+      "rules": {}
+    }
+  }
+}

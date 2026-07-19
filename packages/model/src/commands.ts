@@ -25,6 +25,8 @@ import type {
   TechniqueSettings,
 } from './technique'
 import type {
+  DrcExclusion,
+  DrcRuleOverride,
   Glass,
   GlassId,
   Node,
@@ -809,6 +811,45 @@ export function setGlassAssignments(patch: Readonly<Record<PieceId, GlassId | nu
       }
       return setGlassAssignments(inverse)
     },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* DRC commands (F-030)                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Waive or un-waive a DRC violation (F-030 FR-3). `record` set stores the exclusion under its
+ * stable `key` (rule id + involved entity ids); `record` null removes it. Reversible, so waiving
+ * and un-waiving sit in the undo history like any other edit.
+ */
+export function setDrcExclusion(key: string, record: DrcExclusion | null): Command {
+  return {
+    kind: 'setDrcExclusion',
+    apply: (doc) => {
+      const exclusions = { ...doc.drc.exclusions }
+      if (record === null) delete exclusions[key]
+      else exclusions[key] = record
+      return { ...doc, drc: { ...doc.drc, exclusions } }
+    },
+    invert: (before) => setDrcExclusion(key, before.drc.exclusions[key] ?? null),
+  }
+}
+
+/**
+ * Override a DRC rule's severity and/or enabled flag per project (F-030 FR-4). `override` null
+ * restores the rule's shipped default. Reversible.
+ */
+export function setDrcRuleOverride(ruleId: string, override: DrcRuleOverride | null): Command {
+  return {
+    kind: 'setDrcRuleOverride',
+    apply: (doc) => {
+      const rules = { ...doc.drc.rules }
+      if (override === null) delete rules[ruleId]
+      else rules[ruleId] = override
+      return { ...doc, drc: { ...doc.drc, rules } }
+    },
+    invert: (before) => setDrcRuleOverride(ruleId, before.drc.rules[ruleId] ?? null),
   }
 }
 
