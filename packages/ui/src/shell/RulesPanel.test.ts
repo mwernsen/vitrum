@@ -133,8 +133,10 @@ describe('RulesPanel (F-030)', () => {
     render(RulesPanel, { drc, doc: createEmptyProject() })
     await fireEvent.click(screen.getByRole('button', { name: 'Rule settings' }))
 
-    // The lead default (10 mm) shows as the placeholder for the minimum-piece-size threshold.
-    const input = screen.getByPlaceholderText('10') as HTMLInputElement
+    // The lead default (10 mm) shows as the placeholder for the minimum-piece-size threshold. The
+    // structural pack (F-032) also has a 10 mm default (tiny-edge-contact), so scope to the first —
+    // min-piece-size comes before the structural rules in the registry order.
+    const input = screen.getAllByPlaceholderText('10')[0] as HTMLInputElement
     expect(input).toBeInTheDocument()
 
     await fireEvent.input(input, { target: { value: '12' } })

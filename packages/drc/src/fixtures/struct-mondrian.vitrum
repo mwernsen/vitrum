@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 7,
+  "project": {
+    "settings": {
+      "units": "mm",
+      "name": "Untitled"
+    },
+    "technique": {
+      "kind": "lead",
+      "lead": {
+        "defaultProfileId": "came-h-5",
+        "cuttingToleranceMm": 0,
+        "profiles": {
+          "came-h-4": {
+            "id": "came-h-4",
+            "name": "H 4 mm",
+            "kind": "H",
+            "flangeMm": 4,
+            "heartMm": 1.4
+          },
+          "came-h-5": {
+            "id": "came-h-5",
+            "name": "H 5 mm",
+            "kind": "H",
+            "flangeMm": 5,
+            "heartMm": 1.5
+          },
+          "came-h-6": {
+            "id": "came-h-6",
+            "name": "H 6 mm",
+            "kind": "H",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-h-7": {
+            "id": "came-h-7",
+            "name": "H 7 mm",
+            "kind": "H",
+            "flangeMm": 7,
+            "heartMm": 1.7
+          },
+          "came-h-9": {
+            "id": "came-h-9",
+            "name": "H 9 mm",
+            "kind": "H",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          },
+          "came-h-12": {
+            "id": "came-h-12",
+            "name": "H 12 mm",
+            "kind": "H",
+            "flangeMm": 12,
+            "heartMm": 2
+          },
+          "came-u-6": {
+            "id": "came-u-6",
+            "name": "U 6 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-u-9": {
+            "id": "came-u-9",
+            "name": "U 9 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          }
+        },
+        "overrides": {}
+      },
+      "foil": {
+        "foilWidthMm": 5.6,
+        "pieceGapMm": 0.8,
+        "solderFinish": "silver"
+      }
+    },
+    "segments": {
+      "Oay8HZ6dlftQBHcJwLxyu": {
+        "id": "Oay8HZ6dlftQBHcJwLxyu",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 0
+          },
+          "b": {
+            "x": 600,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "XZmLxjjissuW_iaw3DRw8",
+          "xOkE7EhpDoCe5PEDjPebl"
+        ]
+      },
+      "3aH_T4ndCVORaI0BwUSSt": {
+        "id": "3aH_T4ndCVORaI0BwUSSt",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 600,
+            "y": 0
+          },
+          "b": {
+            "x": 600,
+            "y": 600
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "xOkE7EhpDoCe5PEDjPebl",
+          "YU1gpwt07N7gH9xvKTPGR"
+        ]
+      },
+      "LctaabzmfGQRoKv3tQRCt": {
+        "id": "LctaabzmfGQRoKv3tQRCt",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 600,
+            "y": 600
+          },
+          "b": {
+            "x": 0,
+            "y": 600
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "YU1gpwt07N7gH9xvKTPGR",
+          "kjWEMYRgIWuVRTYdzwZd-"
+        ]
+      },
+      "4gPoq8KEfGiAoRDiYj6HT": {
+        "id": "4gPoq8KEfGiAoRDiYj6HT",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 600
+          },
+          "b": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "kjWEMYRgIWuVRTYdzwZd-",
+          "XZmLxjjissuW_iaw3DRw8"
+        ]
+      },
+      "astUfZVf_K5HvOH58oSYw": {
+        "id": "astUfZVf_K5HvOH58oSYw",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 300,
+            "y": 0
+          },
+          "b": {
+            "x": 300,
+            "y": 300
+          }
+        },
+        "role": "lead",
+        "endpoints": [
+          "w3ENx73iTCvwRUsgPLmPN",
+          "L8lxz7bOlQjCautnzAxbj"
+        ]
+      },
+      "bWfO2dBwsDh28j75Tgyko": {
+        "id": "bWfO2dBwsDh28j75Tgyko",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 300,
+            "y": 300
+          },
+          "b": {
+            "x": 300,
+            "y": 600
+          }
+        },
+        "role": "lead",
+        "endpoints": [
+          "L8lxz7bOlQjCautnzAxbj",
+          "Jnr58QepPjO-ebOlDQyYD"
+        ]
+      },
+      "FsyX62D9XzoHhlakpfvj3": {
+        "id": "FsyX62D9XzoHhlakpfvj3",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 300
+          },
+          "b": {
+            "x": 300,
+            "y": 300
+          }
+        },
+        "role": "lead",
+        "endpoints": [
+          "Gb6FlntRNZxgEH5J6a6nS",
+          "L8lxz7bOlQjCautnzAxbj"
+        ]
+      },
+      "GKh1bv0Vg0rkBXAk9I15S": {
+        "id": "GKh1bv0Vg0rkBXAk9I15S",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 300,
+            "y": 300
+          },
+          "b": {
+            "x": 600,
+            "y": 300
+          }
+        },
+        "role": "lead",
+        "endpoints": [
+          "L8lxz7bOlQjCautnzAxbj",
+          "TiqiQ3U23RUZ-vSHzopff"
+        ]
+      }
+    },
+    "nodes": {
+      "XZmLxjjissuW_iaw3DRw8": {
+        "pos": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "xOkE7EhpDoCe5PEDjPebl": {
+        "pos": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "YU1gpwt07N7gH9xvKTPGR": {
+        "pos": {
+          "x": 600,
+          "y": 600
+        }
+      },
+      "kjWEMYRgIWuVRTYdzwZd-": {
+        "pos": {
+          "x": 0,
+          "y": 600
+        }
+      },
+      "w3ENx73iTCvwRUsgPLmPN": {
+        "pos": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "L8lxz7bOlQjCautnzAxbj": {
+        "pos": {
+          "x": 300,
+          "y": 300
+        }
+      },
+      "Jnr58QepPjO-ebOlDQyYD": {
+        "pos": {
+          "x": 300,
+          "y": 600
+        }
+      },
+      "Gb6FlntRNZxgEH5J6a6nS": {
+        "pos": {
+          "x": 0,
+          "y": 300
+        }
+      },
+      "TiqiQ3U23RUZ-vSHzopff": {
+        "pos": {
+          "x": 600,
+          "y": 300
+        }
+      }
+    },
+    "glasses": {},
+    "assignments": {},
+    "layers": [],
+    "drc": {
+      "exclusions": {},
+      "rules": {}
+    },
+    "reinforcements": []
+  }
+}

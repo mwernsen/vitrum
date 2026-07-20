@@ -20,7 +20,7 @@ import {
   worldToScreen,
 } from '@vitrum/core'
 import type { BBox, Vec2 } from '@vitrum/geometry'
-import { bboxExpand, bboxOf, bboxOverlap, vec2 } from '@vitrum/geometry'
+import { bboxExpand, bboxOf, bboxOverlap, distance, vec2 } from '@vitrum/geometry'
 import type { Glass, GlassId, PieceId, Segment, TransparencyClass } from '@vitrum/model'
 
 import { segmentToWorldPoints } from './scene'
@@ -63,6 +63,8 @@ export interface CanvasPalette {
   readonly severityError: string
   readonly severityWarning: string
   readonly severityInfo: string
+  /** Reinforcement bar colour (F-032) — a metallic steel tone distinct from lead/glass. */
+  readonly reinforcement: string
 }
 
 /**
@@ -101,6 +103,7 @@ const FALLBACK: CanvasPalette = {
   severityError: '#e11d48',
   severityWarning: '#d97706',
   severityInfo: '#1d50cf',
+  reinforcement: '#57534e',
 }
 
 /** Read the canvas palette from an element's resolved custom properties. */
@@ -141,6 +144,7 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     severityError: read('--ruby-600', FALLBACK.severityError),
     severityWarning: read('--amber-600', FALLBACK.severityWarning),
     severityInfo: read('--cobalt-600', FALLBACK.severityInfo),
+    reinforcement: read('--ink-700', FALLBACK.reinforcement),
   }
 }
 
@@ -573,6 +577,75 @@ export function drawViolations(
     ctx.lineWidth = 1.5
     ctx.strokeStyle = palette.rulerBg
     ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/** A reinforcement bar to draw (F-032): two endpoints and a width, in mm. */
+export interface ReinforcementRender {
+  readonly id: string
+  readonly a: Vec2
+  readonly b: Vec2
+  readonly widthMm: number
+}
+
+/**
+ * Draw reinforcement bars (F-032) on the content layer: a solid metallic bar at true width
+ * (zoom-proportional) with rounded caps and small endpoint knobs, drawn distinctly from lead/glass.
+ * The selected bar and a live placement rubber-band render in the selection colour. Chrome colours
+ * are token-sourced (the bar is a structural annotation, not glass, so it uses tokens per the canvas
+ * boundary rule).
+ */
+export function drawReinforcements(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  bars: readonly ReinforcementRender[],
+  selectedId: string | null,
+  placement: { a: Vec2; b: Vec2 } | null,
+  palette: CanvasPalette,
+): void {
+  if (!ctx) return
+  const pxPerMm = distance(worldToScreen(vp, vec2(0, 0)), worldToScreen(vp, vec2(1, 0))) || 1
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (const bar of bars) {
+    const sa = worldToScreen(vp, bar.a)
+    const sb = worldToScreen(vp, bar.b)
+    const selected = bar.id === selectedId
+    ctx.beginPath()
+    ctx.moveTo(sa.x, sa.y)
+    ctx.lineTo(sb.x, sb.y)
+    ctx.strokeStyle = selected ? palette.selection : palette.reinforcement
+    ctx.lineWidth = Math.max(2.5, bar.widthMm * pxPerMm)
+    ctx.stroke()
+    // A thin highlight down the middle reads as a metal bar, not a lead line.
+    ctx.beginPath()
+    ctx.moveTo(sa.x, sa.y)
+    ctx.lineTo(sb.x, sb.y)
+    ctx.strokeStyle = palette.rulerBg
+    ctx.globalAlpha = 0.35
+    ctx.lineWidth = Math.max(1, bar.widthMm * pxPerMm * 0.25)
+    ctx.stroke()
+    ctx.globalAlpha = 1
+    // Endpoint knobs, so an endpoint is grabbable and visible.
+    for (const s of [sa, sb]) {
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, selected ? 4 : 3, 0, Math.PI * 2)
+      ctx.fillStyle = selected ? palette.selection : palette.reinforcement
+      ctx.fill()
+    }
+  }
+  if (placement) {
+    const sa = worldToScreen(vp, placement.a)
+    const sb = worldToScreen(vp, placement.b)
+    ctx.beginPath()
+    ctx.setLineDash([6, 4])
+    ctx.moveTo(sa.x, sa.y)
+    ctx.lineTo(sb.x, sb.y)
+    ctx.strokeStyle = palette.selection
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+    ctx.setLineDash([])
   }
   ctx.restore()
 }

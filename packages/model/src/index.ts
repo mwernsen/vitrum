@@ -20,6 +20,9 @@ export {
   type Project,
   type ProjectSettings,
   type ReferenceLayer,
+  type ReinforcementBar,
+  type ReinforcementId,
+  type ReinforcementMaterial,
   type Segment,
   type SegmentGeometry,
   type SegmentId,
@@ -83,7 +86,14 @@ export {
 } from './technique'
 
 // Ids and factories
-export { newCameProfileId, newGlassId, newLayerId, newNodeId, newSegmentId } from './ids'
+export {
+  newCameProfileId,
+  newGlassId,
+  newLayerId,
+  newNodeId,
+  newReinforcementId,
+  newSegmentId,
+} from './ids'
 export { createSegment, weldSegments } from './factory'
 
 // Node helpers (F-013)
@@ -104,6 +114,7 @@ export {
 
 // Commands
 export {
+  addReinforcement,
   addSegment,
   addSegments,
   deleteNode,
@@ -111,6 +122,7 @@ export {
   moveNode,
   removeCameProfile,
   removeGlass,
+  removeReinforcement,
   removeSegment,
   removeSegments,
   replaceSegments,
@@ -124,6 +136,7 @@ export {
   transformSegments,
   updateFoilSettings,
   updateLeadSettings,
+  updateReinforcement,
   updateSegmentGeometry,
   updateSegmentsGeometry,
   updateSettings,

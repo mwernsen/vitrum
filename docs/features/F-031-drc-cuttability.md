@@ -126,7 +126,7 @@ Delivered on branch `f-031-drc-cuttability` (2026-07-19).
   definitions implementable.
 - **`degenerate-cut-contour` fires only on a truly collapsed contour** (empty ring or area ≤ 1 mm²),
   not on F-021's raw `degenerate` flag — that flag is set whenever the offset self-intersects
-  *anywhere*, including a lone sharp tip or tight bay that the sharp-point / concave rules already
+  _anywhere_, including a lone sharp tip or tight bay that the sharp-point / concave rules already
   flag precisely. This matches the spec's "too small to inset **at all**" and removes double-reporting.
 - **Geometric rules assess the true boundary, then subtract the edge allowance** for concave radius
   (the score follows the inset line, which tightens a concave curve). Corner rules cover the outer

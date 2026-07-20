@@ -15,7 +15,15 @@ export function buildInput(project: Project): DrcInput {
   const { pieces, diagnostics } = detectPieces(segments)
   const cutContours = computeCutContours(pieces, segments, project.technique)
   const assignedKeys = pieces.map(pieceKey).filter((key) => key in project.assignments)
-  return { project, pieces, diagnostics, cutContours, assignedKeys }
+  // Cold-path effective glass: the direct assignment (content id → glass), as after a reload. The
+  // structural pack's weight rule reads glass thickness through this.
+  const effectiveGlass: Record<string, string> = {}
+  for (const piece of pieces) {
+    const key = pieceKey(piece)
+    const glassId = project.assignments[key]
+    if (glassId) effectiveGlass[key] = glassId
+  }
+  return { project, pieces, diagnostics, cutContours, assignedKeys, effectiveGlass }
 }
 
 /** Active-violation counts by rule id, for comparing against a scene's expected set. */

@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 7,
+  "project": {
+    "settings": {
+      "units": "mm",
+      "name": "Untitled"
+    },
+    "technique": {
+      "kind": "lead",
+      "lead": {
+        "defaultProfileId": "came-h-5",
+        "cuttingToleranceMm": 0,
+        "profiles": {
+          "came-h-4": {
+            "id": "came-h-4",
+            "name": "H 4 mm",
+            "kind": "H",
+            "flangeMm": 4,
+            "heartMm": 1.4
+          },
+          "came-h-5": {
+            "id": "came-h-5",
+            "name": "H 5 mm",
+            "kind": "H",
+            "flangeMm": 5,
+            "heartMm": 1.5
+          },
+          "came-h-6": {
+            "id": "came-h-6",
+            "name": "H 6 mm",
+            "kind": "H",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-h-7": {
+            "id": "came-h-7",
+            "name": "H 7 mm",
+            "kind": "H",
+            "flangeMm": 7,
+            "heartMm": 1.7
+          },
+          "came-h-9": {
+            "id": "came-h-9",
+            "name": "H 9 mm",
+            "kind": "H",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          },
+          "came-h-12": {
+            "id": "came-h-12",
+            "name": "H 12 mm",
+            "kind": "H",
+            "flangeMm": 12,
+            "heartMm": 2
+          },
+          "came-u-6": {
+            "id": "came-u-6",
+            "name": "U 6 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-u-9": {
+            "id": "came-u-9",
+            "name": "U 9 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          }
+        },
+        "overrides": {}
+      },
+      "foil": {
+        "foilWidthMm": 5.6,
+        "pieceGapMm": 0.8,
+        "solderFinish": "silver"
+      }
+    },
+    "segments": {
+      "7XONvjsmxYZQudIBcUrUK": {
+        "id": "7XONvjsmxYZQudIBcUrUK",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 0
+          },
+          "b": {
+            "x": 900,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "rZ6rX2KrDDLZANYW1eGKm",
+          "5q9Y81zXpZ67e8Q15ePEG"
+        ]
+      },
+      "Jco67EwZx65yJNnuA6eDs": {
+        "id": "Jco67EwZx65yJNnuA6eDs",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 900,
+            "y": 0
+          },
+          "b": {
+            "x": 900,
+            "y": 600
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "5q9Y81zXpZ67e8Q15ePEG",
+          "Wa1WeCBuTeZt3eHk8Ds1x"
+        ]
+      },
+      "3CQ7Ui1mnmgLqZwe4QGAk": {
+        "id": "3CQ7Ui1mnmgLqZwe4QGAk",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 900,
+            "y": 600
+          },
+          "b": {
+            "x": 0,
+            "y": 600
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "Wa1WeCBuTeZt3eHk8Ds1x",
+          "jIAOI4Zzr4sUZaNXzyH-P"
+        ]
+      },
+      "SGeWx97TDnowf5r3n7v7j": {
+        "id": "SGeWx97TDnowf5r3n7v7j",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 600
+          },
+          "b": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "jIAOI4Zzr4sUZaNXzyH-P",
+          "rZ6rX2KrDDLZANYW1eGKm"
+        ]
+      }
+    },
+    "nodes": {
+      "rZ6rX2KrDDLZANYW1eGKm": {
+        "pos": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "5q9Y81zXpZ67e8Q15ePEG": {
+        "pos": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "Wa1WeCBuTeZt3eHk8Ds1x": {
+        "pos": {
+          "x": 900,
+          "y": 600
+        }
+      },
+      "jIAOI4Zzr4sUZaNXzyH-P": {
+        "pos": {
+          "x": 0,
+          "y": 600
+        }
+      }
+    },
+    "glasses": {},
+    "assignments": {},
+    "layers": [],
+    "drc": {
+      "exclusions": {},
+      "rules": {}
+    },
+    "reinforcements": [
+      {
+        "id": "r-bar-1",
+        "a": {
+          "x": 50,
+          "y": 300
+        },
+        "b": {
+          "x": 850,
+          "y": 300
+        },
+        "widthMm": 6,
+        "material": "zinc"
+      }
+    ]
+  }
+}

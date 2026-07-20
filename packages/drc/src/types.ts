@@ -1,5 +1,5 @@
 import type { CutContour, Diagnostic, Piece, TechniqueKind } from '@vitrum/core'
-import type { Project, Severity } from '@vitrum/model'
+import type { GlassId, Project, Severity } from '@vitrum/model'
 import type { Vec2 } from '@vitrum/geometry'
 
 /**
@@ -29,6 +29,12 @@ export type RuleId =
   | 'concave-notch'
   | 'sharp-point'
   | 'degenerate-cut-contour'
+  // Structural pack — F-032
+  | 'hinge-line'
+  | 'crowded-joint'
+  | 'panel-needs-reinforcement'
+  | 'panel-weight'
+  | 'tiny-edge-contact'
 
 /**
  * The document + derived data a rule inspects. Everything here is plain, structured-cloneable
@@ -44,6 +50,16 @@ export interface DrcInput {
   readonly diagnostics: readonly Diagnostic[]
   readonly cutContours: readonly CutContour[]
   readonly assignedKeys: readonly string[]
+  /**
+   * Each piece's *effective* glass (F-023), keyed by content id → project {@link GlassId}: the
+   * direct assignment, or the one inherited across a split/merge. Resolving inheritance is the
+   * caller's job (as with {@link assignedKeys}), so the engine stays a pure function of its input.
+   * The structural `panel-weight` rule (F-032) reads each glass's thickness through this map; a
+   * piece with no effective glass is weighed at the default 3 mm. Optional so pre-F-032 callers
+   * (and golden fixtures with no assignments) still typecheck — absent means "weigh everything at
+   * the default thickness".
+   */
+  readonly effectiveGlass?: Readonly<Record<string, GlassId>>
 }
 
 /**

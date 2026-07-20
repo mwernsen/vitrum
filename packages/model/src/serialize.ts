@@ -1,6 +1,6 @@
 import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
-import type { DrcState, Glass, Project, Segment } from './types'
+import type { DrcState, Glass, Project, ReinforcementBar, Segment } from './types'
 
 /**
  * Persistence (F-002). A `.vitrum` file is JSON: a small envelope carrying a
@@ -12,7 +12,7 @@ import type { DrcState, Glass, Project, Segment } from './types'
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 6
+export const CURRENT_SCHEMA_VERSION = 7
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -145,12 +145,31 @@ const migrateV5ToV6: Migration = {
   },
 }
 
+/**
+ * v6 → v7 (F-032): reinforcement bars. v6 files have no `reinforcements` list; add an empty one so
+ * a pre-F-032 project loads with no bars placed. Any bars a pre-release v6 file might carry are
+ * preserved.
+ */
+const migrateV6ToV7: Migration = {
+  from: 6,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'reinforcements'> & {
+      reinforcements?: readonly ReinforcementBar[]
+    }
+    return {
+      schemaVersion: 7,
+      project: { ...project, reinforcements: project.reinforcements ?? [] },
+    }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
   migrateV3ToV4,
   migrateV4ToV5,
   migrateV5ToV6,
+  migrateV6ToV7,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

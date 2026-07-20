@@ -3,7 +3,7 @@
 |                |                        |
 | -------------- | ---------------------- |
 | **Phase**      | 3 — Design rule checks |
-| **Status**     | draft                  |
+| **Status**     | done                   |
 | **Depends on** | F-030, F-023           |
 | **Complexity** | L                      |
 
@@ -76,4 +76,109 @@ up front. Completes milestone M3 ("it can be built").
 
 1. Reinforcement bar as document entity (proposed) vs annotation-only — entity chosen
    because F-042 (BOM) and F-041 (print) want it; confirm.
+   **Resolved (Mathieu, 2026-07-20): document entity**, as proposed. Shipped as a serialized
+   `ReinforcementBar` on `Project.reinforcements` (schema v6→v7), excluded from piece detection by
+   construction (it is not a `segment`).
 2. Hinge angular tolerance and span thresholds — same workshop sanity-check as F-031.
+   **Resolved (Mathieu, 2026-07-20): ship the specced defaults** as configurable per-technique
+   `ThresholdSpec` data (12°/85% lead, 8°/92% foil, and the rest as specced), editable per project
+   like F-031's — retunable without a code change.
+
+## Implementation notes
+
+Delivered on branch `f-032-drc-structural` (2026-07-20). Both open questions and six additional
+seam decisions (A–F below) were approved by Mathieu before coding.
+
+**What shipped**
+
+- **Reinforcement bar entity (`@vitrum/model`)** — `ReinforcementBar { id, a, b, widthMm, material }`
+  on `Project.reinforcements`, a separate list from `segments` so bars never reach piece detection,
+  DRC topology or cut outputs (FR-2 "excluded from pieces/cut outputs" holds by construction —
+  `outputSegments` only ever sees `segments`). Commands `addReinforcement` / `updateReinforcement`
+  (mergeable, so an endpoint drag is one undo entry) / `removeReinforcement`, all reversible. Schema
+  **v6 → v7** migration (`migrateV6ToV7`) adds an empty list to older files.
+- **Structural rule pack (`packages/drc/src/rules/structural.ts`)**, five rules registered after the
+  cuttability pack, each a pure `Rule` (no engine change): `hinge-line`, `crowded-joint`,
+  `panel-needs-reinforcement`, `panel-weight`, `tiny-edge-contact`. All thresholds are `ThresholdSpec`
+  data (per-technique where the spec differs), consumed via the shared `resolveThreshold`, so they
+  switch with technique and take per-project overrides (FR-4). Two rules self-grade via the F-031
+  `RawViolation.severity` seam (hinge → error when perfectly straight; crowded → error at ≥ 6 ends).
+- **Weight model (`rules/weight.ts`)** — `panelWeight(input)`: glass computed exactly
+  (area × thickness × 2.5 g/cm³, thickness from effective glass, 3 mm fallback) + a documented coarse
+  lead estimate (came cross-section `flange × heart` × 11.34 g/cm³ × length; foil a flat
+  solder+foil linear mass). FR-3 verified against a hand-computed 200 mm/4 mm reference (≈ 468 g).
+- **`DrcInput.effectiveGlass`** (seam A) — an additive, optional `contentId → glassId` map so the
+  weight rule reads glass thickness; inheritance is resolved by the caller (mirrors `assignedKeys`),
+  keeping the engine a pure function of its input. No `Rule`-interface change.
+- **Reinforcement tool + rendering (`@vitrum/ui`)** — a `ReinforcementController` (place with two
+  clicks, click-to-select, endpoint-drag, Delete) driven from a floating-`Toolbar` entry, `drawReinforcements`
+  on the canvas content layer (distinct metallic bar), an Inspector panel (length, width, material,
+  delete), and the DRC input now carries `effectiveGlass`. `panel-weight`'s always-on info gets **no
+  canvas marker** until it escalates to a warning (seam E), filtered in `DrcController.markers`.
+
+**Decisions (A–F, as approved)**
+
+- **A** — additive `DrcInput.effectiveGlass`, caller-resolved inheritance, 3 mm fallback.
+- **B** — cross-section × lead-density lead-mass model with a foil solder constant; glass dominates,
+  so the total is within FR-3's 10 %.
+- **C** — max unsupported span = panel bbox max dimension; a bar clears the violation only if it
+  spans ≥ 80 % of that offending dimension (`barSpansAxis`).
+- **D** — foil relaxes the hinge thresholds to 8° / 92 % vs lead's 12° / 85 %.
+- **E** — `panel-weight` info renders as a Rules-panel row only (no canvas marker) until it warns.
+- **F** — the reinforcement tool is a dedicated UI controller with a floating-`Toolbar` entry.
+
+**Deviations / decisions**
+
+- **Reinforcement tool is a UI controller, not an F-011 `ToolDef`** (contra seam F's literal
+  wording). The `ToolDef` framework emits `SegmentDraft[]` that flow through the segment-commit path;
+  a reinforcement bar is not a segment and must not. So it follows the F-023 paint/select precedent —
+  a dedicated interactive controller — while honouring the intent (a toolbar-activated tool with pure
+  geometry). Recorded here as the one deviation.
+- **`hinge-line` uses the span-fraction alone**, not an additional "both ends touch the border"
+  test — the two conflict (an 85 %-of-panel run does not reach both edges), and a run covering ≥ the
+  threshold fraction of the panel dimension _is_ effectively edge to edge. The "must not flag" golden
+  scene is a **staggered** layout (dividers jogged at mid-span) with no full-width collinear chain,
+  demonstrating the good-practice lesson; a literal running-bond brick has continuous bed joints that
+  would (correctly) flag, so the fixture stages the staggering the rule rewards.
+- **`crowded-joint` implements the degree-based check** (≥ N came ends at a node); the "two joints
+  closer than the came width" sub-clause is a documented follow-up (the F-030 near-miss rule already
+  covers sub-tolerance coincidence).
+- **`panel-needs-reinforcement` emits one violation** covering area and/or span (message names the
+  reason), anchored at the panel centre with identity `['panel']` so it is a single waivable item.
+
+**Testing**
+
+- `packages/model`: `reinforcementCommands.test.ts` (add/update/merge-drag/remove + undo) and the
+  v6→v7 migration test.
+- `packages/drc`: `structural.test.ts` — the Mondrian/brick hinge pair (FR-1), per-technique + a
+  per-project threshold override, crowded-joint warn/error/silent, the reinforcement area+span flow
+  incl. "a bar that does not span does not clear" (FR-2), the hand-computed weight reference (FR-3)
+  and info→warning grading, and tiny-edge-contact trigger/silent. Plus an on-disk **golden `.vitrum`
+  fixture suite** (`src/fixtures/struct-*`) loaded through the persistence path, proving the bar
+  round-trips and clears the rule after a cold reload. The existing topology-suite exact-count tests
+  were scoped to `TOPOLOGY_RULES` (the always-on `panel-weight` info and the clean scene's lone
+  full-span splitter are structural concerns) — matching F-031's per-pack scoping.
+- `packages/ui`: `reinforcement.svelte.test.ts` (place / cancel / select / delete / coalesced
+  endpoint drag / width+material edit / inert-when-off); `RulesPanel.test.ts` adjusted for the extra
+  10 mm default.
+- E2E: `apps/desktop/e2e/structural.spec.ts` — draw an oversized panel, run checks, see "Needs
+  reinforcement", place a bar spanning the panel, re-run, watch it clear.
+- All gates green from the repo root: `pnpm lint`, `pnpm format:check`, `pnpm check`,
+  `pnpm test` (633), `pnpm test:e2e` (18).
+
+**Handed to Mathieu (manual, per the acceptance criteria)**
+
+- **Gallery / physical review**: the deliberately-oversized design that demands rebar and the manual
+  "place a bar, watch the violation clear" pass in the real app (the E2E automates the logic; the
+  visual read of the metallic bar and the teaching messages is a human check). The hinge messages,
+  weight readout wording, and bar rendering want a design-system eye.
+- **Threshold sanity-check in the workshop** — defaults shipped as specced and are per-project
+  editable, so they can be retuned without a code change.
+
+**Follow-ups (out of scope)**
+
+- `crowded-joint` proximity sub-clause (two real joints within a came width); snapping the
+  reinforcement tool to nodes/lead lines ("tied to the lead lines"); a BOM/print consumer of bars
+  (F-041/F-042); curve-aware hinge tracing beyond near-straight segments.
+- Net-new UI to back-port to the design projects: the **reinforcement toolbar tool**, its **canvas
+  bar rendering**, and the **Inspector bar panel** (added to the F-030/F-023 back-port list).

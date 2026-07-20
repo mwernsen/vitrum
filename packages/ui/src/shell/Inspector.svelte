@@ -24,6 +24,7 @@
   import type { AssignmentController } from '../glass/assignment.svelte'
   import type { EditController } from '../tools/edit.svelte'
   import type { PaintController } from '../tools/paint.svelte'
+  import type { ReinforcementController } from '../tools/reinforcement.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
 
   interface Props {
@@ -34,6 +35,8 @@
     selection?: SelectionController
     /** The paint / piece-select controller (F-023). */
     paint?: PaintController
+    /** The reinforcement-bar controller (F-032). */
+    reinforce?: ReinforcementController
     /** The glass assignment resolver (F-023). */
     assignments?: AssignmentController
     /** The current document, for reading selected geometry. */
@@ -44,7 +47,17 @@
     execute?: (command: Command) => void
   }
 
-  let { unit, edit, selection, paint, assignments, doc, pieces = [], execute }: Props = $props()
+  let {
+    unit,
+    edit,
+    selection,
+    paint,
+    reinforce,
+    assignments,
+    doc,
+    pieces = [],
+    execute,
+  }: Props = $props()
 
   // Pieces selected in piece-select mode (F-023), resolved from their content keys.
   const selectedPieceList = $derived<Piece[]>(
@@ -79,7 +92,21 @@
   // selected — no feature panel lives here (those are in the dock).
   const pieceSelected = $derived(!!paint && selectedPieceList.length > 0)
   const segmentSelected = $derived(!!edit && !!selection && selectedSegments.length > 0)
-  const collapsed = $derived(!pieceSelected && !segmentSelected)
+  // The selected reinforcement bar (F-032), if the bar layer has one.
+  const selectedBar = $derived(reinforce?.selectedBar() ?? null)
+  const barSelected = $derived(!!selectedBar)
+  const barLengthMm = $derived(
+    selectedBar
+      ? Math.hypot(selectedBar.b.x - selectedBar.a.x, selectedBar.b.y - selectedBar.a.y)
+      : 0,
+  )
+  const MATERIAL_OPTIONS = [
+    { value: 'zinc', label: 'Zinc' },
+    { value: 'steel', label: 'Steel' },
+    { value: 'brass', label: 'Brass' },
+    { value: 'lead', label: 'Lead' },
+  ]
+  const collapsed = $derived(!pieceSelected && !segmentSelected && !barSelected)
 
   // Display a mm value in the active unit as a plain, trimmed number string (FR-5: the number
   // the user types round-trips exactly, since editing converts straight back to mm).
@@ -163,7 +190,36 @@
 </script>
 
 <aside class="inspector" class:collapsed aria-label="Inspector">
-  {#if pieceSelected}
+  {#if barSelected && selectedBar}
+    <h2>Reinforcement bar</h2>
+    <dl class="props">
+      <div>
+        <dt>Length</dt>
+        <dd>{formatLength(barLengthMm, unit)}</dd>
+      </div>
+    </dl>
+    <div class="fields">
+      <Input
+        size="sm"
+        label="Width (mm)"
+        value={String(selectedBar.widthMm)}
+        onchange={(v) => {
+          const n = Number(v)
+          if (Number.isFinite(n)) reinforce?.setWidth(n)
+        }}
+      />
+      <Select
+        size="sm"
+        label="Material"
+        options={MATERIAL_OPTIONS}
+        value={selectedBar.material}
+        onchange={(m) => reinforce?.setMaterial(m as 'zinc' | 'steel' | 'brass' | 'lead')}
+      />
+    </div>
+    <div class="actions">
+      <Button size="sm" variant="ghost" onclick={() => reinforce?.deleteSelected()}>Delete</Button>
+    </div>
+  {:else if pieceSelected}
     <h2>{selectedPieceList.length === 1 ? 'Piece' : `${selectedPieceList.length} pieces`}</h2>
 
     {#if selectedPieceList.length === 1}

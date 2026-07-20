@@ -34,6 +34,8 @@ import type {
   PieceId,
   Project,
   ProjectSettings,
+  ReinforcementBar,
+  ReinforcementId,
   Segment,
   SegmentGeometry,
   SegmentId,
@@ -851,6 +853,74 @@ export function setDrcRuleOverride(ruleId: string, override: DrcRuleOverride | n
     },
     invert: (before) => setDrcRuleOverride(ruleId, before.drc.rules[ruleId] ?? null),
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reinforcement bar commands (F-032)                                          */
+/* -------------------------------------------------------------------------- */
+
+/** Add a reinforcement bar (F-032). Fails if its id is already present (ids are never reused). */
+export function addReinforcement(bar: ReinforcementBar): Command {
+  return {
+    kind: 'addReinforcement',
+    apply: (doc) => {
+      if (doc.reinforcements.some((r) => r.id === bar.id)) {
+        throw new Error(`addReinforcement: id ${bar.id} already exists`)
+      }
+      return { ...doc, reinforcements: [...doc.reinforcements, bar] }
+    },
+    invert: () => removeReinforcement(bar.id),
+  }
+}
+
+/**
+ * Replace a reinforcement bar with the same id (endpoints, width or material edit, F-032). The
+ * inverse restores the previous bar exactly. `merge` coalesces a live drag of one endpoint into a
+ * single undo entry (same id), mirroring `moveNode`.
+ */
+export function updateReinforcement(bar: ReinforcementBar): Command {
+  const command: ReinforcementCommand = {
+    kind: 'updateReinforcement',
+    barId: bar.id,
+    apply: (doc) => {
+      if (!doc.reinforcements.some((r) => r.id === bar.id)) {
+        throw new Error(`updateReinforcement: id ${bar.id} does not exist`)
+      }
+      return { ...doc, reinforcements: doc.reinforcements.map((r) => (r.id === bar.id ? bar : r)) }
+    },
+    invert: (before) => {
+      const prior = before.reinforcements.find((r) => r.id === bar.id)
+      if (!prior) throw new Error(`updateReinforcement: id ${bar.id} does not exist`)
+      return updateReinforcement(prior)
+    },
+    merge: (next) =>
+      next.kind === 'updateReinforcement' && (next as ReinforcementCommand).barId === bar.id
+        ? next
+        : undefined,
+  }
+  return command
+}
+
+/** Remove a reinforcement bar by id (F-032). Reversible — the inverse re-adds the exact bar. */
+export function removeReinforcement(id: ReinforcementId): Command {
+  return {
+    kind: 'removeReinforcement',
+    apply: (doc) => ({ ...doc, reinforcements: doc.reinforcements.filter((r) => r.id !== id) }),
+    invert: (before) => {
+      const prior = before.reinforcements.find((r) => r.id === id)
+      return prior ? addReinforcement(prior) : noop()
+    },
+  }
+}
+
+/** Tag `updateReinforcement` commands with the bar id they touch, so `merge` can compare cheaply. */
+interface ReinforcementCommand extends Command {
+  readonly barId: ReinforcementId
+}
+
+/** A do-nothing command (the inverse of removing a bar that no longer exists). */
+function noop(): Command {
+  return { kind: 'noop', apply: (doc) => doc, invert: () => noop() }
 }
 
 /* -------------------------------------------------------------------------- */
