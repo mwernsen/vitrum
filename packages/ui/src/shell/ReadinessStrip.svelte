@@ -14,6 +14,8 @@
     warningCount?: number
     /** Active info-severity violations (F-030). */
     infoCount?: number
+    /** Pieces with no number yet (F-040). Drives the outputs readiness. */
+    unnumberedCount?: number
   }
 
   let {
@@ -23,6 +25,7 @@
     errorCount = 0,
     warningCount = 0,
     infoCount = 0,
+    unnumberedCount = 0,
   }: Props = $props()
 
   const geometryComplete = $derived(pieceCount > 0)
@@ -46,6 +49,13 @@
       : issueCount === 0
         ? 'clear'
         : `${issueCount} ${issueCount === 1 ? 'issue' : 'issues'}`,
+  )
+
+  // Outputs — numbering readiness (F-040): complete once every piece carries a number.
+  const numbered = $derived(Math.max(0, pieceCount - unnumberedCount))
+  const outputsReady = $derived(pieceCount > 0 && unnumberedCount === 0)
+  const outputsMeta = $derived(
+    pieceCount === 0 ? '—' : outputsReady ? 'numbered' : `${numbered}/${pieceCount} numbered`,
   )
 </script>
 
@@ -88,16 +98,15 @@
     <span class="meta">{checksMeta}</span>
   </span>
 
-  <!-- Outputs — placeholder until the cartoon view (F-040) lands -->
-  <span
-    class="pill"
-    data-placeholder
-    aria-disabled="true"
-    title="Manufacturing outputs arrive with F-040"
-  >
-    <span class="dot" style="background:var(--paper-300)"></span>
+  <!-- Outputs — piece numbering (F-040) -->
+  <span class="pill" class:done={outputsReady} data-testid="outputs-readiness">
+    {#if outputsReady}
+      <span class="ic ok"><Check size={14} strokeWidth={2.4} /></span>
+    {:else}
+      <span class="dot" style="background:var(--paper-300)"></span>
+    {/if}
     Outputs
-    <span class="meta">—</span>
+    <span class="meta">{outputsMeta}</span>
   </span>
 
   <span class="spacer"></span>
@@ -141,10 +150,6 @@
     font: 600 12px/1 var(--font-sans);
     color: var(--ink-800);
     white-space: nowrap;
-  }
-
-  .pill[data-placeholder] {
-    opacity: 0.55;
   }
 
   .meta {

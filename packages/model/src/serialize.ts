@@ -1,6 +1,14 @@
 import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
-import type { DrcState, Glass, Project, ReinforcementBar, Segment } from './types'
+import {
+  defaultNumbering,
+  type DrcState,
+  type Glass,
+  type NumberingState,
+  type Project,
+  type ReinforcementBar,
+  type Segment,
+} from './types'
 
 /**
  * Persistence (F-002). A `.vitrum` file is JSON: a small envelope carrying a
@@ -12,7 +20,7 @@ import type { DrcState, Glass, Project, ReinforcementBar, Segment } from './type
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 7
+export const CURRENT_SCHEMA_VERSION = 8
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -163,6 +171,30 @@ const migrateV6ToV7: Migration = {
   },
 }
 
+/**
+ * v7 → v8 (F-040): piece numbering. v7 files have no `numbering` block; add the default (grouped-by-
+ * glass, nothing numbered yet) so a pre-F-040 project loads with every piece unnumbered until the
+ * first renumber. Any `numbering` a pre-release v7 file might carry is preserved, with its fields
+ * defaulted.
+ */
+const migrateV7ToV8: Migration = {
+  from: 7,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'numbering'> & {
+      numbering?: Partial<NumberingState>
+    }
+    const base = defaultNumbering()
+    const prior = project.numbering
+    const numbering: NumberingState = {
+      scheme: prior?.scheme ?? base.scheme,
+      glassCodes: prior?.glassCodes ?? base.glassCodes,
+      auto: prior?.auto ?? base.auto,
+      overrides: prior?.overrides ?? base.overrides,
+    }
+    return { schemaVersion: 8, project: { ...project, numbering } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -170,6 +202,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV4ToV5,
   migrateV5ToV6,
   migrateV6ToV7,
+  migrateV7ToV8,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

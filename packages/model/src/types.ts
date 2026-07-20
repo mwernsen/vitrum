@@ -187,6 +187,29 @@ export interface DrcState {
   readonly rules: Readonly<Record<string, DrcRuleOverride>>
 }
 
+/**
+ * How pieces are numbered on the cartoon (F-040). `grouped` is the default a new project starts with
+ * (Mathieu, 2026-07-20): the number encodes the glass code implicitly (`A1..An, B1..`). `sequential`
+ * is a single row-major sweep (`1,2,3…`); `manual` shows only per-piece overrides.
+ */
+export type NumberingScheme = 'sequential' | 'grouped' | 'manual'
+
+/**
+ * Piece-numbering state (F-040). Like glass assignments, only *intent and materialised result* are
+ * persisted — pieces themselves are derived. Numbers are keyed by a piece's **content id** (F-020) so
+ * they survive a save/reload, and they change **only** on an explicit renumber (a workshop cartoon
+ * must not shuffle mid-build): `auto` is the materialised result of the last renumber, and a piece
+ * absent from both maps renders "unnumbered" until the next renumber (FR-3). `overrides` are the
+ * manual per-piece labels the user typed; they win over `auto` and survive an auto-renumber (FR-1).
+ * `glassCodes` maps a glass id to its short, editable code (`A, B, C…`) — the legend's key (FR-4).
+ */
+export interface NumberingState {
+  readonly scheme: NumberingScheme
+  readonly glassCodes: Readonly<Record<GlassId, string>>
+  readonly auto: Readonly<Record<PieceId, string>>
+  readonly overrides: Readonly<Record<PieceId, string>>
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -224,9 +247,19 @@ export interface Project {
    * rule and by F-041/F-042 exports.
    */
   readonly reinforcements: readonly ReinforcementBar[]
+  /**
+   * Piece-numbering state (F-040): scheme, glass codes and the materialised numbers. Derived pieces
+   * are never stored; only this intent + last-renumber result is persisted.
+   */
+  readonly numbering: NumberingState
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
+
+/** A fresh numbering state: grouped-by-glass (the default), nothing numbered yet. */
+export function defaultNumbering(): NumberingState {
+  return { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} }
+}
 
 /** A fresh, empty project. `settings` overrides are shallow-merged over the defaults. */
 export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Project {
@@ -240,5 +273,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     layers: [],
     drc: { exclusions: {}, rules: {} },
     reinforcements: [],
+    numbering: defaultNumbering(),
   }
 }

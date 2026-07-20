@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { pieceKey, type CutContour, type Diagnostic, type Piece } from '@vitrum/core'
+  import {
+    pieceKey,
+    type CutContour,
+    type Diagnostic,
+    type LabelPlacement,
+    type Piece,
+  } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
   import type { Glass, GlassId, PieceId, ReinforcementBar, Segment } from '@vitrum/model'
@@ -12,6 +18,7 @@
     drawDiagnostics,
     drawGlassFills,
     drawGrid,
+    drawNumbers,
     drawOverlay,
     drawPieceFills,
     drawPieceHighlight,
@@ -21,6 +28,7 @@
     drawSnapMarker,
     drawToolPreview,
     drawViolations,
+    fillBackground,
     prepareContext,
     readCanvasPalette,
     type CanvasPalette,
@@ -82,6 +90,14 @@
     reinforcements?: readonly ReinforcementBar[]
     /** The reinforcement-bar controller (F-032). Absent ⇒ bars are view-only. */
     reinforce?: ReinforcementController
+    /** Cartoon view mode (F-040): a white sheet with line work + numbers, no colour fills. */
+    cartoon?: boolean
+    /** Whether to overlay piece numbers in the coloured view (F-040). Always on in cartoon. */
+    showNumbers?: boolean
+    /** Effective piece number per content id (F-040). */
+    numberLabels?: ReadonlyMap<PieceId, string>
+    /** Label placement (pole of inaccessibility + radius) per content id (F-040). */
+    numberPlacements?: ReadonlyMap<PieceId, LabelPlacement>
   }
 
   let {
@@ -108,6 +124,10 @@
     selectedViolationKey = null,
     reinforcements = [],
     reinforce,
+    cartoon = false,
+    showNumbers = false,
+    numberLabels,
+    numberPlacements,
   }: Props = $props()
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
@@ -115,19 +135,34 @@
     return glassAssignments?.get(pieceKey(piece))
   }
 
-  /** True when the paint or piece-select layer (F-023) is driving. */
-  function painting(): boolean {
-    return !!paint && paint.active
+  /** Resolve a piece's effective number (F-040). */
+  function numberFor(piece: Piece): string | undefined {
+    return numberLabels?.get(pieceKey(piece))
+  }
+  /** Resolve a piece's label placement (F-040). */
+  function placementFor(piece: Piece): LabelPlacement | undefined {
+    return numberPlacements?.get(pieceKey(piece))
   }
 
-  /** True when the reinforcement-bar layer (F-032) is driving. */
+  /** True when the paint or piece-select layer (F-023) is driving. Inert in the cartoon view. */
+  function painting(): boolean {
+    return !cartoon && !!paint && paint.active
+  }
+
+  /** True when the reinforcement-bar layer (F-032) is driving. Inert in the cartoon view. */
   function placingBar(): boolean {
-    return !!reinforce && reinforce.active
+    return !cartoon && !!reinforce && reinforce.active
+  }
+
+  /** True when a drawing tool is active. Inert in the cartoon view (a derived, read-only view). */
+  function drawing(): boolean {
+    return !cartoon && !!tools && tools.activeId !== 'select'
   }
 
   /** True when the inert select tool is active, editing is wired in, and paint/bars are off. */
   function editing(): boolean {
     return (
+      !cartoon &&
       !!edit &&
       !!selection &&
       !painting() &&
@@ -170,12 +205,18 @@
     }
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
-      if (showGlass) {
-        drawGlassFills(ctx, viewport.transform, size, pieces, glassFor, glasses, palette)
+      if (cartoon) {
+        // A monochrome workshop sheet: white ground, black line work, numbers — no colour fills.
+        fillBackground(ctx, size, palette.rulerBg)
+        drawContent(ctx, viewport.transform, size, segments, palette)
+      } else {
+        if (showGlass) {
+          drawGlassFills(ctx, viewport.transform, size, pieces, glassFor, glasses, palette)
+        }
+        if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
+        drawContent(ctx, viewport.transform, size, segments, palette, technique)
+        if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       }
-      if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
-      drawContent(ctx, viewport.transform, size, segments, palette, technique)
-      if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       if (reinforcements.length > 0 || placingBar()) {
         drawReinforcements(
           ctx,
@@ -185,6 +226,10 @@
           reinforce?.placement ?? null,
           palette,
         )
+      }
+      // Numbers overlay: always in the cartoon, on demand in the coloured view (F-040).
+      if (cartoon || showNumbers) {
+        drawNumbers(ctx, viewport.transform, size, pieces, numberFor, placementFor, palette)
       }
       dirty.content = false
     }
@@ -271,6 +316,10 @@
     void reinforcements
     void reinforce?.selectedId
     void reinforce?.placement
+    void cartoon
+    void showNumbers
+    void numberLabels
+    void numberPlacements
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {
@@ -365,9 +414,9 @@
       return
     }
     // Left button with a drawing tool active starts/continues a drawing gesture.
-    if (event.button === 0 && tools && tools.activeId !== 'select') {
+    if (event.button === 0 && drawing()) {
       updateSnap(event)
-      tools.pointerDown(localPoint(event), mods(event))
+      tools!.pointerDown(localPoint(event), mods(event))
       event.preventDefault()
       return
     }
@@ -391,9 +440,9 @@
       reinforce!.pointerMove(point)
     } else if (painting()) {
       paint!.pointerMove(point)
-    } else if (tools && tools.activeId !== 'select') {
+    } else if (drawing()) {
       updateSnap(event)
-      tools.pointerMove(point, mods(event))
+      tools!.pointerMove(point, mods(event))
     } else if (editing()) {
       updateSnap(event)
       edit!.pointerMove(point, mods(event))
@@ -406,9 +455,9 @@
         reinforce!.pointerUp()
       } else if (painting()) {
         paint!.pointerUp()
-      } else if (tools && tools.activeId !== 'select') {
+      } else if (drawing()) {
         updateSnap(event)
-        tools.pointerUp(localPoint(event), mods(event))
+        tools!.pointerUp(localPoint(event), mods(event))
       } else if (editing()) {
         updateSnap(event)
         edit!.pointerUp(localPoint(event), mods(event))
@@ -456,8 +505,8 @@
 
   function handleDblClick(event: MouseEvent) {
     // Double-click finishes a polyline chain (the second click already placed the point).
-    if (tools && tools.activeId !== 'select') {
-      tools.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+    if (drawing()) {
+      tools!.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
       event.preventDefault()
       return
     }
@@ -470,20 +519,23 @@
 
   function handleWindowKeyDown(event: KeyboardEvent) {
     if (isTyping(event.target)) return
-    // The reinforcement layer (F-032) gets first refusal while active (Delete/Esc on a bar).
-    if (placingBar() && reinforce!.handleKeyDown(event)) {
-      event.preventDefault()
-      return
-    }
-    // The tool layer gets first refusal (single-key activation, numeric entry, Esc/Enter).
-    if (tools && tools.handleKeyDown(event)) {
-      event.preventDefault()
-      return
-    }
-    // In select mode, the edit layer handles delete / nudge / duplicate / select-all / Esc.
-    if (editing() && edit!.handleKeyDown(event)) {
-      event.preventDefault()
-      return
+    // The cartoon view (F-040) is read-only: only pan/zoom keys below apply, no tool/edit keys.
+    if (!cartoon) {
+      // The reinforcement layer (F-032) gets first refusal while active (Delete/Esc on a bar).
+      if (placingBar() && reinforce!.handleKeyDown(event)) {
+        event.preventDefault()
+        return
+      }
+      // The tool layer gets first refusal (single-key activation, numeric entry, Esc/Enter).
+      if (tools && tools.handleKeyDown(event)) {
+        event.preventDefault()
+        return
+      }
+      // In select mode, the edit layer handles delete / nudge / duplicate / select-all / Esc.
+      if (editing() && edit!.handleKeyDown(event)) {
+        event.preventDefault()
+        return
+      }
     }
     if (event.code === 'Space' && !spaceDown) {
       spaceDown = true

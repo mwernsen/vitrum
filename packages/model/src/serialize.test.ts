@@ -70,6 +70,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 4, migrate: (file) => ({ schemaVersion: 5, project: file.project }) },
       { from: 5, migrate: (file) => ({ schemaVersion: 6, project: file.project }) },
       { from: 6, migrate: (file) => ({ schemaVersion: 7, project: file.project }) },
+      { from: 7, migrate: (file) => ({ schemaVersion: 8, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -218,6 +219,43 @@ describe('schema versioning (FR-4)', () => {
     )
     expect(withBars.reinforcements).toHaveLength(1)
     expect(withBars.reinforcements[0]!.material).toBe('zinc')
+  })
+
+  it('v7 → v8 adds the default numbering state (F-040)', () => {
+    // A legacy v7 file with reinforcements but no numbering block.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 7, project: legacyProject }))
+    expect(project.numbering).toEqual({
+      scheme: 'grouped',
+      glassCodes: {},
+      auto: {},
+      overrides: {},
+    })
+    // A pre-release v7 file carrying numbering keeps it.
+    const withNumbering = deserialize(
+      JSON.stringify({
+        schemaVersion: 7,
+        project: {
+          ...legacyProject,
+          numbering: { scheme: 'sequential', glassCodes: { g1: 'A' }, auto: { 'p-1': '1' } },
+        },
+      }),
+    )
+    expect(withNumbering.numbering.scheme).toBe('sequential')
+    expect(withNumbering.numbering.glassCodes).toEqual({ g1: 'A' })
+    expect(withNumbering.numbering.auto).toEqual({ 'p-1': '1' })
+    // A missing sub-field (overrides) is defaulted.
+    expect(withNumbering.numbering.overrides).toEqual({})
   })
 
   it('throws when no migration path exists for an older version', () => {
