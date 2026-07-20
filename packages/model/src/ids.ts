@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 
 import type { CameProfileId } from './technique'
-import type { GlassId, LayerId, NodeId, SegmentId } from './types'
+import type { GlassId, LayerId, NodeId, ReinforcementId, SegmentId } from './types'
 
 /**
  * Stable-id generation. IDs are opaque strings, never reused and never derived from an
@@ -28,4 +28,9 @@ export function newLayerId(): LayerId {
 /** A fresh came-profile id for a user-added library entry (seed profiles use readable slugs). */
 export function newCameProfileId(): CameProfileId {
   return `came-${nanoid(8)}`
+}
+
+/** A fresh reinforcement-bar id (F-032). */
+export function newReinforcementId(): ReinforcementId {
+  return nanoid()
 }

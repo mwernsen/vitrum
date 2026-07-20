@@ -3,7 +3,7 @@
 |                |                        |
 | -------------- | ---------------------- |
 | **Phase**      | 3 — Design rule checks |
-| **Status**     | draft                  |
+| **Status**     | in-progress            |
 | **Depends on** | F-030, F-023           |
 | **Complexity** | L                      |
 

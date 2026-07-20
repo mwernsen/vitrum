@@ -69,6 +69,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 3, migrate: (file) => ({ schemaVersion: 4, project: file.project }) },
       { from: 4, migrate: (file) => ({ schemaVersion: 5, project: file.project }) },
       { from: 5, migrate: (file) => ({ schemaVersion: 6, project: file.project }) },
+      { from: 6, migrate: (file) => ({ schemaVersion: 7, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -187,6 +188,36 @@ describe('schema versioning (FR-4)', () => {
       }),
     )
     expect(withDrc.drc.exclusions['near-miss-joint#s1|s2']).toEqual({ note: 'ok as drawn' })
+  })
+
+  it('v6 → v7 adds an empty reinforcements list (F-032)', () => {
+    // A legacy v6 file with a DRC block but no reinforcements list.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 6, project: legacyProject }))
+    expect(project.reinforcements).toEqual([])
+    // A pre-release v6 file carrying bars keeps them.
+    const withBars = deserialize(
+      JSON.stringify({
+        schemaVersion: 6,
+        project: {
+          ...legacyProject,
+          reinforcements: [
+            { id: 'r1', a: { x: 0, y: 0 }, b: { x: 100, y: 0 }, widthMm: 6, material: 'zinc' },
+          ],
+        },
+      }),
+    )
+    expect(withBars.reinforcements).toHaveLength(1)
+    expect(withBars.reinforcements[0]!.material).toBe('zinc')
   })
 
   it('throws when no migration path exists for an older version', () => {

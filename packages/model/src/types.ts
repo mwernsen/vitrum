@@ -117,6 +117,34 @@ export interface ReferenceLayer {
   readonly visible: boolean
 }
 
+/** A stable, never-reused id for a reinforcement bar (F-032). */
+export type ReinforcementId = string
+
+/**
+ * The material a reinforcement (saddle/rebar) bar is made of (F-032). A rendering/BOM concern
+ * (F-042 consumes it); it does not change the structural rule, which only cares that a bar spans
+ * the panel. Zinc-cored perimeter and flat steel saddle bars are the common shop choices.
+ */
+export type ReinforcementMaterial = 'zinc' | 'steel' | 'brass' | 'lead'
+
+/**
+ * A reinforcement bar (F-032): a straight, rigid bar laid across an assembled panel and tied to
+ * the lead lines to stop it flexing, folding or bowing under its own weight. Modelled as a
+ * first-class document entity (not a lead-line segment) because F-041 (print/tiling) and F-042
+ * (BOM) both need it, and because the `panel-needs-reinforcement` rule consumes it. It is
+ * deliberately **not** part of `segments`, so it never reaches piece detection, DRC topology or cut
+ * outputs (F-020's `outputSegments` only ever sees `segments`) — a bar adds no glass piece and no
+ * cut line. `a`/`b` are its endpoints in mm; `widthMm` is the bar's visual/BOM width.
+ */
+export interface ReinforcementBar {
+  readonly id: ReinforcementId
+  readonly a: Vec2
+  readonly b: Vec2
+  /** Bar width in mm (visual + BOM). Default 6 mm. */
+  readonly widthMm: number
+  readonly material: ReinforcementMaterial
+}
+
 /**
  * How serious a design-rule violation is (F-030), mirroring KiCad's ERC/DRC severities.
  * Errors block a clean panel; warnings and info are advisory. Persisted here because a
@@ -190,6 +218,12 @@ export interface Project {
    * derived (never stored); only this user intent is persisted.
    */
   readonly drc: DrcState
+  /**
+   * Reinforcement bars laid across the panel (F-032). A separate list from `segments` precisely so
+   * bars never reach piece detection or cut outputs; consumed by the `panel-needs-reinforcement`
+   * rule and by F-041/F-042 exports.
+   */
+  readonly reinforcements: readonly ReinforcementBar[]
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -205,5 +239,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     assignments: {},
     layers: [],
     drc: { exclusions: {}, rules: {} },
+    reinforcements: [],
   }
 }
