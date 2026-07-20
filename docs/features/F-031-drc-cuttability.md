@@ -3,7 +3,7 @@
 |                |                        |
 | -------------- | ---------------------- |
 | **Phase**      | 3 — Design rule checks |
-| **Status**     | draft                  |
+| **Status**     | done                   |
 | **Depends on** | F-030                  |
 | **Complexity** | L                      |
 
@@ -81,5 +81,79 @@ Score-and-break implications:
 
 1. Default thresholds above are my synthesis of craft guidance — Mathieu should
    sanity-check against his own workshop experience before they ship as defaults.
+   **Resolved (Mathieu, 2026-07-19): ship as specced.** The values above are the shipping
+   defaults; every one is editable per project (per technique), so they can be retuned without
+   a code change.
 2. Should `concave-notch` offer a quick-fix suggestion ("split piece here")? Backlog
    unless the F-030 quick-fix API landed.
+   **Resolved (Mathieu, 2026-07-19): defer.** The F-030 quick-fix seam did land, but a correct
+   "split here" needs a where-to-split geometry decision that is a feature in itself. The rule
+   ships with a strong teaching `explain` and no quick-fix; revisit as its own ticket.
+
+## Implementation notes
+
+Delivered on branch `f-031-drc-cuttability` (2026-07-19).
+
+**What shipped**
+
+- **Cuttability rule pack** (`packages/drc/src/rules/cuttability.ts`), all six rules registered after
+  the topology pack: `min-piece-size`, `sliver`, `concave-curvature`, `concave-notch`
+  (titled "Impossible inside cut" — the flagship), `sharp-point`, `degenerate-cut-contour`. Size and
+  degeneracy read F-021's cut contours; curvature and corner angles read the pieces' **true boundary
+  curves** via a new `rules/pieceGeometry.ts` (`cornersOf`, `concaveCurvatureHits` over
+  `curvatureAt`/`tangentAt`), so a gentle curve never reads as polyline kinks (FR-3).
+- **Per-technique, tunable thresholds** — each rule declares its limits as `ThresholdSpec` data
+  (key, label, unit, rationale, `defaultFor(kind)`). Defaults switch with technique automatically;
+  a project override pins a value that persists across technique switches (FR-4). `resolveThreshold`
+  is the single resolver.
+- **Inscribed-width proxy for slivers** — new `inscribedCircle` in `@vitrum/geometry` (Mapbox
+  `polylabel`: deterministic quadtree, no rasterisation). Twice the radius is the inscribed width;
+  length is estimated as `area / width` (documented, stable). Failure mode noted in the source.
+- **Persistence** — `DrcRuleOverride.thresholds?: Record<string, number>` added to the model. It is
+  an additive optional field, so v6 files without it load unchanged — **no schema bump**. Carried by
+  the existing `setDrcRuleOverride` command (undoable).
+- **UI** — the Rules-panel settings section now renders a number input per threshold (placeholder =
+  the technique default, value = the override), persisting edits through `setDrcRuleOverride`.
+
+**Deviations / decisions**
+
+- **Per-violation severity (minimal engine change, contra FR-1's literal "no engine changes").** The
+  spec's own rules grade themselves — `min-piece-size` is a warning but an error below half; likewise
+  `concave-curvature` below its hard radius — which the F-030 runner (one severity per rule) cannot
+  express. Added an optional `RawViolation.severity` consumed in `run.ts` (`override ?? raw ?? default`,
+  so an explicit project override still wins). Purely additive; the topology pack and the `Rule`
+  interface are untouched. This is the only engine change and it is what makes the spec's rule
+  definitions implementable.
+- **`degenerate-cut-contour` fires only on a truly collapsed contour** (empty ring or area ≤ 1 mm²),
+  not on F-021's raw `degenerate` flag — that flag is set whenever the offset self-intersects
+  *anywhere*, including a lone sharp tip or tight bay that the sharp-point / concave rules already
+  flag precisely. This matches the spec's "too small to inset **at all**" and removes double-reporting.
+- **Geometric rules assess the true boundary, then subtract the edge allowance** for concave radius
+  (the score follows the inset line, which tightens a concave curve). Corner rules cover the outer
+  boundary; enclosed-hole internal cuts are a documented, rare backlog case.
+- **`min-piece-size` and `sliver` intentionally overlap** — a sliver is by definition below the size
+  floor, so both fire on a thin strip. Each is an independent lens; the golden sets record both.
+
+**Testing**
+
+- `packages/geometry`: `inscribedCircle` unit tests (square, thin rectangle, holes, triangle incircle).
+- `packages/drc`: per-rule scene suite (`cuttability.test.ts`) with a triggering + a just-inside-
+  threshold silent scene for every rule (FR-2), both graded severities, the per-technique switch and a
+  per-project threshold override (FR-4), the acceptance pair (nasty panel flags every defect, a
+  well-drawn traditional panel is silent), and a **golden `.vitrum` fixture suite** (`src/fixtures/cut-*`,
+  loaded from disk with a drift guard). FR-5 benchmark: the pack runs on the ~200-piece grid well under
+  300 ms. The topology golden suites are scoped to `TOPOLOGY_RULES` (each pack tests its own rules).
+- `packages/model`: threshold-override persistence + undo test.
+- `packages/ui`: `RulesPanel` component test edits a threshold and asserts the persisted override.
+- No new E2E: F-031 rides F-030's checks → violations → waive flow (same panel, more entries); the new
+  threshold-editing surface is covered by the component test. All gates green (`lint`, `format:check`,
+  `check`, `test`).
+
+**Handed to Mathieu / follow-ups**
+
+- The Rules-panel threshold inputs are net-new UI built to the Vitrum Design System (tokens + `Select`/
+  `Checkbox` idiom); fold them into the Portal/Design project's Rules panel when it is back-ported (the
+  F-030 back-port note already covers that panel).
+- `concave-notch` "split piece here" quick-fix deferred to its own ticket (open question 2).
+- Enclosed-hole (internal-cut) cuttability and a ring-saw/waterjet "cutting capability" profile that
+  relaxes the rules remain backlog, as scoped.

@@ -74,6 +74,7 @@ const input: DrcInput = {
   project: createEmptyProject(),
   pieces: [],
   diagnostics: [],
+  cutContours: [],
   assignedKeys: [],
 }
 

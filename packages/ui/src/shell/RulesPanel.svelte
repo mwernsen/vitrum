@@ -54,6 +54,27 @@
   function overrideFor(ruleId: string) {
     return doc?.drc.rules[ruleId]
   }
+
+  // Per-rule tunable thresholds (F-031). The placeholder shows the technique-dependent default; a
+  // typed value pins an override that persists across technique switches.
+  const techniqueKind = $derived(doc?.technique.kind ?? 'lead')
+
+  function thresholdOverride(ruleId: string, key: string): number | undefined {
+    return doc?.drc.rules[ruleId]?.thresholds?.[key]
+  }
+
+  /** Set (empty clears) one threshold override, preserving the rule's other override fields. */
+  function setThreshold(ruleId: string, key: string, raw: string): void {
+    const ov = overrideFor(ruleId)
+    const thresholds: Record<string, number> = { ...(ov?.thresholds ?? {}) }
+    const value = Number.parseFloat(raw)
+    if (raw.trim() === '' || Number.isNaN(value)) delete thresholds[key]
+    else thresholds[key] = value
+    const next = { ...(ov ?? {}) }
+    if (Object.keys(thresholds).length > 0) next.thresholds = thresholds
+    else delete next.thresholds
+    drc.setRuleOverride(ruleId, Object.keys(next).length > 0 ? next : null)
+  }
 </script>
 
 <div class="rules">
@@ -93,27 +114,52 @@
       {#each RULES as rule (rule.id)}
         {@const ov = overrideFor(rule.id)}
         <div class="setting">
-          <Checkbox
-            label={rule.title}
-            checked={ov?.enabled !== false}
-            onchange={(enabled) =>
-              drc.setRuleOverride(
-                rule.id,
-                enabled && (ov?.severity ?? undefined) === undefined
-                  ? null
-                  : { ...(ov ?? {}), enabled },
-              )}
-          />
-          <Select
-            size="sm"
-            options={SEVERITY_OPTIONS}
-            value={ov?.severity ?? rule.defaultSeverity}
-            onchange={(severity) =>
-              drc.setRuleOverride(rule.id, {
-                ...(ov ?? {}),
-                severity: severity as Severity,
-              })}
-          />
+          <div class="setting-head">
+            <Checkbox
+              label={rule.title}
+              checked={ov?.enabled !== false}
+              onchange={(enabled) =>
+                drc.setRuleOverride(
+                  rule.id,
+                  enabled &&
+                    (ov?.severity ?? undefined) === undefined &&
+                    ov?.thresholds === undefined
+                    ? null
+                    : { ...(ov ?? {}), enabled },
+                )}
+            />
+            <Select
+              size="sm"
+              options={SEVERITY_OPTIONS}
+              value={ov?.severity ?? rule.defaultSeverity}
+              onchange={(severity) =>
+                drc.setRuleOverride(rule.id, {
+                  ...(ov ?? {}),
+                  severity: severity as Severity,
+                })}
+            />
+          </div>
+          {#if rule.thresholds && rule.thresholds.length > 0}
+            <div class="thresholds">
+              {#each rule.thresholds as spec (spec.key)}
+                <label class="threshold" title={spec.rationale}>
+                  <span class="threshold-label">{spec.label}</span>
+                  <span class="threshold-input">
+                    <input
+                      type="number"
+                      inputmode="decimal"
+                      step="0.5"
+                      min="0"
+                      placeholder={String(spec.defaultFor(techniqueKind))}
+                      value={thresholdOverride(rule.id, spec.key) ?? ''}
+                      oninput={(e) => setThreshold(rule.id, spec.key, e.currentTarget.value)}
+                    />
+                    <span class="threshold-unit">{spec.unit}</span>
+                  </span>
+                </label>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -400,11 +446,59 @@
 
   .setting {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--paper-100);
+  }
+
+  .setting-head {
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--paper-100);
+  }
+
+  .thresholds {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 24px;
+  }
+
+  .threshold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .threshold-label {
+    font: var(--text-caption);
+    color: var(--ink-600);
+  }
+
+  .threshold-input {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .threshold-input input {
+    width: 56px;
+    padding: 4px 7px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--paper-0);
+    color: var(--ink-800);
+    font: 500 11.5px/1 var(--font-mono);
+    text-align: right;
+  }
+
+  .threshold-unit {
+    font: var(--text-caption);
+    color: var(--ink-500);
+    min-width: 12px;
   }
 
   .empty {

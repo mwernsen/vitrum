@@ -112,6 +112,9 @@ export {
   signedArea,
 } from './polygon'
 
+// Inscribed circle (inscribed-width proxy for DRC sliver detection)
+export { inscribedCircle, type InscribedCircle } from './inscribed'
+
 // Intersection
 export { intersect, type Intersection } from './intersect'
 

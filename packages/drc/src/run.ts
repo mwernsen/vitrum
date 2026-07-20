@@ -21,9 +21,11 @@ export function runChecks(input: DrcInput, rules: readonly Rule[] = RULES): RunR
   for (const rule of rules) {
     const override = overrides[rule.id]
     if (override?.enabled === false) continue
-    const severity: Severity = override?.severity ?? rule.defaultSeverity
 
     for (const raw of rule.check(input)) {
+      // An explicit project override wins; otherwise the rule may grade this instance (F-031),
+      // falling back to its shipped default severity.
+      const severity: Severity = override?.severity ?? raw.severity ?? rule.defaultSeverity
       const key = exclusionKey(rule.id, raw)
       const waiver = exclusions[key]
       const violation: Violation = {

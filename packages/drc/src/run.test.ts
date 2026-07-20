@@ -1,6 +1,7 @@
 import { setDrcExclusion, setDrcRuleOverride, DocumentStore } from '@vitrum/model'
 import { describe, expect, it } from 'vitest'
 
+import { TOPOLOGY_RULES } from './rules/topology'
 import { runChecks } from './run'
 import { countByRule } from './test/harness'
 import { buildInput } from './test/harness'
@@ -23,7 +24,10 @@ describe('topology rule pack — golden scenes (FR-5)', () => {
 
   it('each scene produces exactly its expected violation set', () => {
     for (const scene of allScenes()) {
-      const result = runChecks(buildInput(scene.project))
+      // Scope to the topology pack: these fixtures are the ERC pack's golden suite. The cuttability
+      // pack (F-031) has its own scenes; some ERC fixtures use deliberately degenerate geometry that
+      // a cuttability rule would legitimately flag.
+      const result = runChecks(buildInput(scene.project), TOPOLOGY_RULES)
       expect(countByRule(result), `scene: ${scene.name}`).toEqual(
         // Drop zero entries so the expected map lists only what should fire.
         Object.fromEntries(Object.entries(scene.expected).filter(([, n]) => n && n > 0)),

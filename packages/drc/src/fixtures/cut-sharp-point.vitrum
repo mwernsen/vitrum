@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 6,
+  "project": {
+    "settings": {
+      "units": "mm",
+      "name": "Untitled"
+    },
+    "technique": {
+      "kind": "lead",
+      "lead": {
+        "defaultProfileId": "came-h-5",
+        "cuttingToleranceMm": 0,
+        "profiles": {
+          "came-h-4": {
+            "id": "came-h-4",
+            "name": "H 4 mm",
+            "kind": "H",
+            "flangeMm": 4,
+            "heartMm": 1.4
+          },
+          "came-h-5": {
+            "id": "came-h-5",
+            "name": "H 5 mm",
+            "kind": "H",
+            "flangeMm": 5,
+            "heartMm": 1.5
+          },
+          "came-h-6": {
+            "id": "came-h-6",
+            "name": "H 6 mm",
+            "kind": "H",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-h-7": {
+            "id": "came-h-7",
+            "name": "H 7 mm",
+            "kind": "H",
+            "flangeMm": 7,
+            "heartMm": 1.7
+          },
+          "came-h-9": {
+            "id": "came-h-9",
+            "name": "H 9 mm",
+            "kind": "H",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          },
+          "came-h-12": {
+            "id": "came-h-12",
+            "name": "H 12 mm",
+            "kind": "H",
+            "flangeMm": 12,
+            "heartMm": 2
+          },
+          "came-u-6": {
+            "id": "came-u-6",
+            "name": "U 6 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-u-9": {
+            "id": "came-u-9",
+            "name": "U 9 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          }
+        },
+        "overrides": {}
+      },
+      "foil": {
+        "foilWidthMm": 5.6,
+        "pieceGapMm": 0.8,
+        "solderFinish": "silver"
+      }
+    },
+    "segments": {
+      "NBPxSUoGG8JIKM-R7Arf9": {
+        "id": "NBPxSUoGG8JIKM-R7Arf9",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 0
+          },
+          "b": {
+            "x": 80,
+            "y": 6
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "bRv-DGePHQIHeLXQ6c5Ae",
+          "ZiWvutVZvLDvLj0Wy0EHa"
+        ]
+      },
+      "GHKdk4Ufs9xSj6bmVqpvN": {
+        "id": "GHKdk4Ufs9xSj6bmVqpvN",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 80,
+            "y": 6
+          },
+          "b": {
+            "x": 0,
+            "y": 12
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "ZiWvutVZvLDvLj0Wy0EHa",
+          "8vs_NUKOrA2ZoLbgawKa9"
+        ]
+      },
+      "bMquhCtwuw7dxa6anzWN8": {
+        "id": "bMquhCtwuw7dxa6anzWN8",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 12
+          },
+          "b": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "8vs_NUKOrA2ZoLbgawKa9",
+          "bRv-DGePHQIHeLXQ6c5Ae"
+        ]
+      }
+    },
+    "nodes": {
+      "bRv-DGePHQIHeLXQ6c5Ae": {
+        "pos": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "ZiWvutVZvLDvLj0Wy0EHa": {
+        "pos": {
+          "x": 80,
+          "y": 6
+        }
+      },
+      "8vs_NUKOrA2ZoLbgawKa9": {
+        "pos": {
+          "x": 0,
+          "y": 12
+        }
+      }
+    },
+    "glasses": {},
+    "assignments": {},
+    "layers": [],
+    "drc": {
+      "exclusions": {},
+      "rules": {}
+    }
+  }
+}

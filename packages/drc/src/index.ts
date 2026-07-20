@@ -12,6 +12,8 @@
 export { runChecks } from './run'
 export { RULES, RULES_BY_ID } from './registry'
 export { TOPOLOGY_RULES } from './rules/topology'
+export { CUTTABILITY_RULES } from './rules/cuttability'
+export { resolveThreshold } from './thresholds'
 export { quickFixCommand } from './quickfix'
 export { exclusionKey, SEVERITY_RANK } from './identity'
 export type {
@@ -23,6 +25,7 @@ export type {
   RunResult,
   Severity,
   SeverityCounts,
+  ThresholdSpec,
   Violation,
   WeldQuickFix,
 } from './types'

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { deserialize } from '@vitrum/model'
 import { describe, expect, it } from 'vitest'
 
+import { TOPOLOGY_RULES } from './rules/topology'
 import { runChecks } from './run'
 import { buildInput, countByRule } from './test/harness'
 import { allScenes } from './test/scenes'
@@ -26,7 +27,7 @@ describe('golden .vitrum fixtures', () => {
   for (const scene of allScenes()) {
     it(`${scene.name}: loaded from disk, produces its expected violation set`, () => {
       const project = loadFixture(scene.name)
-      const result = runChecks(buildInput(project))
+      const result = runChecks(buildInput(project), TOPOLOGY_RULES)
       expect(countByRule(result)).toEqual(
         Object.fromEntries(Object.entries(scene.expected).filter(([, n]) => n && n > 0)),
       )

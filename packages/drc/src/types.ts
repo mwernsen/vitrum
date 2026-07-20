@@ -1,4 +1,4 @@
-import type { Diagnostic, Piece } from '@vitrum/core'
+import type { CutContour, Diagnostic, Piece, TechniqueKind } from '@vitrum/core'
 import type { Project, Severity } from '@vitrum/model'
 import type { Vec2 } from '@vitrum/geometry'
 
@@ -15,24 +15,34 @@ export type { Severity }
 
 /** The id of a shipped rule. Extending the pack adds to this union. */
 export type RuleId =
+  // Topology (ERC) pack — F-030
   | 'open-border'
   | 'dangling-line'
   | 'near-miss-joint'
   | 'duplicate-segment'
   | 'unassigned-glass'
   | 'orphan-region'
+  // Cuttability pack — F-031
+  | 'min-piece-size'
+  | 'sliver'
+  | 'concave-curvature'
+  | 'concave-notch'
+  | 'sharp-point'
+  | 'degenerate-cut-contour'
 
 /**
  * The document + derived data a rule inspects. Everything here is plain, structured-cloneable
  * data (no closures) so the whole input can be posted to a worker. `pieces` and `diagnostics`
- * come from F-020's detection; `assignedKeys` are the content ids of pieces with an *effective*
- * glass (F-023, direct or inherited) — resolving inheritance is the caller's job so the engine
- * stays a pure function of its input.
+ * come from F-020's detection; `cutContours` are F-021's technique-inset contours (one per piece,
+ * joined by `pieceId`), the geometry the cuttability pack (F-031) checks; `assignedKeys` are the
+ * content ids of pieces with an *effective* glass (F-023, direct or inherited) — resolving
+ * inheritance is the caller's job so the engine stays a pure function of its input.
  */
 export interface DrcInput {
   readonly project: Project
   readonly pieces: readonly Piece[]
   readonly diagnostics: readonly Diagnostic[]
+  readonly cutContours: readonly CutContour[]
   readonly assignedKeys: readonly string[]
 }
 
@@ -66,6 +76,13 @@ export interface RawViolation {
   readonly pieceIds?: readonly string[]
   readonly distance?: number
   readonly quickFix?: QuickFix
+  /**
+   * A per-violation severity, escalating this one instance above the rule's `defaultSeverity`.
+   * Some cuttability rules grade themselves (F-031): `min-piece-size` is a warning but an error
+   * below half the minimum; `concave-curvature` is a warning but an error under a hard radius. A
+   * project's severity override, when present, still replaces this (an explicit override wins).
+   */
+  readonly severity?: Severity
 }
 
 /** A located, severity-graded, explained problem — the engine's output unit. */
@@ -89,15 +106,33 @@ export interface Violation {
 }
 
 /**
+ * A tunable threshold a rule reads (F-031). Cuttability limits are craft numbers that differ by
+ * technique (copper foil permits finer work than lead) and that a workshop may want to retune, so
+ * each is declared here as data: a stable `key` (the persistence + override key), a `label`/`unit`
+ * for the settings UI, the `rationale` that documents *why* the default is what it is, and the
+ * per-technique default. A project override pins a single value across techniques; with no override
+ * the effective value is `defaultFor(project.technique.kind)`, so it switches automatically (FR-4).
+ */
+export interface ThresholdSpec {
+  readonly key: string
+  readonly label: string
+  readonly unit: string
+  readonly rationale: string
+  defaultFor(kind: TechniqueKind): number
+}
+
+/**
  * One design rule. `check` is pure: same input, same violations, in a deterministic order.
  * `defaultSeverity` and `explain` are the rule's shipped defaults; a project can override the
- * severity or disable the rule (FR-4).
+ * severity or disable the rule (FR-4). `thresholds` (F-031) declares the rule's tunable limits so
+ * the settings UI can render and persist them; topology rules carry none.
  */
 export interface Rule {
   readonly id: RuleId
   readonly title: string
   readonly defaultSeverity: Severity
   readonly explain: string
+  readonly thresholds?: readonly ThresholdSpec[]
   check(input: DrcInput): RawViolation[]
 }
 
