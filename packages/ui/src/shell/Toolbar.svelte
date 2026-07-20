@@ -11,19 +11,23 @@
   import Square from 'lucide-svelte/icons/square'
   import SquareDashed from 'lucide-svelte/icons/square-dashed'
   import Triangle from 'lucide-svelte/icons/triangle'
+  import Wrench from 'lucide-svelte/icons/wrench'
 
   import IconButton from '../components/IconButton.svelte'
   import type { ToolController } from '../tools/controller.svelte'
   import type { PaintController } from '../tools/paint.svelte'
+  import type { ReinforcementController } from '../tools/reinforcement.svelte'
 
   interface Props {
     /** The drawing-tool controller (F-011). Optional so the shell renders in isolation. */
     tools?: ToolController
     /** The paint / piece-select controller (F-023). Optional so the shell renders in isolation. */
     paint?: PaintController
+    /** The reinforcement-bar controller (F-032). Optional so the shell renders in isolation. */
+    reinforce?: ReinforcementController
   }
 
-  let { tools, paint }: Props = $props()
+  let { tools, paint, reinforce }: Props = $props()
 
   // The palette and their single-key shortcuts (F-011). The border tool has no single-key
   // shortcut (the resolved set is L/A/B/R/C/P), so it is toolbar-only.
@@ -39,19 +43,28 @@
     { id: 'guide', label: 'Construction guide', key: 'G', icon: Ruler },
   ]
 
-  // A drawing/select tool is active only when the paint layer is off; picking one turns paint off.
-  const activeId = $derived(paint?.active ? '' : (tools?.activeId ?? 'select'))
+  // A drawing/select tool is active only when the paint and bar layers are off.
+  const activeId = $derived(paint?.active || reinforce?.active ? '' : (tools?.activeId ?? 'select'))
 
   function select(id: ToolId | 'select') {
     paint?.setMode('off')
+    reinforce?.setMode('off')
     if (id === 'select') tools?.deactivate()
     else tools?.activate(id)
   }
 
-  // Paint tools (F-023): activating one deactivates the drawing layer.
+  // Paint tools (F-023): activating one deactivates the drawing and bar layers.
   function paintMode(mode: 'paint' | 'select') {
     tools?.deactivate()
+    reinforce?.setMode('off')
     paint?.setMode(paint.mode === mode ? 'off' : mode)
+  }
+
+  // Reinforcement bars (F-032): activating deactivates the drawing and paint layers.
+  function barMode() {
+    tools?.deactivate()
+    paint?.setMode('off')
+    reinforce?.setMode(reinforce.mode === 'draw' ? 'off' : 'draw')
   }
 </script>
 
@@ -85,6 +98,18 @@
       onclick={() => paintMode('select')}
     >
       <Shapes size={18} />
+    </IconButton>
+  {/if}
+
+  {#if reinforce}
+    <div class="divider" aria-hidden="true"></div>
+    <IconButton
+      label="Reinforcement bar"
+      variant={reinforce.mode === 'draw' ? 'outline' : 'ghost'}
+      aria-pressed={reinforce.mode === 'draw'}
+      onclick={() => barMode()}
+    >
+      <Wrench size={18} />
     </IconButton>
   {/if}
 </div>

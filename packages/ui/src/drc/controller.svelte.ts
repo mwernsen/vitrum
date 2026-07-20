@@ -79,9 +79,15 @@ export class DrcController {
     this.#scheduler = options.scheduler ?? REAL_SCHEDULER
   }
 
-  /** Canvas markers for the active violations (F-030 overlay). */
+  /**
+   * Canvas markers for the active violations (F-030 overlay). The always-on `panel-weight` info
+   * (F-032) is a Rules-panel readout only — it gets no canvas marker until it escalates to a
+   * warning, so a clean design never carries a permanent weight dot (seam E).
+   */
   markers = $derived(
-    this.result.violations.map((v) => ({ at: v.at, severity: v.severity, key: v.key })),
+    this.result.violations
+      .filter((v) => !(v.ruleId === 'panel-weight' && v.severity === 'info'))
+      .map((v) => ({ at: v.at, severity: v.severity, key: v.key })),
   )
 
   /** Live mode: (re)schedule a debounced run against the latest input. */

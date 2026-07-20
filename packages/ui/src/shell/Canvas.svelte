@@ -2,7 +2,7 @@
   import { pieceKey, type CutContour, type Diagnostic, type Piece } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
-  import type { Glass, GlassId, PieceId, Segment } from '@vitrum/model'
+  import type { Glass, GlassId, PieceId, ReinforcementBar, Segment } from '@vitrum/model'
   import { onMount } from 'svelte'
 
   import {
@@ -16,6 +16,7 @@
     drawPieceFills,
     drawPieceHighlight,
     drawPieceSelection,
+    drawReinforcements,
     drawRuler,
     drawSnapMarker,
     drawToolPreview,
@@ -31,6 +32,7 @@
   import type { ToolController } from '../tools/controller.svelte'
   import type { EditController } from '../tools/edit.svelte'
   import type { PaintController } from '../tools/paint.svelte'
+  import type { ReinforcementController } from '../tools/reinforcement.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
   import type { SnapController } from '../tools/snap.svelte'
 
@@ -76,6 +78,10 @@
     violations?: readonly ViolationMarker[]
     /** The selected violation's key, ringed on the canvas (F-030). */
     selectedViolationKey?: string | null
+    /** Reinforcement bars to draw (F-032). */
+    reinforcements?: readonly ReinforcementBar[]
+    /** The reinforcement-bar controller (F-032). Absent ⇒ bars are view-only. */
+    reinforce?: ReinforcementController
   }
 
   let {
@@ -100,6 +106,8 @@
     showCuts = false,
     violations = [],
     selectedViolationKey = null,
+    reinforcements = [],
+    reinforce,
   }: Props = $props()
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
@@ -112,9 +120,20 @@
     return !!paint && paint.active
   }
 
-  /** True when the inert select tool is active, editing is wired in, and paint is off. */
+  /** True when the reinforcement-bar layer (F-032) is driving. */
+  function placingBar(): boolean {
+    return !!reinforce && reinforce.active
+  }
+
+  /** True when the inert select tool is active, editing is wired in, and paint/bars are off. */
   function editing(): boolean {
-    return !!edit && !!selection && !painting() && (!tools || tools.activeId === 'select')
+    return (
+      !!edit &&
+      !!selection &&
+      !painting() &&
+      !placingBar() &&
+      (!tools || tools.activeId === 'select')
+    )
   }
 
   let stackEl: HTMLDivElement
@@ -157,6 +176,16 @@
       if (showPieces) drawPieceFills(ctx, viewport.transform, size, pieces, palette)
       drawContent(ctx, viewport.transform, size, segments, palette, technique)
       if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
+      if (reinforcements.length > 0 || placingBar()) {
+        drawReinforcements(
+          ctx,
+          viewport.transform,
+          reinforcements,
+          reinforce?.selectedId ?? null,
+          reinforce?.placement ?? null,
+          palette,
+        )
+      }
       dirty.content = false
     }
     if (dirty.overlay) {
@@ -239,6 +268,9 @@
     void technique
     void cutContours
     void showCuts
+    void reinforcements
+    void reinforce?.selectedId
+    void reinforce?.placement
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {
@@ -320,6 +352,12 @@
       event.preventDefault()
       return
     }
+    // Left button with the reinforcement layer active (F-032) places/selects bars.
+    if (event.button === 0 && placingBar()) {
+      reinforce!.pointerDown(localPoint(event))
+      event.preventDefault()
+      return
+    }
     // Left button with the paint / piece-select layer active (F-023) assigns glass.
     if (event.button === 0 && painting()) {
       paint!.pointerDown(localPoint(event), mods(event))
@@ -349,7 +387,9 @@
       lastPointer = { x: event.clientX, y: event.clientY }
       return
     }
-    if (painting()) {
+    if (placingBar()) {
+      reinforce!.pointerMove(point)
+    } else if (painting()) {
       paint!.pointerMove(point)
     } else if (tools && tools.activeId !== 'select') {
       updateSnap(event)
@@ -362,7 +402,9 @@
 
   function handlePointerUp(event: PointerEvent) {
     if (!panning && event.button === 0) {
-      if (painting()) {
+      if (placingBar()) {
+        reinforce!.pointerUp()
+      } else if (painting()) {
         paint!.pointerUp()
       } else if (tools && tools.activeId !== 'select') {
         updateSnap(event)
@@ -428,6 +470,11 @@
 
   function handleWindowKeyDown(event: KeyboardEvent) {
     if (isTyping(event.target)) return
+    // The reinforcement layer (F-032) gets first refusal while active (Delete/Esc on a bar).
+    if (placingBar() && reinforce!.handleKeyDown(event)) {
+      event.preventDefault()
+      return
+    }
     // The tool layer gets first refusal (single-key activation, numeric entry, Esc/Enter).
     if (tools && tools.handleKeyDown(event)) {
       event.preventDefault()

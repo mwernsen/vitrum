@@ -23,6 +23,7 @@
   import { ToolController } from '../tools/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
   import { PaintController } from '../tools/paint.svelte'
+  import { ReinforcementController } from '../tools/reinforcement.svelte'
   import { SelectionController } from '../tools/selection.svelte'
   import { SnapController } from '../tools/snap.svelte'
 
@@ -115,7 +116,16 @@
     execute: (command) => controller?.execute(command),
   })
 
+  // Reinforcement bars (F-032): a first-class document entity placed across the panel. Its own
+  // interactive controller (parallel to paint) since a bar is not a lead-line segment.
+  const reinforce = new ReinforcementController({
+    viewport,
+    getBars: () => controller?.doc.reinforcements ?? [],
+    execute: (command, options) => controller?.execute(command, options),
+  })
+
   const projectGlasses = $derived(controller?.doc.glasses ?? {})
+  const reinforcements = $derived(controller?.doc.reinforcements ?? [])
   const unassignedCount = $derived(pieces.filter((p) => !assignments.glassFor(p)).length)
 
   // Design rule checks (F-030). The engine runs off the main thread (debounced live, immediate on
@@ -132,6 +142,15 @@
   const assignedKeys = $derived(
     pieces.filter((p) => assignments.glassFor(p)).map((p) => pieceKey(p)),
   )
+  // Each piece's effective glass (content id → glass id), so the structural weight rule (F-032) can
+  // read glass thickness; inheritance is already resolved by the assignment controller.
+  const effectiveGlass = $derived(
+    Object.fromEntries(
+      pieces
+        .map((p) => [pieceKey(p), assignments.glassFor(p)] as const)
+        .filter((entry): entry is readonly [string, GlassId] => entry[1] !== undefined),
+    ),
+  )
   // The technique-inset cut contours the cuttability pack (F-031) checks. Computed unconditionally
   // for DRC (the overlay's copy at `cutContours` is gated on visibility); the cache makes the second
   // call in a cycle free.
@@ -140,7 +159,14 @@
   )
   const drcInput = $derived<DrcInput | null>(
     controller
-      ? { project: controller.doc, pieces, diagnostics, cutContours: drcCutContours, assignedKeys }
+      ? {
+          project: controller.doc,
+          pieces,
+          diagnostics,
+          cutContours: drcCutContours,
+          assignedKeys,
+          effectiveGlass,
+        }
       : null,
   )
   // Live mode: re-run (debounced) whenever the document or its derived data changes.
@@ -267,7 +293,7 @@
       rules={rulesPanel}
     />
     <div class="stage">
-      <Toolbar {tools} {paint} />
+      <Toolbar {tools} {paint} {reinforce} />
       <Canvas
         {viewport}
         segments={shownSegments}
@@ -290,6 +316,8 @@
         showCuts={viewport.cutsVisible}
         violations={drc.markers}
         selectedViolationKey={drc.selectedKey}
+        {reinforcements}
+        {reinforce}
       />
       <div class="dims" aria-label="Panel dimensions">
         <span>{dimText}</span>
@@ -301,6 +329,7 @@
       {edit}
       {selection}
       {paint}
+      {reinforce}
       {assignments}
       doc={controller?.doc}
       {pieces}
