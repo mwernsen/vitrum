@@ -7,7 +7,7 @@
     type NumberingScheme,
     type Panel,
   } from '@vitrum/core'
-  import { pointInPolygon, polygon } from '@vitrum/geometry'
+  import { pointInPolygon, polygon, vec2 } from '@vitrum/geometry'
   import {
     createEmptyProject,
     setGlassAssignments,
@@ -29,12 +29,17 @@
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
   import { NumberingController } from '../numbering/controller.svelte'
+  import { PrintController, type SavePdf } from '../print/controller.svelte'
+  import PrintDialog from '../print/PrintDialog.svelte'
+  import { buildPrintScene } from '../print/scene'
   import { ToolController } from '../tools/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
   import { PaintController } from '../tools/paint.svelte'
   import { ReinforcementController } from '../tools/reinforcement.svelte'
   import { SelectionController } from '../tools/selection.svelte'
   import { SnapController } from '../tools/snap.svelte'
+
+  import type { PrintTileOverlay } from '../canvas/render'
 
   import ActivityRail from './ActivityRail.svelte'
   import Canvas from './Canvas.svelte'
@@ -56,9 +61,11 @@
     controller?: DocumentController
     /** The global glass library controller (F-022). Optional so the shell renders in isolation. */
     glassLibrary?: GlassLibraryController
+    /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
+    exportPdf?: SavePdf
   }
 
-  let { panel, controller, glassLibrary }: Props = $props()
+  let { panel, controller, glassLibrary, exportPdf }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -199,6 +206,54 @@
     if (code === '') delete glassCodes[glassId]
     else glassCodes[glassId] = code
     controller.execute(updateNumbering({ glassCodes }))
+  }
+
+  // --- 1:1 printing (F-041) --------------------------------------------------
+
+  // The print dialog's settings + export runner. The tiling and PDF generation live in
+  // `@vitrum/paper`; this controller is just the reactive UI seam.
+  const print = new PrintController()
+
+  // The tile grid previewed on the canvas while the dialog is open (world-space rectangles).
+  const printTiles = $derived.by<PrintTileOverlay[]>(() => {
+    if (!print.open) return []
+    const tiling = print.tilingFor(bounds)
+    if (!tiling) return []
+    return tiling.tiles.map((tile) => ({
+      min: vec2(tile.worldRect.x, tile.worldRect.y),
+      max: vec2(tile.worldRect.x + tile.worldRect.w, tile.worldRect.y + tile.worldRect.h),
+      label: tile.label,
+    }))
+  })
+
+  /** Build the backend-neutral print scene from the live derived data, then export the PDF. */
+  async function runPrint(): Promise<void> {
+    if (!controller || !bounds || !exportPdf) return
+    const scene = buildPrintScene({
+      contentBounds: bounds,
+      segments: Object.values(controller.doc.segments).filter((s) => s.role !== 'construction'),
+      leadWidthMm: (seg) =>
+        techniqueRender
+          ? techniqueRender.leadWidthMm(seg.id, seg.role)
+          : seg.role === 'border'
+            ? 2
+            : 1,
+      pieces,
+      cutContours: drcCutContours,
+      glassFor: (piece) => assignments.glassFor(piece),
+      glasses: projectGlasses,
+      labelFor: (piece) => numbering.labelFor(piece),
+      placementFor: (piece) => numbering.placements.get(pieceKey(piece)),
+      legend: legend.map((row) => ({
+        code: row.code,
+        name: row.name,
+        manufacturer: row.manufacturer,
+        color: controller.doc.glasses[row.glassId]?.color,
+        count: row.count,
+      })),
+    })
+    const path = await print.export(scene, panel.name, exportPdf)
+    if (path !== null) print.open = false
   }
 
   /** Set or clear a manual per-piece number override (FR-1). Keyed by content id. */
@@ -386,6 +441,8 @@
     pieceCount={pieces.length}
     unnumbered={unnumberedCount}
     {legend}
+    onPrint={exportPdf ? () => (print.open = true) : undefined}
+    printAvailable={!!exportPdf && !!bounds}
   />
 {/snippet}
 
@@ -453,6 +510,7 @@
         showNumbers={viewport.numbersVisible}
         numberLabels={numbering.labels}
         numberPlacements={numbering.placements}
+        {printTiles}
       />
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
@@ -489,6 +547,15 @@
   bind:open={calibrationOpen}
   {viewport}
   onClose={() => (calibrationOpen = false)}
+/>
+
+<PrintDialog
+  controller={print}
+  {bounds}
+  pieceCount={pieces.length}
+  drcErrorCount={drc.result.counts.error}
+  checksRun={drc.hasRun}
+  onExport={runPrint}
 />
 
 <style>

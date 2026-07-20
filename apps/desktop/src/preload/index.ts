@@ -36,6 +36,10 @@ const api = {
       ipcRenderer.invoke('glassLib:export', suggestedName, contents),
     importLibrary: (): Promise<string | null> => ipcRenderer.invoke('glassLib:import'),
   },
+  export: {
+    savePdf: (suggestedName: string, bytes: Uint8Array): Promise<string | null> =>
+      ipcRenderer.invoke('export:savePdf', suggestedName, bytes),
+  },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)
     ipcRenderer.on('menu:action', listener)

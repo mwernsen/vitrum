@@ -8,7 +8,7 @@
   import Badge from '../components/Badge.svelte'
   import IconButton from '../components/IconButton.svelte'
   import Tooltip from '../components/Tooltip.svelte'
-  import logo from '../design/assets/logo.svg'
+  import Logo from '../design/assets/Logo.svelte'
   import type { DocumentController } from '../document/controller.svelte'
 
   import { VIEW_MODES, type ViewMode } from './viewmode'
@@ -36,7 +36,7 @@
   </Tooltip>
 
   <span class="brand">
-    <img class="logo" src={logo} alt="" />
+    <Logo height={22} />
     <span class="wordmark">Vitrum</span>
   </span>
   <span class="doc-title">{title}</span>
@@ -112,11 +112,6 @@
     display: flex;
     align-items: center;
     gap: 9px;
-  }
-
-  .logo {
-    height: 22px;
-    width: auto;
   }
 
   .wordmark {

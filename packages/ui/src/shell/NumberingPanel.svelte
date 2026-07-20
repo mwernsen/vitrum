@@ -29,9 +29,23 @@
     unnumbered: number
     /** Legend rows for glasses in use (FR-4). */
     legend: readonly LegendEntry[]
+    /** Open the 1:1 print dialog (F-041). Absent ⇒ the print action stays a placeholder. */
+    onPrint?: () => void
+    /** Whether there is something to print (a host export port + non-empty panel). */
+    printAvailable?: boolean
   }
 
-  let { scheme, onScheme, onRenumber, onSetCode, pieceCount, unnumbered, legend }: Props = $props()
+  let {
+    scheme,
+    onScheme,
+    onRenumber,
+    onSetCode,
+    pieceCount,
+    unnumbered,
+    legend,
+    onPrint,
+    printAvailable = false,
+  }: Props = $props()
 
   const SCHEME_OPTIONS = [
     { value: 'grouped', label: 'Grouped by glass (A1, A2…)' },
@@ -97,17 +111,28 @@
     {/if}
   </div>
 
-  <!-- Downstream manufacturing outputs arrive with their own features. -->
-  <div class="section placeholders">
+  <!-- Outputs: 1:1 print is live (F-041); the rest arrive with their own features. -->
+  <div class="section">
     <span class="eyebrow">Outputs</span>
+    {#if onPrint}
+      <Button
+        size="sm"
+        variant="secondary"
+        onclick={onPrint}
+        disabled={!printAvailable || pieceCount === 0}
+      >
+        Print cartoon 1:1…
+      </Button>
+    {:else}
+      <div class="scaffold-row">
+        <span class="ph-label">Print cartoon 1:1</span><span class="feature">F-041</span>
+      </div>
+    {/if}
     <div class="scaffold-row">
       <span class="ph-label">Cutting list</span><span class="feature">F-042</span>
     </div>
     <div class="scaffold-row">
       <span class="ph-label">Bill of materials</span><span class="feature">F-042</span>
-    </div>
-    <div class="scaffold-row">
-      <span class="ph-label">Print cartoon 1:1</span><span class="feature">F-041</span>
     </div>
     <div class="scaffold-row">
       <span class="ph-label">Export</span><span class="feature">F-043</span>
@@ -215,10 +240,6 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--ink-500);
-  }
-
-  .placeholders {
-    opacity: 0.7;
   }
 
   .scaffold-row {

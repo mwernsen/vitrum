@@ -1,6 +1,6 @@
 import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
-import type { AppHost, MenuAction } from './host'
+import type { AppHost, ExportPort, MenuAction } from './host'
 
 /** An in-memory `AppHost` for tests: records I/O and answers prompts deterministically. */
 export interface FakeHost extends AppHost {
@@ -17,6 +17,8 @@ export interface FakeHost extends AppHost {
   nextImportLibrary: string | null
   /** The most recent library JSON handed to `exportLibrary()`. */
   lastExportedLibrary: string | null
+  /** The most recent PDF bytes handed to `export.savePdf()`, and its suggested name. */
+  lastExportedPdf: { name: string; bytes: Uint8Array } | null
   emitMenu(action: MenuAction): void
 }
 
@@ -35,6 +37,7 @@ export function createFakeHost(): FakeHost {
     glassLibraryStore: null,
     nextImportLibrary: null,
     lastExportedLibrary: null,
+    lastExportedPdf: null,
     storage: {
       openFile: async () => host.nextOpen,
       saveFile: async (path, contents) => {
@@ -63,6 +66,12 @@ export function createFakeHost(): FakeHost {
       },
       importLibrary: async () => host.nextImportLibrary,
     } satisfies GlassLibraryPort,
+    export: {
+      savePdf: async (name, bytes) => {
+        host.lastExportedPdf = { name, bytes }
+        return name
+      },
+    } satisfies ExportPort,
     onMenuAction: (handler) => {
       menuHandler = handler
       return () => {

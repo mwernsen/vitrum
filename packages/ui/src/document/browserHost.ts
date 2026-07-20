@@ -1,6 +1,6 @@
 import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
-import type { AppHost } from './host'
+import type { AppHost, ExportPort } from './host'
 
 /**
  * A browser stub of `AppHost` for `pnpm dev:ui`, where no Electron main process exists.
@@ -53,9 +53,17 @@ export function createBrowserHost(): AppHost {
     importLibrary: () => pickFile().then((f) => f?.contents ?? null),
   }
 
+  const exportPort: ExportPort = {
+    savePdf: async (suggestedName, bytes) => {
+      downloadBytes(suggestedName, bytes)
+      return suggestedName
+    },
+  }
+
   return {
     storage,
     glassLibrary,
+    export: exportPort,
     reportDirty: (value) => {
       dirty = value
     },
@@ -79,6 +87,17 @@ function safeLocalStorage(): Storage | null {
 function downloadFile(name: string, contents: string): void {
   if (typeof document === 'undefined') return
   const blob = new Blob([contents], { type: 'application/json' })
+  triggerDownload(name, blob)
+}
+
+function downloadBytes(name: string, bytes: Uint8Array): void {
+  if (typeof document === 'undefined') return
+  // Copy into a fresh ArrayBuffer so the Blob gets a plain BlobPart (not a SharedArrayBuffer view).
+  const buffer = bytes.slice().buffer
+  triggerDownload(name, new Blob([buffer], { type: 'application/pdf' }))
+}
+
+function triggerDownload(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

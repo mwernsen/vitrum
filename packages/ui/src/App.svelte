@@ -82,7 +82,12 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<AppShell {panel} {controller} {glassLibrary} />
+<AppShell
+  {panel}
+  {controller}
+  {glassLibrary}
+  exportPdf={host.export ? (name, bytes) => host.export!.savePdf(name, bytes) : undefined}
+/>
 <DebugPalette {controller} />
 
 <style>
