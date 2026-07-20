@@ -43,3 +43,20 @@ describe('ReadinessStrip — checks pill (F-030)', () => {
     expect(screen.getByTestId('checks-readiness')).toHaveTextContent('1 issue')
   })
 })
+
+describe('ReadinessStrip — outputs pill (F-040)', () => {
+  it('is dashed before any piece exists', () => {
+    render(ReadinessStrip, { pieceCount: 0 })
+    expect(screen.getByTestId('outputs-readiness')).toHaveTextContent('—')
+  })
+
+  it('shows the numbered ratio while some pieces are unnumbered', () => {
+    render(ReadinessStrip, { pieceCount: 4, unnumberedCount: 1 })
+    expect(screen.getByTestId('outputs-readiness')).toHaveTextContent('3/4 numbered')
+  })
+
+  it('reads "numbered" once every piece has a number', () => {
+    render(ReadinessStrip, { pieceCount: 4, unnumberedCount: 0 })
+    expect(screen.getByTestId('outputs-readiness')).toHaveTextContent('numbered')
+  })
+})

@@ -8,6 +8,7 @@
 // Domain types
 export {
   createEmptyProject,
+  defaultNumbering,
   type DrcExclusion,
   type DrcRuleOverride,
   type DrcState,
@@ -16,6 +17,8 @@ export {
   type LayerId,
   type Node,
   type NodeId,
+  type NumberingScheme,
+  type NumberingState,
   type PieceId,
   type Project,
   type ProjectSettings,
@@ -136,6 +139,7 @@ export {
   transformSegments,
   updateFoilSettings,
   updateLeadSettings,
+  updateNumbering,
   updateReinforcement,
   updateSegmentGeometry,
   updateSegmentsGeometry,
@@ -143,6 +147,7 @@ export {
   upsertCameProfile,
   upsertGlass,
   type Command,
+  type NumberingPatch,
 } from './commands'
 
 // Network queries

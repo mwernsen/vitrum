@@ -1,9 +1,17 @@
 <script lang="ts">
-  import { formatLength, leadFlangeMm, pieceKey, type Panel } from '@vitrum/core'
+  import {
+    formatLength,
+    leadFlangeMm,
+    pieceKey,
+    renumber,
+    type NumberingScheme,
+    type Panel,
+  } from '@vitrum/core'
   import { pointInPolygon, polygon } from '@vitrum/geometry'
   import {
     createEmptyProject,
     setGlassAssignments,
+    updateNumbering,
     type GlassId,
     type PieceId,
   } from '@vitrum/model'
@@ -20,6 +28,7 @@
   import { AssignmentController } from '../glass/assignment.svelte'
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
+  import { NumberingController } from '../numbering/controller.svelte'
   import { ToolController } from '../tools/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
   import { PaintController } from '../tools/paint.svelte'
@@ -29,9 +38,11 @@
 
   import ActivityRail from './ActivityRail.svelte'
   import Canvas from './Canvas.svelte'
+  import CartoonLegend from './CartoonLegend.svelte'
   import { type DockSection } from './dock'
   import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
+  import NumberingPanel, { type LegendEntry } from './NumberingPanel.svelte'
   import ReadinessStrip from './ReadinessStrip.svelte'
   import RulesPanel from './RulesPanel.svelte'
   import StatusBar from './StatusBar.svelte'
@@ -107,6 +118,15 @@
     assignments.update(detection, pieces, detection?.lineage ?? {}, controller.doc.assignments)
   })
 
+  // Piece numbering (F-040). Resolves each live piece's effective number (from the last renumber or a
+  // manual override, inherited across edits via the detector lineage the way glass is). The stored
+  // numbers change only on an explicit renumber, never on a geometry edit (FR-3).
+  const numbering = new NumberingController()
+  $effect(() => {
+    if (!controller) return
+    numbering.update(detection, pieces, detection?.lineage ?? {}, controller.doc.numbering)
+  })
+
   // The paint / piece-select controller (F-023). Assignments key off project glasses, so painting a
   // library swatch auto-imports a project copy first (handled in the glass dock).
   const paint = new PaintController({
@@ -127,6 +147,68 @@
   const projectGlasses = $derived(controller?.doc.glasses ?? {})
   const reinforcements = $derived(controller?.doc.reinforcements ?? [])
   const unassignedCount = $derived(pieces.filter((p) => !assignments.glassFor(p)).length)
+  const unnumberedCount = $derived(numbering.unnumberedCount(pieces))
+
+  // The glass legend (F-040 FR-4): one row per glass actually in use, with its code and piece count.
+  // Recomputed from the live pieces + effective glass, so it always matches current assignments.
+  const legend = $derived.by<LegendEntry[]>(() => {
+    if (!controller) return []
+    const codes = controller.doc.numbering.glassCodes
+    const counts: Record<GlassId, number> = {}
+    for (const piece of pieces) {
+      const g = assignments.glassFor(piece)
+      if (g) counts[g] = (counts[g] ?? 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([glassId, count]) => {
+        const glass = controller.doc.glasses[glassId]
+        return {
+          glassId,
+          code: codes[glassId] ?? '?',
+          name: glass?.name ?? 'Unknown glass',
+          manufacturer: glass?.manufacturer,
+          count,
+        }
+      })
+      .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+  })
+
+  // --- Numbering actions (F-040) ---------------------------------------------
+
+  /** Renumber every piece under the current scheme, keeping manual overrides (FR-1). One undo step. */
+  function renumberPieces(): void {
+    if (!controller) return
+    const result = renumber({
+      pieces,
+      scheme: controller.doc.numbering.scheme,
+      glassOf: (piece) => assignments.glassFor(piece),
+      glassCodes: controller.doc.numbering.glassCodes,
+      overrides: Object.fromEntries(numbering.effectiveOverrides),
+    })
+    controller.execute(updateNumbering({ auto: result.auto, glassCodes: result.glassCodes }))
+  }
+
+  function setScheme(scheme: NumberingScheme): void {
+    controller?.execute(updateNumbering({ scheme }))
+  }
+
+  /** Edit a glass's code, keeping the rest of the map. Clearing (empty) drops the entry. */
+  function setGlassCode(glassId: GlassId, code: string): void {
+    if (!controller) return
+    const glassCodes = { ...controller.doc.numbering.glassCodes }
+    if (code === '') delete glassCodes[glassId]
+    else glassCodes[glassId] = code
+    controller.execute(updateNumbering({ glassCodes }))
+  }
+
+  /** Set or clear a manual per-piece number override (FR-1). Keyed by content id. */
+  function setPieceNumber(pieceContentId: PieceId, label: string | null): void {
+    if (!controller) return
+    const overrides = { ...controller.doc.numbering.overrides }
+    if (label === null || label === '') delete overrides[pieceContentId]
+    else overrides[pieceContentId] = label
+    controller.execute(updateNumbering({ overrides }))
+  }
 
   // Design rule checks (F-030). The engine runs off the main thread (debounced live, immediate on
   // "Run checks"); this shell builds its input from the derived data and routes the results into the
@@ -197,8 +279,41 @@
     for (const key of Object.keys(stored)) if (!live[key]) patch[key] = null
     if (Object.keys(patch).length > 0) controller.execute(setGlassAssignments(patch))
   }
+
+  // Materialise inherited/reshaped numbers under each live piece's current content id before a save,
+  // so numbers split or reshaped this session persist across reload (mirrors the assignment
+  // normaliser). Rebuilds both `auto` and `overrides` under current ids and drops vanished pieces.
+  function normalizeNumbering(): void {
+    if (!controller) return
+    const cur = controller.doc.numbering
+    const auto: Record<PieceId, string> = {}
+    const overrides: Record<PieceId, string> = {}
+    for (const piece of pieces) {
+      const key = pieceKey(piece)
+      const a = numbering.effectiveAuto.get(key)
+      const o = numbering.effectiveOverrides.get(key)
+      if (a !== undefined) auto[key] = a
+      if (o !== undefined) overrides[key] = o
+    }
+    const same = (
+      x: Readonly<Record<string, string>>,
+      y: Readonly<Record<string, string>>,
+    ): boolean => {
+      const kx = Object.keys(x)
+      if (kx.length !== Object.keys(y).length) return false
+      return kx.every((k) => x[k] === y[k])
+    }
+    if (!same(auto, cur.auto) || !same(overrides, cur.overrides)) {
+      controller.execute(updateNumbering({ auto, overrides }))
+    }
+  }
+
   $effect(() => {
-    if (controller) controller.onBeforeSave = normalizeAssignments
+    if (controller)
+      controller.onBeforeSave = () => {
+        normalizeAssignments()
+        normalizeNumbering()
+      }
   })
 
   const hoveredPieceId = $derived.by(() => {
@@ -262,6 +377,18 @@
   />
 {/snippet}
 
+{#snippet makePanel()}
+  <NumberingPanel
+    scheme={numbering.scheme}
+    onScheme={setScheme}
+    onRenumber={renumberPieces}
+    onSetCode={setGlassCode}
+    pieceCount={pieces.length}
+    unnumbered={unnumberedCount}
+    {legend}
+  />
+{/snippet}
+
 <div class="shell">
   <TopBar
     title={panel.name}
@@ -273,6 +400,7 @@
   <ReadinessStrip
     pieceCount={pieces.length}
     {unassignedCount}
+    {unnumberedCount}
     checksRun={drc.hasRun}
     errorCount={drc.result.counts.error}
     warningCount={drc.result.counts.warning}
@@ -291,9 +419,12 @@
       execute={controller ? (command) => controller.execute(command) : undefined}
       glass={glassLibrary ? glassPanel : undefined}
       rules={rulesPanel}
+      make={makePanel}
     />
     <div class="stage">
-      <Toolbar {tools} {paint} {reinforce} />
+      {#if viewMode !== 'cartoon'}
+        <Toolbar {tools} {paint} {reinforce} />
+      {/if}
       <Canvas
         {viewport}
         segments={shownSegments}
@@ -318,7 +449,14 @@
         selectedViolationKey={drc.selectedKey}
         {reinforcements}
         {reinforce}
+        cartoon={viewMode === 'cartoon'}
+        showNumbers={viewport.numbersVisible}
+        numberLabels={numbering.labels}
+        numberPlacements={numbering.placements}
       />
+      {#if viewMode === 'cartoon'}
+        <CartoonLegend entries={legend} scheme={numbering.scheme} />
+      {/if}
       <div class="dims" aria-label="Panel dimensions">
         <span>{dimText}</span>
         <span class="zoom">{zoomText}</span>
@@ -331,6 +469,8 @@
       {paint}
       {reinforce}
       {assignments}
+      {numbering}
+      onSetNumber={setPieceNumber}
       doc={controller?.doc}
       {pieces}
       execute={controller ? (command) => controller.execute(command) : undefined}

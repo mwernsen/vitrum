@@ -22,6 +22,7 @@
   import Input from '../components/Input.svelte'
   import Select from '../components/Select.svelte'
   import type { AssignmentController } from '../glass/assignment.svelte'
+  import type { NumberingController } from '../numbering/controller.svelte'
   import type { EditController } from '../tools/edit.svelte'
   import type { PaintController } from '../tools/paint.svelte'
   import type { ReinforcementController } from '../tools/reinforcement.svelte'
@@ -39,6 +40,10 @@
     reinforce?: ReinforcementController
     /** The glass assignment resolver (F-023). */
     assignments?: AssignmentController
+    /** The piece-numbering resolver (F-040). */
+    numbering?: NumberingController
+    /** Set/clear a manual per-piece number override (F-040), keyed by content id. */
+    onSetNumber?: (pieceContentId: string, label: string | null) => void
     /** The current document, for reading selected geometry. */
     doc?: Project
     /** Detected pieces (F-020), derived from the live network. */
@@ -54,6 +59,8 @@
     paint,
     reinforce,
     assignments,
+    numbering,
+    onSetNumber,
     doc,
     pieces = [],
     execute,
@@ -231,7 +238,7 @@
         </div>
         <div>
           <dt>Number</dt>
-          <dd>—</dd>
+          <dd>{numbering?.labelFor(piece) ?? 'Unnumbered'}</dd>
         </div>
         <div>
           <dt>Area</dt>
@@ -242,6 +249,18 @@
           <dd>{formatLength(piece.perimeter, unit)}</dd>
         </div>
       </dl>
+
+      {#if onSetNumber}
+        <h3>Number override</h3>
+        <div class="fields">
+          <Input
+            size="sm"
+            label="Custom number"
+            value={numbering?.effectiveOverrides.get(pieceKey(piece)) ?? ''}
+            onchange={(v) => onSetNumber?.(pieceKey(piece), v.trim() === '' ? null : v.trim())}
+          />
+        </div>
+      {/if}
     {/if}
 
     <h3>Assign glass</h3>

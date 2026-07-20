@@ -12,7 +12,7 @@ export interface ViewModeMeta {
 
 export const VIEW_MODES: ViewModeMeta[] = [
   { id: 'design', label: 'Design', live: true },
-  { id: 'cartoon', label: 'Cartoon', live: false, feature: 'F-040' },
+  { id: 'cartoon', label: 'Cartoon', live: true },
   { id: 'render', label: 'Render', live: false, feature: 'F-053' },
   { id: 'light', label: 'Light', live: false, feature: 'F-054' },
 ]

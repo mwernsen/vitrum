@@ -20,20 +20,17 @@
     glass?: Snippet
     /** Live rules content (F-030), rendered when the rules section is open. */
     rules?: Snippet
+    /** Live manufacturing content (F-040 numbering), rendered when the make section is open. */
+    make?: Snippet
   }
 
-  let { section, viewport, doc, execute, glass, rules }: Props = $props()
+  let { section, viewport, doc, execute, glass, rules, make }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
 
   // Placeholder section scaffolds — the as-designed structure of an unbuilt panel (turn 3
   // 3d/3e), shown disabled so the shell reads complete without faking data.
   const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {
-    make: {
-      note: 'Piece numbering, the cutting list, the bill of materials and 1:1 export are generated here from the finished panel.',
-      sections: ['Numbering', 'Cutting list', 'Bill of materials'],
-      actions: ['Print cartoon 1:1', 'Export'],
-    },
     versions: {
       note: 'Named snapshots and auto-saves you can restore or open as a copy.',
       actions: ['Save version…'],
@@ -54,6 +51,8 @@
       {@render glass?.()}
     {:else if section === 'rules'}
       {@render rules?.()}
+    {:else if section === 'make'}
+      {@render make?.()}
     {:else if scaffold}
       <div class="placeholder">
         {#if scaffold.actions}

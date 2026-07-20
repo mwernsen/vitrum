@@ -39,6 +39,12 @@
       toggle: () => viewport.toggleCuts(),
     },
     {
+      label: 'Numbers',
+      hint: 'piece numbers overlay',
+      on: viewport.numbersVisible,
+      toggle: () => viewport.toggleNumbers(),
+    },
+    {
       label: 'Construction guides',
       hint: 'snapping guides',
       on: viewport.guidesVisible,

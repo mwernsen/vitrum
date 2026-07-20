@@ -31,6 +31,7 @@ import type {
   GlassId,
   Node,
   NodeId,
+  NumberingScheme,
   PieceId,
   Project,
   ProjectSettings,
@@ -812,6 +813,55 @@ export function setGlassAssignments(patch: Readonly<Record<PieceId, GlassId | nu
         inverse[pieceId] = before.assignments[pieceId] ?? null
       }
       return setGlassAssignments(inverse)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Piece numbering (F-040)                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** A patch over {@link NumberingState}. Provided record fields **replace** the whole map. */
+export interface NumberingPatch {
+  readonly scheme?: NumberingScheme
+  readonly glassCodes?: Readonly<Record<GlassId, string>>
+  readonly auto?: Readonly<Record<PieceId, string>>
+  readonly overrides?: Readonly<Record<PieceId, string>>
+}
+
+/**
+ * Update piece-numbering state (F-040) in one undo step. Every gesture routes through here: choosing
+ * the scheme (`{ scheme }`), a renumber (`{ auto, glassCodes }`), a manual per-piece override
+ * (`{ overrides }`), editing a glass code (`{ glassCodes }`), and the save-time normalisation that
+ * re-keys inherited numbers under current content ids (`{ auto, overrides }`). Provided record fields
+ * replace the whole map, so the command is self-inverting: the inverse restores exactly the prior
+ * value of every field the patch touched. Editing geometry never routes through here — numbers only
+ * change on explicit intent (FR-3).
+ */
+export function updateNumbering(patch: NumberingPatch): Command {
+  return {
+    kind: 'updateNumbering',
+    apply: (doc) => ({
+      ...doc,
+      numbering: {
+        scheme: patch.scheme ?? doc.numbering.scheme,
+        glassCodes: patch.glassCodes ?? doc.numbering.glassCodes,
+        auto: patch.auto ?? doc.numbering.auto,
+        overrides: patch.overrides ?? doc.numbering.overrides,
+      },
+    }),
+    invert: (before) => {
+      const prev: {
+        scheme?: NumberingScheme
+        glassCodes?: Readonly<Record<GlassId, string>>
+        auto?: Readonly<Record<PieceId, string>>
+        overrides?: Readonly<Record<PieceId, string>>
+      } = {}
+      if (patch.scheme !== undefined) prev.scheme = before.numbering.scheme
+      if (patch.glassCodes !== undefined) prev.glassCodes = before.numbering.glassCodes
+      if (patch.auto !== undefined) prev.auto = before.numbering.auto
+      if (patch.overrides !== undefined) prev.overrides = before.numbering.overrides
+      return updateNumbering(prev)
     },
   }
 }

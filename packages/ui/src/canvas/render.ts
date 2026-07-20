@@ -1,6 +1,7 @@
 import type {
   CutContour,
   Diagnostic,
+  LabelPlacement,
   LengthUnit,
   Piece,
   PreviewShape,
@@ -648,6 +649,108 @@ export function drawReinforcements(
     ctx.setLineDash([])
   }
   ctx.restore()
+}
+
+/** Fill the whole drawing area with a solid colour — the cartoon's white sheet (F-040). */
+export function fillBackground(
+  ctx: CanvasRenderingContext2D | null,
+  size: ViewSize,
+  color: string,
+): void {
+  if (!ctx) return
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, size.width, size.height)
+}
+
+/** Smallest / largest on-screen number height (CSS px). Below the minimum a label uses a leader. */
+const MIN_NUMBER_PX = 9
+const MAX_NUMBER_PX = 26
+
+/**
+ * Draw piece numbers (F-040): each piece's label at its **pole of inaccessibility** (never the
+ * centroid, which can fall outside an L-shape or in a hole), sized from the piece's inscribed radius.
+ * A label that cannot fit inside the piece even at the minimum size gets a **leader line** to a label
+ * drawn just outside it (FR-2), so tiny slivers still read. A white halo behind every glyph keeps it
+ * legible over glass fills (in the coloured-view overlay) and line crossings (in the cartoon).
+ * Unnumbered pieces (no effective label) are skipped — their state is surfaced in the panel/inspector.
+ * Culled to the visible region so cost tracks what is on screen (FR-4).
+ */
+export function drawNumbers(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  size: ViewSize,
+  pieces: readonly Piece[],
+  labelOf: (piece: Piece) => string | undefined,
+  placementOf: (piece: Piece) => LabelPlacement | undefined,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || pieces.length === 0) return
+  const visible = bboxExpand(visibleWorldBounds(vp, size), 5)
+  const ink = palette.content
+  const halo = palette.rulerBg
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+
+  for (const piece of pieces) {
+    if (!bboxOverlap(piece.bbox, visible)) continue
+    const label = labelOf(piece)
+    if (label === undefined) continue
+    const placement = placementOf(piece)
+    const at = placement ? placement.at : piece.centroid
+    const rPx = (placement ? placement.radius : 0) * vp.scale
+    const p = worldToScreen(vp, at)
+
+    // Font that fits the inscribed circle, clamped to a readable band.
+    let font = Math.max(MIN_NUMBER_PX, Math.min(MAX_NUMBER_PX, rPx * 1.1))
+    ctx.font = `600 ${font}px "Geist Mono", ui-monospace, monospace`
+    const half = Math.hypot(ctx.measureText(label).width / 2, font / 2)
+    const fits = rPx > 0 && half <= rPx * 0.95
+
+    if (fits) {
+      drawHaloText(ctx, label, p.x, p.y, ink, halo)
+      continue
+    }
+
+    // Too small: leader from the piece to a label just outside it (up-and-right), min size.
+    font = MIN_NUMBER_PX
+    ctx.font = `600 ${font}px "Geist Mono", ui-monospace, monospace`
+    const off = Math.max(rPx, 4) + 11
+    const lx = p.x + off
+    const ly = p.y - off
+    ctx.strokeStyle = ink
+    ctx.globalAlpha = 0.6
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineTo(lx, ly)
+    ctx.stroke()
+    ctx.globalAlpha = 1
+    // A dot at the anchor so the leader clearly belongs to this piece.
+    ctx.fillStyle = ink
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+    drawHaloText(ctx, label, lx, ly, ink, halo)
+  }
+  ctx.restore()
+}
+
+/** Draw text with a thin same-colour-background halo so it stays legible over any fill. */
+function drawHaloText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  ink: string,
+  halo: string,
+): void {
+  ctx.lineWidth = 3
+  ctx.strokeStyle = halo
+  ctx.strokeText(text, x, y)
+  ctx.fillStyle = ink
+  ctx.fillText(text, x, y)
 }
 
 /** Draw the cursor crosshair. Its own layer so pointer moves never redraw content. */
