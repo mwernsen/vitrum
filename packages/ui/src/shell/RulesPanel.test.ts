@@ -127,6 +127,24 @@ describe('RulesPanel (F-030)', () => {
     expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(6)
   })
 
+  it('edits a cuttability threshold, persisting it as a per-rule override (F-031 FR-4)', async () => {
+    const execute = vi.fn()
+    const drc = makeController(RESULT, execute)
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+    await fireEvent.click(screen.getByRole('button', { name: 'Rule settings' }))
+
+    // The lead default (10 mm) shows as the placeholder for the minimum-piece-size threshold.
+    const input = screen.getByPlaceholderText('10') as HTMLInputElement
+    expect(input).toBeInTheDocument()
+
+    await fireEvent.input(input, { target: { value: '12' } })
+    expect(execute).toHaveBeenCalled()
+    // Apply the captured command to a fresh doc and inspect the persisted override.
+    const command = execute.mock.calls.at(-1)![0] as Command
+    const doc = command.apply(createEmptyProject())
+    expect(doc.drc.rules['min-piece-size']?.thresholds).toEqual({ minDimensionMm: 12 })
+  })
+
   it('reads "no issues found" when a run is clean', () => {
     const clean: RunResult = {
       violations: [],

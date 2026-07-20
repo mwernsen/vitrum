@@ -65,4 +65,29 @@ describe('setDrcRuleOverride (per-project rule config, F-030 FR-4)', () => {
     store.execute(setDrcRuleOverride('unassigned-glass', null))
     expect(store.document.drc.rules['unassigned-glass']).toBeUndefined()
   })
+
+  it('persists per-rule thresholds (F-031) and undo restores the prior value', () => {
+    const store = new DocumentStore()
+    store.execute(setDrcRuleOverride('min-piece-size', { thresholds: { minDimensionMm: 12 } }))
+    expect(store.document.drc.rules['min-piece-size']).toEqual({
+      thresholds: { minDimensionMm: 12 },
+    })
+
+    // Overrides replace wholesale, so severity + thresholds together is one record.
+    store.execute(
+      setDrcRuleOverride('min-piece-size', {
+        severity: 'error',
+        thresholds: { minDimensionMm: 14 },
+      }),
+    )
+    expect(store.document.drc.rules['min-piece-size']).toEqual({
+      severity: 'error',
+      thresholds: { minDimensionMm: 14 },
+    })
+
+    store.undo()
+    expect(store.document.drc.rules['min-piece-size']).toEqual({
+      thresholds: { minDimensionMm: 12 },
+    })
+  })
 })

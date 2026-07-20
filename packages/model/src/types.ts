@@ -125,13 +125,17 @@ export interface ReferenceLayer {
 export type Severity = 'error' | 'warning' | 'info'
 
 /**
- * A per-project override of a DRC rule (F-030 FR-4). Both fields are optional: an entry may
- * change only the severity, only the enabled flag, or (rarely) both. A rule with no entry uses
- * its built-in default severity and is enabled.
+ * A per-project override of a DRC rule (F-030 FR-4). Every field is optional: an entry may change
+ * the severity, the enabled flag, and/or (F-031) tunable thresholds. A rule with no entry uses its
+ * built-in default severity, is enabled, and takes the technique-dependent default for every
+ * threshold. `thresholds` maps a rule's threshold key (e.g. `minDimensionMm`) to a pinned value
+ * that overrides the shipped per-technique default; keys absent from the map keep their default.
+ * The field is optional and additive, so pre-F-031 v6 files (which never carry it) load unchanged.
  */
 export interface DrcRuleOverride {
   readonly severity?: Severity
   readonly enabled?: boolean
+  readonly thresholds?: Readonly<Record<string, number>>
 }
 
 /**

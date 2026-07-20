@@ -132,8 +132,16 @@
   const assignedKeys = $derived(
     pieces.filter((p) => assignments.glassFor(p)).map((p) => pieceKey(p)),
   )
+  // The technique-inset cut contours the cuttability pack (F-031) checks. Computed unconditionally
+  // for DRC (the overlay's copy at `cutContours` is gated on visibility); the cache makes the second
+  // call in a cycle free.
+  const drcCutContours = $derived(
+    controller && pieces.length > 0 ? controller.cutContours(pieces) : [],
+  )
   const drcInput = $derived<DrcInput | null>(
-    controller ? { project: controller.doc, pieces, diagnostics, assignedKeys } : null,
+    controller
+      ? { project: controller.doc, pieces, diagnostics, cutContours: drcCutContours, assignedKeys }
+      : null,
   )
   // Live mode: re-run (debounced) whenever the document or its derived data changes.
   $effect(() => {

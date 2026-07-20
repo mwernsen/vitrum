@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CUTTABILITY_RULES } from './rules/cuttability'
 import { runChecks } from './run'
 import { buildInput } from './test/harness'
 import { gridProject } from './test/scenes'
@@ -21,5 +22,19 @@ describe('performance (FR-1)', () => {
     const perRun = (performance.now() - start) / runs
 
     expect(perRun).toBeLessThan(500)
+  })
+
+  // F-031 FR-5: the cuttability pack — including the per-piece inscribed-width search — completes on
+  // the ~200-piece reference document in under 300 ms in the worker.
+  it('runs the cuttability pack on the ~200-piece grid in under 300 ms', () => {
+    const input = buildInput(gridProject(14))
+    expect(input.cutContours.length).toBeGreaterThanOrEqual(180)
+
+    const start = performance.now()
+    const runs = 5
+    for (let i = 0; i < runs; i++) runChecks(input, CUTTABILITY_RULES)
+    const perRun = (performance.now() - start) / runs
+
+    expect(perRun).toBeLessThan(300)
   })
 })
