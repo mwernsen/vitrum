@@ -58,4 +58,24 @@ describe('NumberingPanel (F-040)', () => {
     await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sequential' } })
     expect(props.onScheme).toHaveBeenCalledWith('sequential')
   })
+
+  it('shows a live print action when wired, opening the dialog on click (F-041)', async () => {
+    const onPrint = vi.fn()
+    render(NumberingPanel, base({ onPrint, printAvailable: true }))
+    const button = screen.getByRole('button', { name: /Print cartoon 1:1/ })
+    expect(button).toBeEnabled()
+    await fireEvent.click(button)
+    expect(onPrint).toHaveBeenCalledOnce()
+  })
+
+  it('disables the print action when nothing is printable', () => {
+    render(NumberingPanel, base({ onPrint: vi.fn(), printAvailable: false }))
+    expect(screen.getByRole('button', { name: /Print cartoon 1:1/ })).toBeDisabled()
+  })
+
+  it('falls back to a print placeholder when no host export is available', () => {
+    render(NumberingPanel, base())
+    expect(screen.getByText('Print cartoon 1:1')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Print cartoon 1:1/ })).toBeNull()
+  })
 })

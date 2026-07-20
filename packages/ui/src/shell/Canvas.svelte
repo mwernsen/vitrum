@@ -23,6 +23,7 @@
     drawPieceFills,
     drawPieceHighlight,
     drawPieceSelection,
+    drawPrintTiles,
     drawReinforcements,
     drawRuler,
     drawSnapMarker,
@@ -32,6 +33,7 @@
     prepareContext,
     readCanvasPalette,
     type CanvasPalette,
+    type PrintTileOverlay,
     type TechniqueRender,
     type ViolationMarker,
   } from '../canvas/render'
@@ -98,6 +100,8 @@
     numberLabels?: ReadonlyMap<PieceId, string>
     /** Label placement (pole of inaccessibility + radius) per content id (F-040). */
     numberPlacements?: ReadonlyMap<PieceId, LabelPlacement>
+    /** 1:1 print page grid to preview on the canvas (F-041). Empty ⇒ no preview. */
+    printTiles?: readonly PrintTileOverlay[]
   }
 
   let {
@@ -128,6 +132,7 @@
     showNumbers = false,
     numberLabels,
     numberPlacements,
+    printTiles = [],
   }: Props = $props()
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
@@ -244,6 +249,7 @@
       }
       if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
       drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
+      if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       if (edit && selection && editing()) {
@@ -345,6 +351,7 @@
     void selectedPieces?.size
     void violations
     void selectedViolationKey
+    void printTiles
     schedule('overlay', 'rulers')
   })
 

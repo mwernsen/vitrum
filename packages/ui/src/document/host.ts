@@ -10,6 +10,19 @@ import type { GlassLibraryPort, StoragePort } from '@vitrum/model'
 /** Menu commands the host can forward to the document controller. */
 export type MenuAction = 'new' | 'open' | 'save' | 'saveAs' | 'undo' | 'redo' | 'togglePalette'
 
+/**
+ * Writing generated documents (PDF today) to disk (F-041). Mirrors {@link StoragePort} but carries
+ * binary bytes and a native save dialog. Reused by the cutting list / BOM (F-042) and export (F-043)
+ * features, so it lives on the host rather than being folded into the print feature.
+ */
+export interface ExportPort {
+  /**
+   * Show a save dialog seeded with `suggestedName` and write the bytes. Resolves to the chosen path,
+   * or `null` if the user cancelled.
+   */
+  savePdf(suggestedName: string, bytes: Uint8Array): Promise<string | null>
+}
+
 export interface AppHost {
   /** File dialogs, disk I/O and crash-recovery snapshots. */
   readonly storage: StoragePort
@@ -19,6 +32,11 @@ export interface AppHost {
    * the session only.
    */
   readonly glassLibrary?: GlassLibraryPort
+  /**
+   * Writing generated PDFs to disk (F-041). Absent means the host cannot export (the print action is
+   * then unavailable); the browser stub downloads the file instead.
+   */
+  readonly export?: ExportPort
   /** Subscribe to native-menu commands. Returns an unsubscribe function. */
   onMenuAction?(handler: (action: MenuAction) => void): () => void
   /** Report unsaved-changes state so the host can guard window close. */

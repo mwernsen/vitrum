@@ -72,6 +72,22 @@ export default ts.config(
     },
   },
   {
+    files: ['packages/paper/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@vitrum/ui', '@vitrum/desktop', 'svelte', 'svelte/*', 'electron'],
+              message: 'packages/paper is pure output generation and must not depend on UI layers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/ui/**'],
     rules: {
       'no-restricted-imports': [

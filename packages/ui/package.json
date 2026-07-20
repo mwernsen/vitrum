@@ -23,6 +23,7 @@
     "@vitrum/drc": "workspace:*",
     "@vitrum/geometry": "workspace:*",
     "@vitrum/model": "workspace:*",
+    "@vitrum/paper": "workspace:*",
     "lucide-svelte": "^1.0.1",
     "svelte": "^5.56.6"
   },

@@ -7,11 +7,20 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
+  Tray,
   type MenuItemConstructorOptions,
 } from 'electron'
 
 const FILE_FILTERS = [{ name: 'Vitrum design', extensions: ['vitrum'] }]
+
+/** Resolve a path inside the bundled resources folder (works in dev and packaged). */
+function resourcePath(...segments: string[]): string {
+  const base = app.isPackaged ? process.resourcesPath : join(import.meta.dirname, '../../resources')
+  return join(base, ...segments)
+}
 const LIBRARY_FILTERS = [{ name: 'Glass library', extensions: ['json'] }]
+const PDF_FILTERS = [{ name: 'PDF document', extensions: ['pdf'] }]
 
 /** Where the crash-recovery snapshot lives (overridable so E2E runs stay isolated). */
 function autosavePath(): string {
@@ -30,11 +39,14 @@ let documentDirty = false
 let allowClose = false
 
 function createWindow(): BrowserWindow {
+  const icon = nativeImage.createFromPath(resourcePath('icon.png'))
+
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
     show: false,
     title: 'Vitrum',
+    icon,
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -214,6 +226,21 @@ function registerIpc(): void {
     return readFile(path, 'utf8')
   })
 
+  // Write a generated PDF (F-041). `VITRUM_EXPORT_PATH` bypasses the native dialog so E2E runs write
+  // to a temp file they can then read and assert on.
+  ipcMain.handle('export:savePdf', async (_event, suggestedName: string, bytes: Uint8Array) => {
+    const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const forced = process.env['VITRUM_EXPORT_PATH']
+    if (forced) {
+      await writeFile(forced, buffer)
+      return forced
+    }
+    const result = await dialog.showSaveDialog({ defaultPath: suggestedName, filters: PDF_FILTERS })
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, buffer)
+    return result.filePath
+  })
+
   ipcMain.handle('confirm:discard', async () => {
     const window = BrowserWindow.getFocusedWindow() ?? undefined
     const { response } = await dialog.showMessageBox(window!, {
@@ -244,10 +271,27 @@ function registerIpc(): void {
   })
 }
 
+function createTray(): Tray {
+  const icon = nativeImage
+    .createFromPath(resourcePath('tray-icon.png'))
+    .resize({ width: 16, height: 16 })
+  // On macOS, template images are automatically inverted for dark menu bars.
+  icon.setTemplateImage(process.platform === 'darwin')
+  const tray = new Tray(icon)
+  tray.setToolTip('Vitrum')
+  return tray
+}
+
 void app.whenReady().then(() => {
   registerIpc()
   buildMenu()
   createWindow()
+  createTray()
+
+  // Set the dock icon on macOS (higher-res than the BrowserWindow icon).
+  if (process.platform === 'darwin') {
+    app.dock?.setIcon(nativeImage.createFromPath(resourcePath('icon.png')))
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

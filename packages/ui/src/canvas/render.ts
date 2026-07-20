@@ -753,6 +753,55 @@ function drawHaloText(
   ctx.fillText(text, x, y)
 }
 
+/** One tile of the print-preview overlay: its world-space rectangle (mm) and page label (F-041). */
+export interface PrintTileOverlay {
+  readonly min: Vec2
+  readonly max: Vec2
+  readonly label: string
+}
+
+/**
+ * Draw the 1:1 print page grid over the canvas (F-041 print preview): each tile's world rectangle
+ * as a dashed cobalt outline with a faint fill and its page label, so the user sees exactly how the
+ * panel breaks across sheets before exporting. Overlap bands read as the doubly-covered strips where
+ * neighbouring rectangles intersect. Chrome, so token-sourced colours (via the resolved palette).
+ */
+export function drawPrintTiles(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  tiles: readonly PrintTileOverlay[],
+  palette: CanvasPalette,
+): void {
+  if (!ctx || tiles.length === 0) return
+  ctx.save()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.font = '11px "Geist Mono", ui-monospace, monospace'
+  for (const tile of tiles) {
+    const a = worldToScreen(vp, tile.min)
+    const b = worldToScreen(vp, tile.max)
+    const x = Math.min(a.x, b.x)
+    const y = Math.min(a.y, b.y)
+    const w = Math.abs(b.x - a.x)
+    const h = Math.abs(b.y - a.y)
+
+    ctx.fillStyle = palette.selection
+    ctx.globalAlpha = 0.05
+    ctx.fillRect(x, y, w, h)
+    ctx.globalAlpha = 1
+
+    ctx.strokeStyle = palette.selection
+    ctx.lineWidth = 1
+    ctx.setLineDash([6, 4])
+    ctx.strokeRect(crisp(x), crisp(y), w, h)
+    ctx.setLineDash([])
+
+    ctx.fillStyle = palette.selection
+    ctx.fillText(tile.label, x + 4, y + 4)
+  }
+  ctx.restore()
+}
+
 /** Draw the cursor crosshair. Its own layer so pointer moves never redraw content. */
 export function drawOverlay(
   ctx: CanvasRenderingContext2D | null,
