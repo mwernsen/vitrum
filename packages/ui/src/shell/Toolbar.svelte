@@ -14,6 +14,7 @@
   import Wrench from 'lucide-svelte/icons/wrench'
 
   import IconButton from '../components/IconButton.svelte'
+  import Tooltip from '../components/Tooltip.svelte'
   import type { ToolController } from '../tools/controller.svelte'
   import type { PaintController } from '../tools/paint.svelte'
   import type { ReinforcementController } from '../tools/reinforcement.svelte'
@@ -71,46 +72,59 @@
 <div class="palette" role="toolbar" aria-orientation="vertical" aria-label="Tools">
   {#each items as tool (tool.id)}
     {@const Icon = tool.icon}
-    <IconButton
-      label={tool.key ? `${tool.label} (${tool.key})` : tool.label}
-      variant={tool.id === activeId ? 'outline' : 'ghost'}
-      aria-pressed={tool.id === activeId}
-      onclick={() => select(tool.id)}
-    >
-      <Icon size={18} />
-    </IconButton>
+    {@const label = tool.key ? `${tool.label} (${tool.key})` : tool.label}
+    <Tooltip {label} side="right">
+      <IconButton
+        {label}
+        title={undefined}
+        variant={tool.id === activeId ? 'outline' : 'ghost'}
+        aria-pressed={tool.id === activeId}
+        onclick={() => select(tool.id)}
+      >
+        <Icon size={18} />
+      </IconButton>
+    </Tooltip>
   {/each}
 
   {#if paint}
     <div class="divider" aria-hidden="true"></div>
-    <IconButton
-      label="Paint glass"
-      variant={paint.mode === 'paint' ? 'outline' : 'ghost'}
-      aria-pressed={paint.mode === 'paint'}
-      onclick={() => paintMode('paint')}
-    >
-      <PaintBucket size={18} />
-    </IconButton>
-    <IconButton
-      label="Select pieces"
-      variant={paint.mode === 'select' ? 'outline' : 'ghost'}
-      aria-pressed={paint.mode === 'select'}
-      onclick={() => paintMode('select')}
-    >
-      <Shapes size={18} />
-    </IconButton>
+    <Tooltip label="Paint glass" side="right">
+      <IconButton
+        label="Paint glass"
+        title={undefined}
+        variant={paint.mode === 'paint' ? 'outline' : 'ghost'}
+        aria-pressed={paint.mode === 'paint'}
+        onclick={() => paintMode('paint')}
+      >
+        <PaintBucket size={18} />
+      </IconButton>
+    </Tooltip>
+    <Tooltip label="Select pieces" side="right">
+      <IconButton
+        label="Select pieces"
+        title={undefined}
+        variant={paint.mode === 'select' ? 'outline' : 'ghost'}
+        aria-pressed={paint.mode === 'select'}
+        onclick={() => paintMode('select')}
+      >
+        <Shapes size={18} />
+      </IconButton>
+    </Tooltip>
   {/if}
 
   {#if reinforce}
     <div class="divider" aria-hidden="true"></div>
-    <IconButton
-      label="Reinforcement bar"
-      variant={reinforce.mode === 'draw' ? 'outline' : 'ghost'}
-      aria-pressed={reinforce.mode === 'draw'}
-      onclick={() => barMode()}
-    >
-      <Wrench size={18} />
-    </IconButton>
+    <Tooltip label="Reinforcement bar" side="right">
+      <IconButton
+        label="Reinforcement bar"
+        title={undefined}
+        variant={reinforce.mode === 'draw' ? 'outline' : 'ghost'}
+        aria-pressed={reinforce.mode === 'draw'}
+        onclick={() => barMode()}
+      >
+        <Wrench size={18} />
+      </IconButton>
+    </Tooltip>
   {/if}
 </div>
 
