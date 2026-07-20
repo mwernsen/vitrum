@@ -17,7 +17,9 @@ import {
 describe('topology rule pack — golden scenes (FR-5)', () => {
   it('is silent on the clean reference document', () => {
     const { project } = cleanScene()
-    const result = runChecks(buildInput(project))
+    // Scoped to the topology pack: the clean scene's lone full-height splitter is (correctly) a
+    // structural hinge, and `panel-weight` always emits an info — both belong to the F-032 suite.
+    const result = runChecks(buildInput(project), TOPOLOGY_RULES)
     expect(result.violations).toEqual([])
     expect(result.counts).toEqual({ error: 0, warning: 0, info: 0 })
   })
@@ -36,14 +38,14 @@ describe('topology rule pack — golden scenes (FR-5)', () => {
   })
 
   it('grades severities per the rule defaults', () => {
-    const result = runChecks(buildInput(nearMissScene().project))
+    const result = runChecks(buildInput(nearMissScene().project), TOPOLOGY_RULES)
     // near-miss and dangling are errors.
     expect(result.violations.every((v) => v.severity === 'error')).toBe(true)
     expect(result.counts.error).toBe(3)
   })
 
   it('near-miss carries a weld quick-fix naming two distinct nodes', () => {
-    const result = runChecks(buildInput(nearMissScene().project))
+    const result = runChecks(buildInput(nearMissScene().project), TOPOLOGY_RULES)
     const nearMiss = result.violations.find((v) => v.ruleId === 'near-miss-joint')
     expect(nearMiss?.quickFix?.kind).toBe('weld')
     expect(nearMiss?.quickFix?.keepNodeId).not.toBe(nearMiss?.quickFix?.dropNodeId)
@@ -71,7 +73,7 @@ describe('per-project overrides (FR-3/FR-4)', () => {
       ...base,
       drc: { exclusions: {}, rules: { 'duplicate-segment': { severity: 'error' as const } } },
     }
-    const result = runChecks(buildInput(project))
+    const result = runChecks(buildInput(project), TOPOLOGY_RULES)
     const dup = result.violations.find((v) => v.ruleId === 'duplicate-segment')
     expect(dup?.severity).toBe('error')
     expect(result.counts.error).toBeGreaterThanOrEqual(1)
@@ -83,21 +85,21 @@ describe('per-project overrides (FR-3/FR-4)', () => {
       ...base,
       drc: { exclusions: {}, rules: { 'unassigned-glass': { enabled: false } } },
     }
-    const result = runChecks(buildInput(project))
+    const result = runChecks(buildInput(project), TOPOLOGY_RULES)
     expect(result.violations.some((v) => v.ruleId === 'unassigned-glass')).toBe(false)
     expect(result.excluded.some((v) => v.ruleId === 'unassigned-glass')).toBe(false)
   })
 
   it('a waiver moves a violation to the excluded list and off the active totals', () => {
     const project = unassignedScene().project
-    const first = runChecks(buildInput(project))
+    const first = runChecks(buildInput(project), TOPOLOGY_RULES)
     const key = first.violations.find((v) => v.ruleId === 'unassigned-glass')!.key
 
     const waived = {
       ...project,
       drc: { ...project.drc, exclusions: { [key]: { note: 'stopper glass, no colour' } } },
     }
-    const result = runChecks(buildInput(waived))
+    const result = runChecks(buildInput(waived), TOPOLOGY_RULES)
     expect(result.violations.some((v) => v.key === key)).toBe(false)
     expect(result.excluded.find((v) => v.key === key)?.note).toBe('stopper glass, no colour')
     expect(result.counts.warning).toBe(0)
@@ -107,18 +109,18 @@ describe('per-project overrides (FR-3/FR-4)', () => {
     // Waive the open-border violation, then reload the store's document and re-run: still waived.
     const scene = openBorderScene()
     const input = buildInput(scene.project)
-    const key = runChecks(input).violations[0]!.key
+    const key = runChecks(input, TOPOLOGY_RULES).violations[0]!.key
 
     const store = new DocumentStore()
     store.load(scene.project)
     store.execute(setDrcExclusion(key, { note: 'open by design' }))
-    const result = runChecks(buildInput(store.document))
+    const result = runChecks(buildInput(store.document), TOPOLOGY_RULES)
     expect(result.violations.some((v) => v.key === key)).toBe(false)
     expect(result.excluded.some((v) => v.key === key)).toBe(true)
 
     // Toggling the rule off via the store also silences it.
     store.execute(setDrcRuleOverride('open-border', { enabled: false }))
-    expect(runChecks(buildInput(store.document)).excluded).toEqual([])
+    expect(runChecks(buildInput(store.document), TOPOLOGY_RULES).excluded).toEqual([])
   })
 })
 
