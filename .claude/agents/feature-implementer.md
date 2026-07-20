@@ -203,3 +203,10 @@ this file steers every future feature.
   - The drawing `Toolbar` is a floating card over the canvas stage (`.stage` is its positioned
     ancestor); offset past the canvas rulers (`RULER_SIZE`). `GlassDock` is content-only inside the
     dock's glass section. The launch screen ("2a") is deferred (needs a multi-panel store; see F-055).
+- (F-040, 2026-07-20) The pole-of-inaccessibility for label placement already exists as
+  `inscribedCircle` in `@vitrum/geometry` (a `polylabel` port, holes respected, deterministic) — its
+  `radius` also gives auto font-size and the "too small → leader line" test. Don't hand-roll polylabel.
+- (F-040, 2026-07-20) Per-piece derived state that must survive edits + reload (numbering, like glass)
+  mirrors F-023 exactly: store content-id-keyed on the document, resolve live via `resolveGeneration`
+  gated on the `DetectionResult` generation token, and materialise at save. Numbering needs it *twice*
+  (auto + overrides) so a renumber leaves manual overrides untouched.
