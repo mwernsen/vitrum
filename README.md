@@ -16,6 +16,13 @@ so that when you finally reach for the glass cutter, the surprises are the good 
 It's early days, and the workshop is very much still being built. If you make glass,
 write code, or both, you're in the right place.
 
+## A look inside
+
+![Vitrum's design view: a stained-glass panel mid-cut, with a layers list, lead-came technique settings, and a live readiness strip up top](docs/screenshots/home.png)
+
+*The design view — layers and technique on the left, glass and lead on the canvas,
+and a readiness strip that tracks geometry, glass, checks, and numbering as you work.*
+
 ---
 
 ## For makers
