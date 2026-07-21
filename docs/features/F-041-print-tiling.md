@@ -166,6 +166,12 @@ DRC warn-not-block callout, and the blue page-grid preview overlaid on the canva
   measure key dimensions (and the 100 mm ruler) against the model — the spec's supervisor-on-paper
   acceptance step.
 
+**Update (F-043, 2026-07-21):** the standalone `PrintDialog` and its Make-dock "Print cartoon 1:1"
+button were removed; the 1:1 tiled cutting template is now the **"Cutting template — 1:1 tiled"**
+document type inside the single Export dialog (top-bar Export button). The pure `PrintController` +
+`buildPrintDocument` pipeline is unchanged — the dialog composes it, and the canvas tile-grid preview
+is preserved (keyed on the export dialog's tiled type). See F-043 Implementation notes.
+
 **Follow-ups (out of scope)**
 
 - `@vitrum/paper` is ready for **F-042** (cutting list / BOM tables) and **F-043** (single-sheet /

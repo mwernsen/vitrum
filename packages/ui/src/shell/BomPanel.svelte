@@ -9,7 +9,6 @@
   } from '@vitrum/core'
   import type { BomSettings } from '@vitrum/model'
 
-  import Button from '../components/Button.svelte'
   import Input from '../components/Input.svelte'
 
   import type { CutSort } from '../bom/controller.svelte'
@@ -29,28 +28,10 @@
     /** Highlight the contributing pieces (+ optional segments) of a line item on the canvas. */
     onHighlight: (pieceIds: readonly string[], segmentIds?: readonly string[]) => void
     onClearHighlight: () => void
-    /** Export the cutting list / BOM as PDF (absent ⇒ the action is a disabled placeholder). */
-    onExportPdf?: () => void
-    /** Export the cutting list / BOM as CSV. */
-    onExportCsv?: () => void
-    exporting?: boolean
-    errorMessage?: string | null
   }
 
-  let {
-    report,
-    unit,
-    sort,
-    onSort,
-    factors,
-    onSetFactor,
-    onHighlight,
-    onClearHighlight,
-    onExportPdf,
-    onExportCsv,
-    exporting = false,
-    errorMessage = null,
-  }: Props = $props()
+  let { report, unit, sort, onSort, factors, onSetFactor, onHighlight, onClearHighlight }: Props =
+    $props()
 
   let settingsOpen = $state(false)
 
@@ -285,32 +266,6 @@
             })}
         />
       </div>
-    {/if}
-  </section>
-
-  <!-- Export -->
-  <section class="exports">
-    <span class="eyebrow">Export</span>
-    <div class="export-actions">
-      <Button
-        size="sm"
-        variant="secondary"
-        onclick={onExportPdf}
-        disabled={!onExportPdf || !hasPieces || exporting}
-      >
-        PDF…
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        onclick={onExportCsv}
-        disabled={!onExportCsv || !hasPieces || exporting}
-      >
-        CSV…
-      </Button>
-    </div>
-    {#if errorMessage}
-      <p class="error">{errorMessage}</p>
     {/if}
   </section>
 </div>
@@ -576,16 +531,5 @@
     display: grid;
     gap: var(--space-2);
     padding-top: var(--space-2);
-  }
-
-  .export-actions {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  .error {
-    margin: 0;
-    font: var(--text-small);
-    color: var(--danger-600, var(--warning-600));
   }
 </style>

@@ -28,9 +28,10 @@ test.afterEach(async () => {
   await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
 })
 
-// Drives F-041 end to end: draw + number a piece, open the print dialog from the Manufacturing dock,
-// export, and confirm a real multi-page vector PDF lands on disk (overview page + at least one tile).
-test('exports a 1:1 tiled PDF from the print dialog', async () => {
+// Drives F-041 end to end: draw + number a piece, open the Export dialog, pick the 1:1 tiled
+// cutting-template document type, export, and confirm a real multi-page vector PDF lands on disk
+// (overview page + at least one tile). The tiling grid is previewed on the canvas while active.
+test('exports a 1:1 tiled PDF via the Export dialog', async () => {
   const window = await app.firstWindow()
   const canvas = window.getByRole('main', { name: 'Design canvas' })
   await expect(canvas).toBeVisible()
@@ -46,12 +47,13 @@ test('exports a 1:1 tiled PDF from the print dialog', async () => {
   await window.getByRole('button', { name: 'Manufacturing' }).click()
   await window.getByRole('button', { name: 'Renumber' }).click()
 
-  // Open the print dialog and export.
-  await window.getByRole('button', { name: /Print cartoon 1:1/ }).click()
-  const dialog = window.getByRole('dialog', { name: 'Print cartoon 1:1' })
+  // Open the Export dialog and pick the 1:1 tiled cutting template.
+  await window.getByRole('button', { name: 'Export' }).click()
+  const dialog = window.getByRole('dialog', { name: 'Export' })
   await expect(dialog).toBeVisible()
+  await dialog.getByLabel('What to export').selectOption('tiled')
   await expect(dialog).toContainText('tiles')
-  await dialog.getByRole('button', { name: 'Export PDF' }).click()
+  await dialog.getByRole('button', { name: 'Export' }).click()
 
   // The dialog closes on a successful export, and a valid PDF is written to the export path.
   await expect(dialog).toBeHidden()

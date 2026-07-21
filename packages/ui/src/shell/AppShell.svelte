@@ -8,7 +8,7 @@
     type NumberingScheme,
     type Panel,
   } from '@vitrum/core'
-  import { pointInPolygon, polygon, vec2 } from '@vitrum/geometry'
+  import { pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
   import {
     createEmptyProject,
     setGlassAssignments,
@@ -34,8 +34,10 @@
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
   import { NumberingController } from '../numbering/controller.svelte'
-  import { PrintController, type SavePdf } from '../print/controller.svelte'
-  import PrintDialog from '../print/PrintDialog.svelte'
+  import { ExportController, type SavePdf } from '../export/controller.svelte'
+  import ExportDialog from '../export/ExportDialog.svelte'
+  import { buildExportScene } from '../export/scene'
+  import { PrintController } from '../print/controller.svelte'
   import { buildPrintScene } from '../print/scene'
   import { ToolController } from '../tools/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
@@ -69,11 +71,13 @@
     glassLibrary?: GlassLibraryController
     /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
     exportPdf?: SavePdf
-    /** Writes a generated text document (CSV) to the host (F-042). Absent ⇒ CSV export unavailable. */
+    /** Writes a generated text document (CSV / SVG / DXF) to the host (F-042/F-043). */
     exportText?: (suggestedName: string, text: string) => Promise<string | null>
+    /** Writes raw image bytes (the PNG snapshot) to the host (F-043). */
+    exportPng?: (suggestedName: string, bytes: Uint8Array) => Promise<string | null>
   }
 
-  let { panel, controller, glassLibrary, exportPdf, exportText }: Props = $props()
+  let { panel, controller, glassLibrary, exportPdf, exportText, exportPng }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -216,15 +220,22 @@
     controller.execute(updateNumbering({ glassCodes }))
   }
 
-  // --- 1:1 printing (F-041) --------------------------------------------------
+  // --- Output hub: the single Export dialog (F-043, consolidated) ------------
 
-  // The print dialog's settings + export runner. The tiling and PDF generation live in
-  // `@vitrum/paper`; this controller is just the reactive UI seam.
+  // The 1:1 tiled template's settings + tiling live on the F-041 print controller; the export dialog
+  // composes it (plus the F-042 BOM controller) rather than owning a separate dialog.
   const print = new PrintController()
+  // The export hub's own state (document type + design PDF / SVG / DXF / PNG options).
+  const exporter = new ExportController()
+  // The canvas hands back a PNG-snapshot getter once mounted (rasterises the live design).
+  let takeSnapshot: (() => Promise<Uint8Array | null>) | undefined
 
-  // The tile grid previewed on the canvas while the dialog is open (world-space rectangles).
+  const exportAvailable = $derived(!!bounds && (!!exportText || !!exportPdf))
+
+  // The tile grid previewed on the canvas while the export dialog's 1:1 tiled type is active
+  // (world-space rectangles) — preserved from the F-041 PrintDialog preview.
   const printTiles = $derived.by<PrintTileOverlay[]>(() => {
-    if (!print.open) return []
+    if (!(exporter.open && exporter.docType === 'tiled')) return []
     const tiling = print.tilingFor(bounds)
     if (!tiling) return []
     return tiling.tiles.map((tile) => ({
@@ -234,12 +245,20 @@
     }))
   })
 
-  /** Build the backend-neutral print scene from the live derived data, then export the PDF. */
-  async function runPrint(): Promise<void> {
-    if (!controller || !bounds || !exportPdf) return
-    const scene = buildPrintScene({
-      contentBounds: bounds,
-      segments: Object.values(controller.doc.segments).filter((s) => s.role !== 'construction'),
+  const legendRows = () =>
+    legend.map((row) => ({
+      code: row.code,
+      name: row.name,
+      manufacturer: row.manufacturer,
+      color: controller?.doc.glasses[row.glassId]?.color,
+      count: row.count,
+    }))
+
+  /** Build the F-041 print scene (1:1 tiled document type) from the live derived data. */
+  function buildTiledScene(ctrl: DocumentController, b: BBox) {
+    return buildPrintScene({
+      contentBounds: b,
+      segments: Object.values(ctrl.doc.segments).filter((s) => s.role !== 'construction'),
       leadWidthMm: (seg) =>
         techniqueRender
           ? techniqueRender.leadWidthMm(seg.id, seg.role)
@@ -252,16 +271,71 @@
       glasses: projectGlasses,
       labelFor: (piece) => numbering.labelFor(piece),
       placementFor: (piece) => numbering.placements.get(pieceKey(piece)),
-      legend: legend.map((row) => ({
-        code: row.code,
-        name: row.name,
-        manufacturer: row.manufacturer,
-        color: controller.doc.glasses[row.glassId]?.color,
-        count: row.count,
-      })),
+      legend: legendRows(),
     })
-    const path = await print.export(scene, panel.name, exportPdf)
-    if (path !== null) print.open = false
+  }
+
+  /** Build the F-043 export scene (design sheet / design files) from the live derived data. */
+  function buildDesignScene(ctrl: DocumentController, b: BBox) {
+    return buildExportScene({
+      contentBounds: b,
+      segments: Object.values(ctrl.doc.segments).filter((s) => s.role !== 'construction'),
+      leadWidthMm: (seg) =>
+        techniqueRender
+          ? techniqueRender.leadWidthMm(seg.id, seg.role)
+          : seg.role === 'border'
+            ? 2
+            : 1,
+      pieces,
+      pieceKeyOf: (piece) => pieceKey(piece),
+      cutContours: drcCutContours,
+      glassFor: (piece) => assignments.glassFor(piece),
+      glasses: projectGlasses,
+      labelFor: (piece) => numbering.labelFor(piece),
+      placementFor: (piece) => numbering.placements.get(pieceKey(piece)),
+      reinforcements,
+      legend: legendRows(),
+    })
+  }
+
+  /** Open the export dialog, seeding technique-aware defaults (F-043). */
+  function openExport(): void {
+    if (technique) exporter.applyTechniqueDefaults(technique.kind)
+    exporter.open = true
+  }
+
+  /**
+   * Dispatch the dialog's current document type to its runner and close on success. Every output
+   * routes through here (F-043 consolidation): the design PDF / SVG / DXF via `ExportController`, the
+   * 1:1 tiled template via `PrintController` (F-041), the cutting list / BOM via `BomController`
+   * (F-042), and the PNG snapshot via the canvas getter.
+   */
+  async function runOutput(): Promise<void> {
+    if (!controller || !bounds) return
+    let path: string | null = null
+    switch (exporter.docType) {
+      case 'tiled':
+        if (exportPdf)
+          path = await print.export(buildTiledScene(controller, bounds), panel.name, exportPdf)
+        break
+      case 'bom':
+        if (bomReport && exporter.bomFormat === 'pdf' && exportPdf)
+          path = await bom.exportPdf(bomReport, panel.name, viewport.unit, exportPdf)
+        else if (bomReport && exporter.bomFormat === 'csv' && exportText)
+          path = await bom.exportCsv(bomReport, panel.name, viewport.unit, exportText)
+        break
+      case 'png': {
+        const bytes = (await takeSnapshot?.()) ?? null
+        if (exportPng) path = await exporter.runPng(bytes, panel.name, exportPng)
+        break
+      }
+      default:
+        path = await exporter.run(buildDesignScene(controller, bounds), panel.name, {
+          saveText: exportText,
+          savePdf: exportPdf,
+        })
+    }
+    if (path !== null) exporter.open = false
   }
 
   /** Set or clear a manual per-piece number override (FR-1). Keyed by content id. */
@@ -352,15 +426,9 @@
     controller?.execute(updateBomSettings(patch))
   }
 
-  async function runBomPdf(): Promise<void> {
-    if (!bomReport || !exportPdf) return
-    await bom.exportPdf(bomReport, panel.name, viewport.unit, exportPdf)
-  }
-
-  async function runBomCsv(): Promise<void> {
-    if (!bomReport || !exportText) return
-    await bom.exportCsv(bomReport, panel.name, viewport.unit, exportText)
-  }
+  // The cutting list / BOM export is dispatched by `runOutput` (the single Export dialog), not from
+  // the BOM panel; the panel keeps the live table, factor editing and row-hover highlight.
+  const hasBom = $derived(bomReport !== null && pieces.length > 0)
 
   // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
   const dimText = $derived(
@@ -492,8 +560,6 @@
     pieceCount={pieces.length}
     unnumbered={unnumberedCount}
     {legend}
-    onPrint={exportPdf ? () => (print.open = true) : undefined}
-    printAvailable={!!exportPdf && !!bounds}
   />
   {#if bomReport}
     <BomPanel
@@ -505,10 +571,6 @@
       onSetFactor={setBomFactor}
       onHighlight={(pieceIds, segmentIds) => bom.highlight(pieceIds, segmentIds)}
       onClearHighlight={() => bom.clearHighlight()}
-      onExportPdf={exportPdf ? runBomPdf : undefined}
-      onExportCsv={exportText ? runBomCsv : undefined}
-      exporting={bom.exporting}
-      errorMessage={bom.errorMessage}
     />
   {/if}
 {/snippet}
@@ -520,6 +582,8 @@
     {viewMode}
     onViewMode={(mode) => (viewMode = mode)}
     onZoomFit={() => viewport.zoomToFit(bounds)}
+    onExport={exportText || exportPdf ? openExport : undefined}
+    exportEnabled={exportAvailable && pieces.length > 0}
   />
   <ReadinessStrip
     pieceCount={pieces.length}
@@ -580,6 +644,7 @@
         {printTiles}
         bomHighlightPieces={bom.highlightPieces}
         bomHighlightSegments={bom.highlightSegments}
+        snapshotRegister={(fn) => (takeSnapshot = fn)}
       />
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
@@ -618,13 +683,16 @@
   onClose={() => (calibrationOpen = false)}
 />
 
-<PrintDialog
-  controller={print}
+<ExportDialog
+  controller={exporter}
+  {print}
+  {bom}
   {bounds}
   pieceCount={pieces.length}
+  {hasBom}
   drcErrorCount={drc.result.counts.error}
   checksRun={drc.hasRun}
-  onExport={runPrint}
+  onExport={runOutput}
 />
 
 <style>

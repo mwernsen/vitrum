@@ -107,6 +107,8 @@
     bomHighlightPieces?: ReadonlySet<string>
     /** Segment ids to highlight for a picked BOM line item (F-042 traceability). */
     bomHighlightSegments?: ReadonlySet<string>
+    /** Register a PNG-snapshot getter with the shell (F-043 snapshot button). */
+    snapshotRegister?: (getter: () => Promise<Uint8Array | null>) => void
   }
 
   let {
@@ -140,7 +142,13 @@
     printTiles = [],
     bomHighlightPieces,
     bomHighlightSegments,
+    snapshotRegister,
   }: Props = $props()
+
+  // Hand the snapshot getter to the shell once mounted (F-043); the getter reads the live canvas.
+  $effect(() => {
+    snapshotRegister?.(toPngBytes)
+  })
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
   function glassFor(piece: Piece): GlassId | undefined {
@@ -194,6 +202,27 @@
   let rulerLeftCanvas: HTMLCanvasElement
 
   let palette: CanvasPalette | null = null
+
+  /**
+   * Rasterise the rendered design to PNG bytes for the F-043 snapshot button. Composites the
+   * document content layer (glass, lead, numbers — not the selection/cursor overlay or grid) onto a
+   * white ground, so the snapshot is the design as drawn. Resolves null when the canvas or
+   * `toBlob`/2D context is unavailable (e.g. jsdom).
+   */
+  export async function toPngBytes(): Promise<Uint8Array | null> {
+    if (typeof document === 'undefined' || !contentCanvas) return null
+    const out = document.createElement('canvas')
+    out.width = contentCanvas.width
+    out.height = contentCanvas.height
+    const ctx = out.getContext('2d')
+    if (!ctx || typeof out.toBlob !== 'function') return null
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.drawImage(contentCanvas, 0, 0)
+    const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
+    if (!blob) return null
+    return new Uint8Array(await blob.arrayBuffer())
+  }
 
   // Per-layer dirty flags coalesced into a single rAF so a burst of pointer/wheel events
   // paints at most once per frame (FR-4). Overlays live on their own layer, so moving the

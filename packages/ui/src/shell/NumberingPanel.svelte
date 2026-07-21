@@ -29,23 +29,9 @@
     unnumbered: number
     /** Legend rows for glasses in use (FR-4). */
     legend: readonly LegendEntry[]
-    /** Open the 1:1 print dialog (F-041). Absent ⇒ the print action stays a placeholder. */
-    onPrint?: () => void
-    /** Whether there is something to print (a host export port + non-empty panel). */
-    printAvailable?: boolean
   }
 
-  let {
-    scheme,
-    onScheme,
-    onRenumber,
-    onSetCode,
-    pieceCount,
-    unnumbered,
-    legend,
-    onPrint,
-    printAvailable = false,
-  }: Props = $props()
+  let { scheme, onScheme, onRenumber, onSetCode, pieceCount, unnumbered, legend }: Props = $props()
 
   const SCHEME_OPTIONS = [
     { value: 'grouped', label: 'Grouped by glass (A1, A2…)' },
@@ -109,28 +95,6 @@
         {/each}
       </div>
     {/if}
-  </div>
-
-  <!-- Outputs: 1:1 print is live (F-041); the rest arrive with their own features. -->
-  <div class="section">
-    <span class="eyebrow">Outputs</span>
-    {#if onPrint}
-      <Button
-        size="sm"
-        variant="secondary"
-        onclick={onPrint}
-        disabled={!printAvailable || pieceCount === 0}
-      >
-        Print cartoon 1:1…
-      </Button>
-    {:else}
-      <div class="scaffold-row">
-        <span class="ph-label">Print cartoon 1:1</span><span class="feature">F-041</span>
-      </div>
-    {/if}
-    <div class="scaffold-row">
-      <span class="ph-label">Export (SVG, DXF, machines)</span><span class="feature">F-043</span>
-    </div>
   </div>
 </div>
 
@@ -234,28 +198,5 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--ink-500);
-  }
-
-  .scaffold-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid var(--paper-100);
-  }
-
-  .ph-label {
-    font: var(--text-small);
-    color: var(--text-muted);
-  }
-
-  .feature {
-    font: var(--text-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: var(--ink-500);
-    padding: 2px 7px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-full);
   }
 </style>

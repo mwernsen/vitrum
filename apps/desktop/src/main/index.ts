@@ -22,6 +22,17 @@ function resourcePath(...segments: string[]): string {
 const LIBRARY_FILTERS = [{ name: 'Glass library', extensions: ['json'] }]
 const PDF_FILTERS = [{ name: 'PDF document', extensions: ['pdf'] }]
 const CSV_FILTERS = [{ name: 'CSV spreadsheet', extensions: ['csv'] }]
+const SVG_FILTERS = [{ name: 'SVG image', extensions: ['svg'] }]
+const DXF_FILTERS = [{ name: 'DXF drawing', extensions: ['dxf'] }]
+const PNG_FILTERS = [{ name: 'PNG image', extensions: ['png'] }]
+
+/** Choose the save-dialog filter for a text export from the suggested file extension (F-042/F-043). */
+function textFiltersFor(suggestedName: string): { name: string; extensions: string[] }[] {
+  const ext = suggestedName.split('.').pop()?.toLowerCase()
+  if (ext === 'svg') return SVG_FILTERS
+  if (ext === 'dxf') return DXF_FILTERS
+  return CSV_FILTERS
+}
 
 /** Where the crash-recovery snapshot lives (overridable so E2E runs stay isolated). */
 function autosavePath(): string {
@@ -242,16 +253,34 @@ function registerIpc(): void {
     return result.filePath
   })
 
-  // Write a generated text document (F-042 CSV). `VITRUM_EXPORT_TEXT_PATH` bypasses the dialog for E2E.
+  // Write a generated text document (F-042 CSV, F-043 SVG/DXF). `VITRUM_EXPORT_TEXT_PATH` bypasses
+  // the dialog for E2E; otherwise the dialog filter is picked from the suggested extension.
   ipcMain.handle('export:saveText', async (_event, suggestedName: string, text: string) => {
     const forced = process.env['VITRUM_EXPORT_TEXT_PATH']
     if (forced) {
       await writeFile(forced, text, 'utf8')
       return forced
     }
-    const result = await dialog.showSaveDialog({ defaultPath: suggestedName, filters: CSV_FILTERS })
+    const result = await dialog.showSaveDialog({
+      defaultPath: suggestedName,
+      filters: textFiltersFor(suggestedName),
+    })
     if (result.canceled || !result.filePath) return null
     await writeFile(result.filePath, text, 'utf8')
+    return result.filePath
+  })
+
+  // Write a generated PNG snapshot (F-043). `VITRUM_EXPORT_PNG_PATH` bypasses the dialog for E2E.
+  ipcMain.handle('export:savePng', async (_event, suggestedName: string, bytes: Uint8Array) => {
+    const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const forced = process.env['VITRUM_EXPORT_PNG_PATH']
+    if (forced) {
+      await writeFile(forced, buffer)
+      return forced
+    }
+    const result = await dialog.showSaveDialog({ defaultPath: suggestedName, filters: PNG_FILTERS })
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, buffer)
     return result.filePath
   })
 

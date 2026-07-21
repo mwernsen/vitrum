@@ -62,6 +62,10 @@ export function createBrowserHost(): AppHost {
       downloadText(suggestedName, text)
       return suggestedName
     },
+    savePng: async (suggestedName, bytes) => {
+      downloadBytes(suggestedName, bytes, 'image/png')
+      return suggestedName
+    },
   }
 
   return {
@@ -99,11 +103,11 @@ function downloadText(name: string, text: string): void {
   triggerDownload(name, new Blob([text], { type: 'text/csv;charset=utf-8' }))
 }
 
-function downloadBytes(name: string, bytes: Uint8Array): void {
+function downloadBytes(name: string, bytes: Uint8Array, mime = 'application/pdf'): void {
   if (typeof document === 'undefined') return
   // Copy into a fresh ArrayBuffer so the Blob gets a plain BlobPart (not a SharedArrayBuffer view).
   const buffer = bytes.slice().buffer
-  triggerDownload(name, new Blob([buffer], { type: 'application/pdf' }))
+  triggerDownload(name, new Blob([buffer], { type: mime }))
 }
 
 function triggerDownload(name: string, blob: Blob): void {

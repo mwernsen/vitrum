@@ -73,3 +73,26 @@ export { renderPdf } from './pdf'
 // Cutting list / BOM (F-042)
 export { buildBomDocument, type BomDocOptions } from './bom'
 export { bomToCsv } from './bomCsv'
+
+// Export scene + options (F-043)
+export {
+  DEFAULT_EXPORT_MARGIN_MM,
+  defaultCutLayout,
+  type CutLayout,
+  type DxfOptions,
+  type ExportBar,
+  type ExportFormat,
+  type ExportPdfOptions,
+  type ExportPiece,
+  type ExportScene,
+  type ExportSegment,
+  type PdfLook,
+  type PdfScaleMode,
+  type SvgFlavor,
+  type SvgOptions,
+} from './exportScene'
+
+// Export backends (F-043)
+export { buildSvg } from './svg'
+export { BEZIER_TOLERANCE_MM, buildDxf } from './dxf'
+export { buildExportPdfDocument } from './exportPdf'

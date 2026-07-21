@@ -59,23 +59,10 @@ describe('NumberingPanel (F-040)', () => {
     expect(props.onScheme).toHaveBeenCalledWith('sequential')
   })
 
-  it('shows a live print action when wired, opening the dialog on click (F-041)', async () => {
-    const onPrint = vi.fn()
-    render(NumberingPanel, base({ onPrint, printAvailable: true }))
-    const button = screen.getByRole('button', { name: /Print cartoon 1:1/ })
-    expect(button).toBeEnabled()
-    await fireEvent.click(button)
-    expect(onPrint).toHaveBeenCalledOnce()
-  })
-
-  it('disables the print action when nothing is printable', () => {
-    render(NumberingPanel, base({ onPrint: vi.fn(), printAvailable: false }))
-    expect(screen.getByRole('button', { name: /Print cartoon 1:1/ })).toBeDisabled()
-  })
-
-  it('falls back to a print placeholder when no host export is available', () => {
+  it('has no output/export actions — those live in the single Export dialog (F-043)', () => {
     render(NumberingPanel, base())
-    expect(screen.getByText('Print cartoon 1:1')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Print cartoon 1:1/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Print/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Export/ })).toBeNull()
+    expect(screen.queryByText(/Outputs/)).toBeNull()
   })
 })

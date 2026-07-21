@@ -88,6 +88,7 @@
   {glassLibrary}
   exportPdf={host.export ? (name, bytes) => host.export!.savePdf(name, bytes) : undefined}
   exportText={host.export ? (name, text) => host.export!.saveText(name, text) : undefined}
+  exportPng={host.export ? (name, bytes) => host.export!.savePng(name, bytes) : undefined}
 />
 <DebugPalette {controller} />
 
