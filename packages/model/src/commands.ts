@@ -25,6 +25,7 @@ import type {
   TechniqueSettings,
 } from './technique'
 import type {
+  BomSettings,
   DrcExclusion,
   DrcRuleOverride,
   Glass,
@@ -862,6 +863,28 @@ export function updateNumbering(patch: NumberingPatch): Command {
       if (patch.auto !== undefined) prev.auto = before.numbering.auto
       if (patch.overrides !== undefined) prev.overrides = before.numbering.overrides
       return updateNumbering(prev)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cutting list / BOM settings (F-042)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Update the cutting-list / BOM estimation factors (F-042 FR-5) in one undo step. A shallow patch
+ * over {@link BomSettings}; the inverse restores exactly the fields the patch touched, so a
+ * waste-factor tweak sits in the undo history like any other edit. The lists themselves are derived,
+ * so changing a factor immediately re-derives the BOM (FR-2) with nothing else to persist.
+ */
+export function updateBomSettings(patch: Partial<BomSettings>): Command {
+  return {
+    kind: 'updateBomSettings',
+    apply: (doc) => ({ ...doc, bom: { ...doc.bom, ...patch } }),
+    invert: (before) => {
+      const prev: Record<string, number> = {}
+      for (const key of Object.keys(patch) as (keyof BomSettings)[]) prev[key] = before.bom[key]
+      return updateBomSettings(prev as Partial<BomSettings>)
     },
   }
 }

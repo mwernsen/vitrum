@@ -69,3 +69,7 @@ export {
 // Composition + rendering
 export { buildPrintDocument } from './compose'
 export { renderPdf } from './pdf'
+
+// Cutting list / BOM (F-042)
+export { buildBomDocument, type BomDocOptions } from './bom'
+export { bomToCsv } from './bomCsv'

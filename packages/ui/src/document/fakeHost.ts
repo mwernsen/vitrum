@@ -19,6 +19,8 @@ export interface FakeHost extends AppHost {
   lastExportedLibrary: string | null
   /** The most recent PDF bytes handed to `export.savePdf()`, and its suggested name. */
   lastExportedPdf: { name: string; bytes: Uint8Array } | null
+  /** The most recent text handed to `export.saveText()`, and its suggested name (F-042 CSV). */
+  lastExportedText: { name: string; text: string } | null
   emitMenu(action: MenuAction): void
 }
 
@@ -38,6 +40,7 @@ export function createFakeHost(): FakeHost {
     nextImportLibrary: null,
     lastExportedLibrary: null,
     lastExportedPdf: null,
+    lastExportedText: null,
     storage: {
       openFile: async () => host.nextOpen,
       saveFile: async (path, contents) => {
@@ -69,6 +72,10 @@ export function createFakeHost(): FakeHost {
     export: {
       savePdf: async (name, bytes) => {
         host.lastExportedPdf = { name, bytes }
+        return name
+      },
+      saveText: async (name, text) => {
+        host.lastExportedText = { name, text }
         return name
       },
     } satisfies ExportPort,

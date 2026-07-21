@@ -16,6 +16,7 @@
     drawContent,
     drawCutContours,
     drawDiagnostics,
+    drawBomHighlight,
     drawGlassFills,
     drawGrid,
     drawNumbers,
@@ -102,6 +103,10 @@
     numberPlacements?: ReadonlyMap<PieceId, LabelPlacement>
     /** 1:1 print page grid to preview on the canvas (F-041). Empty ⇒ no preview. */
     printTiles?: readonly PrintTileOverlay[]
+    /** Piece display ids to highlight for a picked BOM line item (F-042 traceability). */
+    bomHighlightPieces?: ReadonlySet<string>
+    /** Segment ids to highlight for a picked BOM line item (F-042 traceability). */
+    bomHighlightSegments?: ReadonlySet<string>
   }
 
   let {
@@ -133,12 +138,17 @@
     numberLabels,
     numberPlacements,
     printTiles = [],
+    bomHighlightPieces,
+    bomHighlightSegments,
   }: Props = $props()
 
   /** Resolve a piece's effective glass id from the assignment map (F-023). */
   function glassFor(piece: Piece): GlassId | undefined {
     return glassAssignments?.get(pieceKey(piece))
   }
+
+  /** Shared empty set for the BOM highlight (F-042) when one axis is unset — avoids per-frame allocs. */
+  const EMPTY_SET: ReadonlySet<string> = new Set()
 
   /** Resolve a piece's effective number (F-040). */
   function numberFor(piece: Piece): string | undefined {
@@ -248,6 +258,17 @@
         drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
       }
       if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
+      if (bomHighlightPieces || bomHighlightSegments) {
+        drawBomHighlight(
+          ctx,
+          viewport.transform,
+          pieces,
+          bomHighlightPieces ?? EMPTY_SET,
+          segments,
+          bomHighlightSegments ?? EMPTY_SET,
+          palette,
+        )
+      }
       drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
       if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
@@ -352,6 +373,8 @@
     void violations
     void selectedViolationKey
     void printTiles
+    void bomHighlightPieces?.size
+    void bomHighlightSegments?.size
     schedule('overlay', 'rulers')
   })
 

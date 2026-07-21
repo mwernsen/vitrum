@@ -21,6 +21,11 @@ export interface ExportPort {
    * or `null` if the user cancelled.
    */
   savePdf(suggestedName: string, bytes: Uint8Array): Promise<string | null>
+  /**
+   * Show a save dialog and write a UTF-8 text document (F-042 CSV export). Resolves to the chosen
+   * path, or `null` if the user cancelled. Parallel to {@link savePdf} but for text payloads.
+   */
+  saveText(suggestedName: string, text: string): Promise<string | null>
 }
 
 export interface AppHost {

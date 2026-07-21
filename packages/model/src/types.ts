@@ -210,6 +210,25 @@ export interface NumberingState {
   readonly overrides: Readonly<Record<PieceId, string>>
 }
 
+/**
+ * Estimation factors for the cutting list and bill of materials (F-042). Only the *tunable*
+ * numbers live here — everything else in the BOM is derived from geometry, glass, technique and
+ * reinforcement, the way pieces and cut contours are. Every factor is user-configurable and
+ * persisted (FR-5). Waste factors are fractions (`0.30` = +30%), added on top of the net quantity
+ * to give the "buy this much" figure. Defaults resolved by Mathieu (2026-07-20): glass +30%,
+ * came/foil +10%, solder 20 g per metre of foil seam, foil roll 33 m.
+ */
+export interface BomSettings {
+  /** Glass area waste fraction (default 0.30 = +30%). */
+  readonly glassWaste: number
+  /** Came / copper-foil linear waste fraction (default 0.10 = +10%). */
+  readonly leadWaste: number
+  /** Solder used per metre of foil seam, in grams (default 20 g/m, beaded 60/40 both faces). */
+  readonly solderGramsPerMetre: number
+  /** Length of one copper-foil roll in mm, for the "number of rolls" calc (default 33 000 = 33 m). */
+  readonly foilRollLengthMm: number
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -252,6 +271,11 @@ export interface Project {
    * are never stored; only this intent + last-renumber result is persisted.
    */
   readonly numbering: NumberingState
+  /**
+   * Estimation factors for the cutting list / BOM (F-042): waste factors, the solder rule of thumb
+   * and the foil roll length. Only tunable intent is stored; the lists themselves are derived.
+   */
+  readonly bom: BomSettings
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -259,6 +283,11 @@ const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
 /** A fresh numbering state: grouped-by-glass (the default), nothing numbered yet. */
 export function defaultNumbering(): NumberingState {
   return { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} }
+}
+
+/** Fresh BOM estimation factors, seeded with the resolved defaults (Mathieu, 2026-07-20). */
+export function defaultBomSettings(): BomSettings {
+  return { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 }
 }
 
 /** A fresh, empty project. `settings` overrides are shallow-merged over the defaults. */
@@ -274,5 +303,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     drc: { exclusions: {}, rules: {} },
     reinforcements: [],
     numbering: defaultNumbering(),
+    bom: defaultBomSettings(),
   }
 }

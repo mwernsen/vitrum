@@ -502,6 +502,58 @@ export function drawPieceHighlight(
   ctx.stroke()
 }
 
+/**
+ * Highlight the pieces and/or segments a BOM line item contributes to (F-042 traceability). Pieces
+ * fill with a translucent accent and stroke; segments (came/foil) stroke thick. Drawn on the overlay
+ * layer above the content. `pieceIds` are piece **display** ids; `segmentIds` are segment ids.
+ */
+export function drawBomHighlight(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  pieces: readonly Piece[],
+  pieceIds: ReadonlySet<string>,
+  segments: readonly Segment[],
+  segmentIds: ReadonlySet<string>,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || (pieceIds.size === 0 && segmentIds.size === 0)) return
+  ctx.save()
+  if (pieceIds.size > 0) {
+    for (const piece of pieces) {
+      if (!pieceIds.has(piece.id)) continue
+      ctx.beginPath()
+      traceRing(ctx, vp, piece.ring)
+      for (const hole of piece.holeRings) traceRing(ctx, vp, hole)
+      ctx.fillStyle = palette.selection
+      ctx.globalAlpha = 0.28
+      ctx.fill('evenodd')
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = palette.selection
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+  if (segmentIds.size > 0) {
+    ctx.strokeStyle = palette.selection
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    for (const segment of segments) {
+      if (!segmentIds.has(segment.id)) continue
+      const points = segmentToWorldPoints(segment.geometry)
+      if (points.length < 2) continue
+      ctx.beginPath()
+      points.forEach((p, i) => {
+        const s = worldToScreen(vp, p)
+        if (i === 0) ctx.moveTo(s.x, s.y)
+        else ctx.lineTo(s.x, s.y)
+      })
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+}
+
 /** Draw diagnostic markers (F-020): free ends, near-misses and duplicate/overlap segments. */
 export function drawDiagnostics(
   ctx: CanvasRenderingContext2D | null,

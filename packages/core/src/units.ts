@@ -1,6 +1,10 @@
 export type LengthUnit = 'mm' | 'in'
 
 const MM_PER_INCH = 25.4
+const MM2_PER_CM2 = 100
+const MM2_PER_M2 = 1_000_000
+const MM2_PER_IN2 = MM_PER_INCH * MM_PER_INCH // 645.16
+const MM2_PER_FT2 = MM2_PER_IN2 * 144
 
 /** Convert a length in millimetres to the given display unit. */
 export function convertLength(mm: number, unit: LengthUnit): number {
@@ -29,6 +33,31 @@ export function formatLength(mm: number, unit: LengthUnit, opts: LengthFormatOpt
   const value = convertLength(mm, unit)
   const digits = unit === 'in' ? 2 : 1
   return `${value.toFixed(digits)} ${unit}`
+}
+
+/**
+ * Format a small area (mm²) for a cutting-list row in the display unit's workshop-native small
+ * unit: **cm²** for mm mode, **in²** for inch mode. Individual glass pieces are tens to hundreds of
+ * these, so they read naturally without scientific notation. Used for per-piece areas in the cutting
+ * list, the on-screen panel and the CSV (F-042).
+ */
+export function formatArea(mm2: number, unit: LengthUnit): string {
+  if (unit === 'in') return `${(mm2 / MM2_PER_IN2).toFixed(2)} in²`
+  return `${(mm2 / MM2_PER_CM2).toFixed(1)} cm²`
+}
+
+/**
+ * Format a large area (mm²) as a purchasing figure: **m²** for mm mode, **ft²** for inch mode —
+ * how glass is sold. Used for per-glass "buy this much" subtotals in the BOM (F-042).
+ */
+export function formatAreaLarge(mm2: number, unit: LengthUnit): string {
+  if (unit === 'in') return `${(mm2 / MM2_PER_FT2).toFixed(2)} ft²`
+  return `${(mm2 / MM2_PER_M2).toFixed(3)} m²`
+}
+
+/** Convert an area in mm² to square metres — the unit price-per-area (F-022 `pricePerM2`) uses. */
+export function areaToM2(mm2: number): number {
+  return mm2 / MM2_PER_M2
 }
 
 const greatestCommonDivisor = (a: number, b: number): number =>

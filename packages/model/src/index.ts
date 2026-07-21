@@ -8,7 +8,9 @@
 // Domain types
 export {
   createEmptyProject,
+  defaultBomSettings,
   defaultNumbering,
+  type BomSettings,
   type DrcExclusion,
   type DrcRuleOverride,
   type DrcState,
@@ -137,6 +139,7 @@ export {
   setTechniqueKind,
   splitSegmentAtNode,
   transformSegments,
+  updateBomSettings,
   updateFoilSettings,
   updateLeadSettings,
   updateNumbering,
