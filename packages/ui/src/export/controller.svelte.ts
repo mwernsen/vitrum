@@ -8,7 +8,6 @@ import {
   renderPdf,
   type CutLayout,
   type DxfOptions,
-  type ExportFormat,
   type ExportPdfOptions,
   type ExportScene,
   type Orientation,
@@ -27,27 +26,49 @@ export type SaveText = (suggestedName: string, text: string) => Promise<string |
 export type SavePng = (suggestedName: string, bytes: Uint8Array) => Promise<string | null>
 
 /**
- * The reactive owner of the export dialog's settings (F-043). It holds the chosen format and its
- * per-format options as runes and runs the export through `@vitrum/paper` (build SVG/DXF text or a
- * single-sheet PDF → hand it to the host). All the actual generation lives in the pure package; this
- * class is only the UI seam, mirroring `PrintController` (F-041). The PNG snapshot is a separate path
- * (it rasterises the live canvas rather than the scene) driven by {@link runPng} in the shell.
+ * The kinds of output the single Export dialog produces (F-043, consolidated 2026-07-21). Every
+ * shipping output routes through here, organised by document type:
+ * - `design-sheet` — a single-sheet PDF of the whole design (this controller).
+ * - `design-files` — SVG (linework / cut / render) or DXF interchange files (this controller).
+ * - `tiled` — the F-041 1:1 tiled cutting template (driven by `PrintController`).
+ * - `bom` — the F-042 cutting list / BOM as PDF or CSV (driven by `BomController`).
+ * - `png` — a raster snapshot of the canvas (this controller, via the shell's canvas getter).
+ */
+export type OutputDocType = 'design-sheet' | 'design-files' | 'tiled' | 'bom' | 'png'
+
+/** Which interchange file the `design-files` type writes. */
+export type DesignFileFormat = 'svg' | 'dxf'
+
+/** Which document the `bom` type writes. */
+export type BomFileFormat = 'pdf' | 'csv'
+
+/**
+ * The reactive owner of the Export dialog's own state (F-043). It holds the chosen document type and
+ * the options for the types it generates directly (`design-sheet`, `design-files`, `png`) and runs
+ * those through `@vitrum/paper`. The `tiled` and `bom` types are composed from the existing
+ * `PrintController` (F-041) and `BomController` (F-042) — this controller does not duplicate their
+ * pure logic; the shell dispatches each type to the right runner. All generation lives in the pure
+ * package; this class is only the UI seam.
  */
 export class ExportController {
   open = $state(false)
 
-  format = $state<ExportFormat>('svg')
+  docType = $state<OutputDocType>('design-sheet')
 
-  // SVG options.
+  // design-files.
+  designFileFormat = $state<DesignFileFormat>('svg')
   svgFlavor = $state<SvgFlavor>('linework')
   cutLayout = $state<CutLayout>('in-place')
 
-  // PDF options.
+  // design-sheet (single-sheet PDF).
   pdfScaleMode = $state<PdfScaleMode>('actual')
   pdfLook = $state<PdfLook>('render')
   pdfPaperId = $state<string>('a4')
   pdfOrientation = $state<Orientation>('portrait')
   marginMm = $state(DEFAULT_EXPORT_MARGIN_MM)
+
+  // bom.
+  bomFormat = $state<BomFileFormat>('pdf')
 
   // Shared.
   includeNumbers = $state(true)
@@ -96,9 +117,9 @@ export class ExportController {
   }
 
   /**
-   * Build and save the current format. SVG/DXF go through `saveText`; PDF through `savePdf`. Errors
-   * are captured into `errorMessage` (not thrown) so the dialog can show them. Resolves to the saved
-   * path, or null if the export failed or the user cancelled the save dialog.
+   * Build and save the `design-sheet` (single-sheet PDF) or `design-files` (SVG/DXF) output. SVG/DXF
+   * go through `saveText`; PDF through `savePdf`. Errors are captured into `errorMessage` (not
+   * thrown) so the dialog can show them. Resolves to the saved path, or null on failure/cancel.
    */
   async run(
     scene: ExportScene,
@@ -109,19 +130,21 @@ export class ExportController {
     this.errorMessage = null
     try {
       const base = this.baseName(projectName)
-      if (this.format === 'svg') {
+      if (this.docType === 'design-files' && this.designFileFormat === 'svg') {
         if (!hosts.saveText) throw new Error('SVG export is unavailable')
-        const svg = buildSvg(scene, this.svgOptions(projectName))
-        return await this.#saved(hosts.saveText(`${base}.svg`, svg))
+        return await this.#saved(
+          hosts.saveText(`${base}.svg`, buildSvg(scene, this.svgOptions(projectName))),
+        )
       }
-      if (this.format === 'dxf') {
+      if (this.docType === 'design-files' && this.designFileFormat === 'dxf') {
         if (!hosts.saveText) throw new Error('DXF export is unavailable')
-        const dxf = buildDxf(scene, this.dxfOptions(projectName))
-        return await this.#saved(hosts.saveText(`${base}.dxf`, dxf))
+        return await this.#saved(
+          hosts.saveText(`${base}.dxf`, buildDxf(scene, this.dxfOptions(projectName))),
+        )
       }
+      // design-sheet PDF.
       if (!hosts.savePdf) throw new Error('PDF export is unavailable')
-      const doc = buildExportPdfDocument(scene, this.pdfOptions(projectName))
-      const bytes = await renderPdf(doc)
+      const bytes = await renderPdf(buildExportPdfDocument(scene, this.pdfOptions(projectName)))
       return await this.#saved(hosts.savePdf(`${base}.pdf`, bytes))
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : String(error)
@@ -137,9 +160,11 @@ export class ExportController {
     projectName: string,
     savePng: SavePng,
   ): Promise<string | null> {
+    this.exporting = true
     this.errorMessage = null
     if (!bytes) {
       this.errorMessage = 'Could not capture the canvas'
+      this.exporting = false
       return null
     }
     try {
@@ -147,6 +172,8 @@ export class ExportController {
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : String(error)
       return null
+    } finally {
+      this.exporting = false
     }
   }
 

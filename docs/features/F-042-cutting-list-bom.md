@@ -153,6 +153,12 @@ below; the E2E is the stronger automated evidence.)
 - **Spreadsheet round-trip**: open the CSV in a real spreadsheet and confirm columns/units import
   cleanly (FR-3 is unit-tested for quoting/headers; the actual app import is a human check).
 
+**Update (F-043, 2026-07-21):** the `BomPanel` PDF/CSV export buttons were removed; the cutting list /
+BOM now exports as the **"Cutting list & BOM"** document type inside the single Export dialog (top-bar
+Export button). The panel keeps the live cutting-list table, factor editing and row-hover highlight —
+a working view, not an export surface. The pure `computeBom` + `buildBomDocument`/`bomToCsv` pipeline
+is unchanged; the dialog composes `BomController`. See F-043 Implementation notes.
+
 **Follow-ups (out of scope)**
 
 - Copper-foil both-faces tape multiplier (currently seam-once + waste); a per-tile/per-section compact

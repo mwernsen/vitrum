@@ -94,8 +94,6 @@ function base(over: Record<string, unknown> = {}) {
     onSetFactor: vi.fn(),
     onHighlight: vi.fn(),
     onClearHighlight: vi.fn(),
-    onExportPdf: vi.fn(),
-    onExportCsv: vi.fn(),
     ...over,
   }
 }
@@ -171,18 +169,9 @@ describe('BomPanel (F-042)', () => {
     expect(onSetFactor).toHaveBeenCalledWith({ glassWaste: 0.5 })
   })
 
-  it('runs the PDF and CSV exports', async () => {
-    const onExportPdf = vi.fn()
-    const onExportCsv = vi.fn()
-    render(BomPanel, base({ onExportPdf, onExportCsv }))
-    await fireEvent.click(screen.getByRole('button', { name: 'PDF…' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'CSV…' }))
-    expect(onExportPdf).toHaveBeenCalled()
-    expect(onExportCsv).toHaveBeenCalled()
-  })
-
-  it('disables export when no pieces', () => {
-    render(BomPanel, base({ report: report({ pieceCount: 0, cutting: [], glass: [] }) }))
-    expect(screen.getByRole('button', { name: 'PDF…' })).toBeDisabled()
+  it('has no export buttons — export lives in the single Export dialog (F-043)', () => {
+    render(BomPanel, base())
+    expect(screen.queryByRole('button', { name: 'PDF…' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'CSV…' })).toBeNull()
   })
 })

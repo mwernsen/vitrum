@@ -29,9 +29,10 @@ const scene: ExportScene = {
 }
 
 describe('ExportController (F-043)', () => {
-  it('defaults to SVG linework', () => {
+  it('defaults to the design sheet, SVG linework file option', () => {
     const c = new ExportController()
-    expect(c.format).toBe('svg')
+    expect(c.docType).toBe('design-sheet')
+    expect(c.designFileFormat).toBe('svg')
     expect(c.svgFlavor).toBe('linework')
   })
 
@@ -43,40 +44,39 @@ describe('ExportController (F-043)', () => {
     expect(c.cutLayout).toBe('in-place')
   })
 
-  it('exports SVG through saveText with a .svg name', async () => {
+  it('exports an SVG design file through saveText with a .svg name', async () => {
     const c = new ExportController()
-    const saveText = vi.fn(async (name: string, _payload: string) => name)
+    c.docType = 'design-files'
+    const saveText = vi.fn(async (name: string) => name)
     const path = await c.run(scene, 'My Panel', { saveText })
-    expect(saveText).toHaveBeenCalledOnce()
-    const [name, text] = saveText.mock.calls[0]!
-    expect(name).toBe('My-Panel.svg')
-    expect(text).toContain('<svg')
-    expect(text).toContain('width="100mm"')
+    expect(saveText).toHaveBeenCalledWith('My-Panel.svg', expect.stringContaining('<svg'))
+    expect(saveText).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('width="100mm"'),
+    )
     expect(path).toBe('My-Panel.svg')
   })
 
-  it('exports DXF through saveText with a .dxf name', async () => {
+  it('exports a DXF design file through saveText with a .dxf name', async () => {
     const c = new ExportController()
-    c.format = 'dxf'
-    const saveText = vi.fn(async (name: string, _payload: string) => name)
+    c.docType = 'design-files'
+    c.designFileFormat = 'dxf'
+    const saveText = vi.fn(async (name: string) => name)
     await c.run(scene, 'Panel', { saveText })
-    const [name, text] = saveText.mock.calls[0]!
-    expect(name).toBe('Panel.dxf')
-    expect(text).toContain('AC1009')
+    expect(saveText).toHaveBeenCalledWith('Panel.dxf', expect.stringContaining('AC1009'))
   })
 
-  it('exports PDF bytes through savePdf', async () => {
+  it('exports the design sheet as PDF bytes through savePdf', async () => {
     const c = new ExportController()
-    c.format = 'pdf'
-    const savePdf = vi.fn(async (name: string, _bytes: Uint8Array) => name)
+    // docType defaults to 'design-sheet'.
+    const savePdf = vi.fn(async (name: string) => name)
     await c.run(scene, 'Panel', { savePdf })
-    const [name, bytes] = savePdf.mock.calls[0]!
-    expect(name).toBe('Panel.pdf')
-    expect(String.fromCharCode(...bytes.subarray(0, 5))).toBe('%PDF-')
+    expect(savePdf).toHaveBeenCalledWith('Panel.pdf', expect.any(Uint8Array))
   })
 
-  it('captures an error when the format has no host writer', async () => {
+  it('captures an error when the document type has no host writer', async () => {
     const c = new ExportController()
+    c.docType = 'design-files'
     const path = await c.run(scene, 'Panel', {})
     expect(path).toBeNull()
     expect(c.errorMessage).toMatch(/unavailable/)

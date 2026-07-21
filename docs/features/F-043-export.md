@@ -164,3 +164,33 @@ callout shows.
   templates and DXF `CUT` are polylines); a curve-level cut edge is F-021's documented follow-up.
 - DXF splines (needs a richer DXF version than R12); embedding the project name in the DXF header;
   remembering export settings across sessions (shared with F-041/F-042).
+
+### Follow-up: consolidated output hub (2026-07-21, Mathieu)
+
+After the initial delivery, Mathieu decided **all outputs route through the one Export dialog**; the
+per-feature export buttons in the Make sidebar were removed and the top-bar "Export" button is the
+single entry point.
+
+- **The Export dialog is now organised by document type** (a top-level "What to export" selector),
+  each revealing its own options: **Design sheet** (single-sheet PDF), **Design files** (SVG
+  linework/cut/render + DXF), **Cutting template — 1:1 tiled** (the F-041 print flow, with the live
+  canvas tiling preview preserved), **Cutting list & BOM** (F-042 PDF/CSV), and **Image snapshot**
+  (PNG). The DRC warn-not-block gate and technique-aware defaults are kept.
+- **No generation logic was merged or rewritten.** The dialog _composes_ the existing controllers:
+  `PrintController` (F-041) still owns the tiling + tiled PDF, `BomController` (F-042) still owns the
+  cutting-list PDF/CSV, and `ExportController` owns the design PDF / SVG / DXF / PNG plus the shared
+  `docType` state. The shell's `runOutput` dispatches the active type to the right runner. The tiling
+  preview now keys on `exporter.open && exporter.docType === 'tiled'` (was `print.open`).
+- **`PrintDialog.svelte` was deleted** (fully absorbed; its options + tile summary + preview wiring
+  live in `ExportDialog`). The sidebar was pruned: `NumberingPanel` lost its entire Outputs section
+  (keeps the scheme editor + legend); `BomPanel` lost its PDF/CSV buttons (keeps the live cutting-list
+  table, factor editing and row-hover highlight — a working view, not export). Export
+  progress/errors surface in the dialog.
+- **Tests/E2E updated to the new routing:** `ExportDialog.test` covers every document type + the DRC
+  gate + disabled states; `NumberingPanel.test`/`BomPanel.test` assert the export controls are gone;
+  the E2E `export.spec` drives all five types from the single dialog, and `print.spec`/`bom.spec`
+  reroute through it. All gates green (792 unit, 22 E2E). Verified in `pnpm dev:ui`: the doc-type
+  selector reveals each type's options and the tiled type still paints the tile grid on the canvas.
+
+**Net-new UI to back-port** (updated): the document-type **`ExportDialog`** as the single output hub
+(supersedes the earlier per-format dialog and the F-041 `PrintDialog`).

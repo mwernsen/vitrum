@@ -1,8 +1,9 @@
 // The docked side panel (Portal cockpit, turn 3) has one home per feature area. The activity
 // rail is the *sole* switcher — clicking a rail icon swaps what's docked, there are no tabs.
 // Today "layers", "glass", "rules" and "make" are backed by completed features (F-003/012/013/021/
-// 022/023/030/040); "make" hosts piece numbering (F-040) live with the cutting list / BOM / print /
-// export still as-designed placeholders. "versions" is an as-designed placeholder (F-055).
+// 022/023/030/040/042); "make" hosts piece numbering (F-040) and the live cutting list / BOM table
+// (F-042). All outputs (print, SVG/PDF/DXF, cutting list export, PNG) route through the single
+// Export dialog opened from the top bar (F-043), not the dock. "versions" is a placeholder (F-055).
 export type DockSection = 'layers' | 'glass' | 'rules' | 'make' | 'versions'
 
 export interface DockSectionMeta {

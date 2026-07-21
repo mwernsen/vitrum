@@ -29,32 +29,9 @@
     unnumbered: number
     /** Legend rows for glasses in use (FR-4). */
     legend: readonly LegendEntry[]
-    /** Open the 1:1 print dialog (F-041). Absent ⇒ the print action stays a placeholder. */
-    onPrint?: () => void
-    /** Whether there is something to print (a host export port + non-empty panel). */
-    printAvailable?: boolean
-    /** Open the export dialog (F-043). Absent ⇒ the export action stays a placeholder. */
-    onExport?: () => void
-    /** Save a PNG snapshot of the canvas (F-043). Absent ⇒ hidden. */
-    onSnapshot?: () => void
-    /** Whether there is something to export (a host export port + non-empty panel). */
-    exportAvailable?: boolean
   }
 
-  let {
-    scheme,
-    onScheme,
-    onRenumber,
-    onSetCode,
-    pieceCount,
-    unnumbered,
-    legend,
-    onPrint,
-    printAvailable = false,
-    onExport,
-    onSnapshot,
-    exportAvailable = false,
-  }: Props = $props()
+  let { scheme, onScheme, onRenumber, onSetCode, pieceCount, unnumbered, legend }: Props = $props()
 
   const SCHEME_OPTIONS = [
     { value: 'grouped', label: 'Grouped by glass (A1, A2…)' },
@@ -116,46 +93,6 @@
             <span class="count">{entry.count}</span>
           </div>
         {/each}
-      </div>
-    {/if}
-  </div>
-
-  <!-- Outputs: 1:1 print is live (F-041); the rest arrive with their own features. -->
-  <div class="section">
-    <span class="eyebrow">Outputs</span>
-    {#if onPrint}
-      <Button
-        size="sm"
-        variant="secondary"
-        onclick={onPrint}
-        disabled={!printAvailable || pieceCount === 0}
-      >
-        Print cartoon 1:1…
-      </Button>
-    {:else}
-      <div class="scaffold-row">
-        <span class="ph-label">Print cartoon 1:1</span><span class="feature">F-041</span>
-      </div>
-    {/if}
-    {#if onExport}
-      <div class="export-row">
-        <Button
-          size="sm"
-          variant="secondary"
-          onclick={onExport}
-          disabled={!exportAvailable || pieceCount === 0}
-        >
-          Export (SVG, PDF, DXF)…
-        </Button>
-        {#if onSnapshot}
-          <Button size="sm" variant="ghost" onclick={onSnapshot} disabled={pieceCount === 0}>
-            PNG snapshot
-          </Button>
-        {/if}
-      </div>
-    {:else}
-      <div class="scaffold-row">
-        <span class="ph-label">Export (SVG, DXF, machines)</span><span class="feature">F-043</span>
       </div>
     {/if}
   </div>
@@ -261,34 +198,5 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--ink-500);
-  }
-
-  .export-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-
-  .scaffold-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid var(--paper-100);
-  }
-
-  .ph-label {
-    font: var(--text-small);
-    color: var(--text-muted);
-  }
-
-  .feature {
-    font: var(--text-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: var(--ink-500);
-    padding: 2px 7px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-full);
   }
 </style>
