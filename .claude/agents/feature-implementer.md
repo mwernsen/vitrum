@@ -210,3 +210,12 @@ this file steers every future feature.
   mirrors F-023 exactly: store content-id-keyed on the document, resolve live via `resolveGeneration`
   gated on the `DetectionResult` generation token, and materialise at save. Numbering needs it *twice*
   (auto + overrides) so a renumber leaves manual overrides untouched.
+- (F-042, 2026-07-21) A cross-feature derived output that needs another package's estimator (e.g.
+  F-032's `panelWeight`) takes it as an **injected input** to the pure `core` calc, computed in the
+  shell — keeps `core` a leaf (no `core → drc` edge) and reuses the estimator's own home tests.
+- (F-042, 2026-07-21) Persist only **tunable intent** (`BomSettings` on `Project.bom`), never the
+  derived lists; a schema-bump migration seeds resolved defaults on old files and `computeBom`
+  re-derives everything, so the paperwork is never stale (FR-2) and each factor edit is one undo entry.
+- (F-042, 2026-07-21) `@vitrum/paper` is the shared mm-space PDF backend (from F-041) — reuse its
+  `PageBuilder`/pdf-lib for new outputs; add text export via `ExportPort.saveText` paralleling
+  `savePdf` across all three hosts, with a `VITRUM_*_PATH` env override for E2E isolation.
