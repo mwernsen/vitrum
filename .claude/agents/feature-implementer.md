@@ -232,3 +232,8 @@ this file steers every future feature.
   from the file extension); only genuinely-binary outputs (PNG) need a new port method +
   `VITRUM_EXPORT_*_PATH` E2E override. Canvas rasterisation stays in the component behind a
   registration prop so no DOM leaves `packages/ui`.
+- (F-043, 2026-07-21) A multi-output "hub" dialog should **compose** the existing per-feature
+  controllers (`PrintController`/`BomController`/`ExportController`) behind one `docType` selector, not
+  merge their pure logic — the shell dispatches each type to its own runner and the dialog reads the
+  active controller's `busy`/`error`. Canvas overlays previously keyed on a per-dialog `open` flag move
+  to `hub.open && hub.docType === '<type>'`.
