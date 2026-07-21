@@ -219,3 +219,16 @@ this file steers every future feature.
 - (F-042, 2026-07-21) `@vitrum/paper` is the shared mm-space PDF backend (from F-041) — reuse its
   `PageBuilder`/pdf-lib for new outputs; add text export via `ExportPort.saveText` paralleling
   `savePdf` across all three hosts, with a `VITRUM_*_PATH` env override for E2E isolation.
+- (F-043, 2026-07-21) Export outputs live in `@vitrum/paper` next to the F-041 print pipeline; unlike
+  `PrintScene`, `ExportScene` carries **true** segment geometry (line/arc/cubic) so SVG linework
+  round-trips and DXF keeps arcs as arcs. Flatten only at the backend that needs it.
+- (F-043, 2026-07-21) Text exports (SVG/DXF) are byte-identical for free with one shared `fmt()`
+  (fixed decimals, trimmed, `-0`→`0`) + stable id/key sort; PDF can't be byte-asserted (pdf-lib
+  embeds non-deterministic metadata) — assert it structurally.
+- (F-043, 2026-07-21) DXF is y-**up**; flip about the content bounds and convert arc angles
+  (world-CCW → CW after flip → swap DXF start/end). Target R12 (AC1009, POLYLINE not LWPOLYLINE) for
+  the widest, handle-free importability.
+- (F-043, 2026-07-21) New text formats reuse `ExportPort.saveText` (desktop picks the dialog filter
+  from the file extension); only genuinely-binary outputs (PNG) need a new port method +
+  `VITRUM_EXPORT_*_PATH` E2E override. Canvas rasterisation stays in the component behind a
+  registration prop so no DOM leaves `packages/ui`.
