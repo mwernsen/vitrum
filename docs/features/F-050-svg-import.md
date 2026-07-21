@@ -3,7 +3,7 @@
 |                |                    |
 | -------------- | ------------------ |
 | **Phase**      | 5 — Power features |
-| **Status**     | in-progress        |
+| **Status**     | done               |
 | **Depends on** | F-011, F-020       |
 | **Complexity** | L                  |
 
@@ -130,4 +130,53 @@ _(resolved 2026-07-21 with Mathieu)_
 
 ## Implementation notes
 
-(Filled in by the implementing agent after completion: deviations, follow-ups.)
+_Delivered 2026-07-21. All five gates green (lint, format:check, check, test — 856, test:e2e — 23)._
+
+**What shipped**
+
+- **New pure package region `@vitrum/core/svg/`** (not a new package): DOM-free
+  `xml`→`parse`→`transform`→`units`→`path`→`heal`→`import` pipeline, re-exported through
+  `packages/core/src/index.ts`. Chose `core` over extending `@vitrum/paper` because it reuses
+  the F-010 kernel and F-020 `detectPieces` directly and keeps paper export-only; import parses
+  an SVG **string** (not a live `SVGElement`), so it unit-tests in Node.
+- **Healing** (`heal.ts`): endpoint clustering at the user tolerance, crossing-splits via F-020's
+  pairwise intersection, zero-length/duplicate drop, with a per-segment id-stable `HealResult`
+  summary. Idempotent and a no-op at tolerance 0 on a clean network (decision #2, FR-4) — proved
+  by `heal.property.test.ts`.
+- **Import dialog** (`packages/ui/src/import/`): `ImportController` (runes) caches the parsed
+  source, holds the single tolerance slider (debounced heal, live read-out), the scale field for
+  ambiguous-unit files, and the role; `ImportDialog.svelte` composes `components/core` primitives
+  + a new `Slider.svelte`, with a live piece-count preview and dropped-content notice (FR-5).
+  Reached from `TopBar`; merges via one `addSegments` command in `AppShell` (decision #4, FR-3).
+- **`ImportPort`** on `AppHost` (host.ts) — stubbed in `browserHost`/`fakeHost`, real open dialog
+  on desktop, `VITRUM_*_PATH` env override for E2E; no Electron imports leak into `packages/ui`.
+- **Shared round-trip contract** lives in `packages/paper/src/svgRoundTrip.test.ts` and drives the
+  **real** `@vitrum/core` `parseSvg`, so an export sweep/large-arc bug or an import parse bug fails
+  it (FR-4). Committed fixtures: `core/src/svg/fixtures/{inkscape,illustrator}-panel.svg`,
+  `messy-network.svg`, and `apps/desktop/e2e/fixtures/inkscape-square.svg`.
+
+**Deviations from the spec**
+
+- FR-4 is verified two ways rather than one: (a) `heal.property.test.ts` asserts idempotence /
+  tol-0 no-op, and (b) `svgRoundTrip.test.ts` asserts geometric round-trip by comparing sampled
+  points to 1e-6 (stronger than `fmt()`-string equality for curves — arcs reconstruct as kernel
+  arcs, not flattened). The spec's literal "compare via `fmt()`/id-sort" wording was not used; the
+  sampled-point comparison is a superset. Flagging for sign-off.
+- Fixture tests load the committed `.svg` files via Vite `?raw` (ambient decl in
+  `core/src/svg/raw.d.ts`) instead of `node:fs`, so pure `core` keeps `lib: ["ES2023"]` with no
+  `@types/node` and `pnpm check` passes. _(This was the one gate failing when I resumed the
+  branch across a session boundary; the rest of the feature was already implemented and committed.)_
+
+**Verification**
+
+- FR-1 (`fixtures.test.ts`): Inkscape + Illustrator fixtures import at true mm scale, correct
+  geometry, expected piece counts. FR-2: `messy-network.svg` finds 0 pieces raw, 2 once healed.
+  FR-3 + FR-1: `e2e/svg-import.spec.ts` imports and undoes in one step. FR-5: dialog test asserts
+  the dropped-content notice.
+
+**Net-new screen to back-port:** the **Import dialog** (`ImportDialog.svelte`) and the
+`Slider.svelte` primitive have no design in the Claude Design project
+(`3c259295-607a-4eba-8cad-3890f7e80063`) — built in code to the design system; back-port later.
+
+**Follow-ups (out of scope):** raster autotrace → backlog `F-059`; a staged healing-review wizard
+if the single slider proves insufficient on real messy files (decision #1 left the door open).

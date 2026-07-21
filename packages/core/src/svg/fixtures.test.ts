@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs'
-
 import { bboxOf, bboxUnion, type BBox } from '@vitrum/geometry'
 import { describe, expect, it } from 'vitest'
 
+import illustratorPanel from './fixtures/illustrator-panel.svg?raw'
+import inkscapePanel from './fixtures/inkscape-panel.svg?raw'
+import messyNetwork from './fixtures/messy-network.svg?raw'
 import { buildImportPreview, readSvg } from './import'
 import type { PathGeometry } from './path'
 
@@ -11,10 +12,19 @@ import type { PathGeometry } from './path'
  * with correct geometry and scale (real mm units honoured through the viewBox), and a curated messy
  * network heals — at a reasonable tolerance — to the regions a person would see. These exercise the
  * whole pipeline (XML → CTM → shapes → unit map → heal → detect) on files, not synthetic inputs.
+ * Fixtures load via Vite `?raw` so pure `core` never pulls in node:fs.
  */
 
+const fixtures: Record<string, string> = {
+  'inkscape-panel.svg': inkscapePanel,
+  'illustrator-panel.svg': illustratorPanel,
+  'messy-network.svg': messyNetwork,
+}
+
 function fixture(name: string): string {
-  return readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
+  const content = fixtures[name]
+  if (content === undefined) throw new Error(`unknown fixture: ${name}`)
+  return content
 }
 
 function healedBounds(segments: readonly { geometry: PathGeometry }[]): BBox {
