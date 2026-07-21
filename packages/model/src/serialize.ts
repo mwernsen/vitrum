@@ -1,7 +1,9 @@
 import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
 import {
+  defaultBomSettings,
   defaultNumbering,
+  type BomSettings,
   type DrcState,
   type Glass,
   type NumberingState,
@@ -20,7 +22,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 8
+export const CURRENT_SCHEMA_VERSION = 9
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -195,6 +197,28 @@ const migrateV7ToV8: Migration = {
   },
 }
 
+/**
+ * v8 → v9 (F-042): cutting-list / BOM estimation factors. v8 files have no `bom` block; add the
+ * default factors (glass +30%, came/foil +10%, solder 20 g/m, foil roll 33 m) so a pre-F-042 project
+ * loads with the shipped estimation defaults. Any partial `bom` a pre-release v8 file might carry is
+ * preserved, with its fields defaulted.
+ */
+const migrateV8ToV9: Migration = {
+  from: 8,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'bom'> & { bom?: Partial<BomSettings> }
+    const base = defaultBomSettings()
+    const prior = project.bom
+    const bom: BomSettings = {
+      glassWaste: prior?.glassWaste ?? base.glassWaste,
+      leadWaste: prior?.leadWaste ?? base.leadWaste,
+      solderGramsPerMetre: prior?.solderGramsPerMetre ?? base.solderGramsPerMetre,
+      foilRollLengthMm: prior?.foilRollLengthMm ?? base.foilRollLengthMm,
+    }
+    return { schemaVersion: 9, project: { ...project, bom } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -203,6 +227,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV5ToV6,
   migrateV6ToV7,
   migrateV7ToV8,
+  migrateV8ToV9,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

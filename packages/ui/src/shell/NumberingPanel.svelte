@@ -129,13 +129,7 @@
       </div>
     {/if}
     <div class="scaffold-row">
-      <span class="ph-label">Cutting list</span><span class="feature">F-042</span>
-    </div>
-    <div class="scaffold-row">
-      <span class="ph-label">Bill of materials</span><span class="feature">F-042</span>
-    </div>
-    <div class="scaffold-row">
-      <span class="ph-label">Export</span><span class="feature">F-043</span>
+      <span class="ph-label">Export (SVG, DXF, machines)</span><span class="feature">F-043</span>
     </div>
   </div>
 </div>

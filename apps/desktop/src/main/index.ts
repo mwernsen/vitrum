@@ -21,6 +21,7 @@ function resourcePath(...segments: string[]): string {
 }
 const LIBRARY_FILTERS = [{ name: 'Glass library', extensions: ['json'] }]
 const PDF_FILTERS = [{ name: 'PDF document', extensions: ['pdf'] }]
+const CSV_FILTERS = [{ name: 'CSV spreadsheet', extensions: ['csv'] }]
 
 /** Where the crash-recovery snapshot lives (overridable so E2E runs stay isolated). */
 function autosavePath(): string {
@@ -238,6 +239,19 @@ function registerIpc(): void {
     const result = await dialog.showSaveDialog({ defaultPath: suggestedName, filters: PDF_FILTERS })
     if (result.canceled || !result.filePath) return null
     await writeFile(result.filePath, buffer)
+    return result.filePath
+  })
+
+  // Write a generated text document (F-042 CSV). `VITRUM_EXPORT_TEXT_PATH` bypasses the dialog for E2E.
+  ipcMain.handle('export:saveText', async (_event, suggestedName: string, text: string) => {
+    const forced = process.env['VITRUM_EXPORT_TEXT_PATH']
+    if (forced) {
+      await writeFile(forced, text, 'utf8')
+      return forced
+    }
+    const result = await dialog.showSaveDialog({ defaultPath: suggestedName, filters: CSV_FILTERS })
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, text, 'utf8')
     return result.filePath
   })
 

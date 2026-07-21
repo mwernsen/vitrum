@@ -71,6 +71,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 5, migrate: (file) => ({ schemaVersion: 6, project: file.project }) },
       { from: 6, migrate: (file) => ({ schemaVersion: 7, project: file.project }) },
       { from: 7, migrate: (file) => ({ schemaVersion: 8, project: file.project }) },
+      { from: 8, migrate: (file) => ({ schemaVersion: 9, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -256,6 +257,40 @@ describe('schema versioning (FR-4)', () => {
     expect(withNumbering.numbering.auto).toEqual({ 'p-1': '1' })
     // A missing sub-field (overrides) is defaulted.
     expect(withNumbering.numbering.overrides).toEqual({})
+  })
+
+  it('v8 → v9 adds the default BOM settings (F-042)', () => {
+    // A legacy v8 file with numbering but no bom block.
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 8, project: legacyProject }))
+    expect(project.bom).toEqual({
+      glassWaste: 0.3,
+      leadWaste: 0.1,
+      solderGramsPerMetre: 20,
+      foilRollLengthMm: 33_000,
+    })
+    // A pre-release v8 file carrying a partial bom keeps its fields, defaulting the rest.
+    const withBom = deserialize(
+      JSON.stringify({
+        schemaVersion: 8,
+        project: { ...legacyProject, bom: { glassWaste: 0.25, solderGramsPerMetre: 15 } },
+      }),
+    )
+    expect(withBom.bom.glassWaste).toBe(0.25)
+    expect(withBom.bom.solderGramsPerMetre).toBe(15)
+    expect(withBom.bom.leadWaste).toBe(0.1)
+    expect(withBom.bom.foilRollLengthMm).toBe(33_000)
   })
 
   it('throws when no migration path exists for an older version', () => {

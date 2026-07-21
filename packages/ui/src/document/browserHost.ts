@@ -58,6 +58,10 @@ export function createBrowserHost(): AppHost {
       downloadBytes(suggestedName, bytes)
       return suggestedName
     },
+    saveText: async (suggestedName, text) => {
+      downloadText(suggestedName, text)
+      return suggestedName
+    },
   }
 
   return {
@@ -88,6 +92,11 @@ function downloadFile(name: string, contents: string): void {
   if (typeof document === 'undefined') return
   const blob = new Blob([contents], { type: 'application/json' })
   triggerDownload(name, blob)
+}
+
+function downloadText(name: string, text: string): void {
+  if (typeof document === 'undefined') return
+  triggerDownload(name, new Blob([text], { type: 'text/csv;charset=utf-8' }))
 }
 
 function downloadBytes(name: string, bytes: Uint8Array): void {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    computeBom,
     formatLength,
     leadFlangeMm,
     pieceKey,
@@ -11,13 +12,17 @@
   import {
     createEmptyProject,
     setGlassAssignments,
+    updateBomSettings,
     updateNumbering,
+    type BomSettings,
     type GlassId,
     type PieceId,
   } from '@vitrum/model'
 
-  import type { DrcInput } from '@vitrum/drc'
+  import { panelWeight, type DrcInput } from '@vitrum/drc'
   import { onDestroy } from 'svelte'
+
+  import { BomController } from '../bom/controller.svelte'
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
@@ -42,6 +47,7 @@
   import type { PrintTileOverlay } from '../canvas/render'
 
   import ActivityRail from './ActivityRail.svelte'
+  import BomPanel from './BomPanel.svelte'
   import Canvas from './Canvas.svelte'
   import CartoonLegend from './CartoonLegend.svelte'
   import { type DockSection } from './dock'
@@ -63,9 +69,11 @@
     glassLibrary?: GlassLibraryController
     /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
     exportPdf?: SavePdf
+    /** Writes a generated text document (CSV) to the host (F-042). Absent ⇒ CSV export unavailable. */
+    exportText?: (suggestedName: string, text: string) => Promise<string | null>
   }
 
-  let { panel, controller, glassLibrary, exportPdf }: Props = $props()
+  let { panel, controller, glassLibrary, exportPdf, exportText }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -311,6 +319,49 @@
     if (drcInput) drc.schedule(drcInput)
   })
 
+  // --- Cutting list & bill of materials (F-042) ------------------------------
+
+  const bom = new BomController()
+
+  // Panel weight reuses F-032's estimator; the pure BOM calc takes it as an input so `core` stays a
+  // leaf (no core → drc edge).
+  const bomWeight = $derived(
+    drcInput ? panelWeight(drcInput) : { grams: 0, glassGrams: 0, leadGrams: 0 },
+  )
+
+  // The live cutting list / BOM, derived from the same snapshotted data everything else reads, so it
+  // regenerates on any relevant edit and no stale data is reachable (FR-2).
+  const bomReport = $derived.by(() => {
+    if (!controller) return null
+    return computeBom({
+      technique: controller.doc.technique,
+      pieces,
+      cutContours: drcCutContours,
+      segments: Object.values(controller.doc.segments).filter((s) => s.role !== 'construction'),
+      glasses: projectGlasses,
+      glassCodes: controller.doc.numbering.glassCodes,
+      glassByPiece: effectiveGlass,
+      labelByPiece: Object.fromEntries(numbering.labels),
+      reinforcements,
+      factors: controller.doc.bom,
+      weight: bomWeight,
+    })
+  })
+
+  function setBomFactor(patch: Partial<BomSettings>): void {
+    controller?.execute(updateBomSettings(patch))
+  }
+
+  async function runBomPdf(): Promise<void> {
+    if (!bomReport || !exportPdf) return
+    await bom.exportPdf(bomReport, panel.name, viewport.unit, exportPdf)
+  }
+
+  async function runBomCsv(): Promise<void> {
+    if (!bomReport || !exportText) return
+    await bom.exportCsv(bomReport, panel.name, viewport.unit, exportText)
+  }
+
   // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
   const dimText = $derived(
     `${formatLength(panel.widthMm, viewport.unit)} × ${formatLength(panel.heightMm, viewport.unit)}`,
@@ -444,6 +495,22 @@
     onPrint={exportPdf ? () => (print.open = true) : undefined}
     printAvailable={!!exportPdf && !!bounds}
   />
+  {#if bomReport}
+    <BomPanel
+      report={bomReport}
+      unit={viewport.unit}
+      sort={bom.sort}
+      onSort={(s) => (bom.sort = s)}
+      factors={controller?.doc.bom ?? bomReport.factors}
+      onSetFactor={setBomFactor}
+      onHighlight={(pieceIds, segmentIds) => bom.highlight(pieceIds, segmentIds)}
+      onClearHighlight={() => bom.clearHighlight()}
+      onExportPdf={exportPdf ? runBomPdf : undefined}
+      onExportCsv={exportText ? runBomCsv : undefined}
+      exporting={bom.exporting}
+      errorMessage={bom.errorMessage}
+    />
+  {/if}
 {/snippet}
 
 <div class="shell">
@@ -511,6 +578,8 @@
         numberLabels={numbering.labels}
         numberPlacements={numbering.placements}
         {printTiles}
+        bomHighlightPieces={bom.highlightPieces}
+        bomHighlightSegments={bom.highlightSegments}
       />
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
