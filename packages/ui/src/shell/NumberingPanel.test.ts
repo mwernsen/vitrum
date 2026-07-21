@@ -78,4 +78,21 @@ describe('NumberingPanel (F-040)', () => {
     expect(screen.getByText('Print cartoon 1:1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Print cartoon 1:1/ })).toBeNull()
   })
+
+  it('shows live export + snapshot actions when wired (F-043)', async () => {
+    const onExport = vi.fn()
+    const onSnapshot = vi.fn()
+    render(NumberingPanel, base({ onExport, onSnapshot, exportAvailable: true }))
+    const exportBtn = screen.getByRole('button', { name: /Export \(SVG, PDF, DXF\)/ })
+    expect(exportBtn).toBeEnabled()
+    await fireEvent.click(exportBtn)
+    expect(onExport).toHaveBeenCalledOnce()
+    await fireEvent.click(screen.getByRole('button', { name: 'PNG snapshot' }))
+    expect(onSnapshot).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the F-043 export placeholder when no host export is available', () => {
+    render(NumberingPanel, base())
+    expect(screen.getByText('Export (SVG, DXF, machines)')).toBeInTheDocument()
+  })
 })

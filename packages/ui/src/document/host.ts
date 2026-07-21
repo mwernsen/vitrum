@@ -22,10 +22,16 @@ export interface ExportPort {
    */
   savePdf(suggestedName: string, bytes: Uint8Array): Promise<string | null>
   /**
-   * Show a save dialog and write a UTF-8 text document (F-042 CSV export). Resolves to the chosen
-   * path, or `null` if the user cancelled. Parallel to {@link savePdf} but for text payloads.
+   * Show a save dialog and write a UTF-8 text document. Resolves to the chosen path, or `null` if
+   * the user cancelled. Parallel to {@link savePdf} but for text payloads. Used for the F-042 CSV and
+   * the F-043 SVG / DXF exports (the host picks the dialog filter from the suggested extension).
    */
   saveText(suggestedName: string, text: string): Promise<string | null>
+  /**
+   * Show a save dialog and write raw image bytes (the F-043 PNG snapshot). Resolves to the chosen
+   * path, or `null` if the user cancelled. Parallel to {@link savePdf} but tagged as an image.
+   */
+  savePng(suggestedName: string, bytes: Uint8Array): Promise<string | null>
 }
 
 export interface AppHost {

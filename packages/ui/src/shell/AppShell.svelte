@@ -34,6 +34,9 @@
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
   import { NumberingController } from '../numbering/controller.svelte'
+  import { ExportController } from '../export/controller.svelte'
+  import ExportDialog from '../export/ExportDialog.svelte'
+  import { buildExportScene } from '../export/scene'
   import { PrintController, type SavePdf } from '../print/controller.svelte'
   import PrintDialog from '../print/PrintDialog.svelte'
   import { buildPrintScene } from '../print/scene'
@@ -69,11 +72,13 @@
     glassLibrary?: GlassLibraryController
     /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
     exportPdf?: SavePdf
-    /** Writes a generated text document (CSV) to the host (F-042). Absent ⇒ CSV export unavailable. */
+    /** Writes a generated text document (CSV / SVG / DXF) to the host (F-042/F-043). */
     exportText?: (suggestedName: string, text: string) => Promise<string | null>
+    /** Writes raw image bytes (the PNG snapshot) to the host (F-043). */
+    exportPng?: (suggestedName: string, bytes: Uint8Array) => Promise<string | null>
   }
 
-  let { panel, controller, glassLibrary, exportPdf, exportText }: Props = $props()
+  let { panel, controller, glassLibrary, exportPdf, exportText, exportPng }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -262,6 +267,59 @@
     })
     const path = await print.export(scene, panel.name, exportPdf)
     if (path !== null) print.open = false
+  }
+
+  // --- Export: SVG / PDF / DXF / PNG (F-043) ---------------------------------
+
+  const exporter = new ExportController()
+  // The canvas hands back a PNG-snapshot getter once mounted (rasterises the live design).
+  let takeSnapshot: (() => Promise<Uint8Array | null>) | undefined
+
+  const exportAvailable = $derived(!!bounds && (!!exportText || !!exportPdf))
+
+  /** Open the export dialog, seeding technique-aware defaults (F-043). */
+  function openExport(): void {
+    if (technique) exporter.applyTechniqueDefaults(technique.kind)
+    exporter.open = true
+  }
+
+  /** Build the backend-neutral export scene from the live derived data, then write the file. */
+  async function runExport(): Promise<void> {
+    if (!controller || !bounds) return
+    const scene = buildExportScene({
+      contentBounds: bounds,
+      segments: Object.values(controller.doc.segments).filter((s) => s.role !== 'construction'),
+      leadWidthMm: (seg) =>
+        techniqueRender
+          ? techniqueRender.leadWidthMm(seg.id, seg.role)
+          : seg.role === 'border'
+            ? 2
+            : 1,
+      pieces,
+      pieceKeyOf: (piece) => pieceKey(piece),
+      cutContours: drcCutContours,
+      glassFor: (piece) => assignments.glassFor(piece),
+      glasses: projectGlasses,
+      labelFor: (piece) => numbering.labelFor(piece),
+      placementFor: (piece) => numbering.placements.get(pieceKey(piece)),
+      reinforcements,
+      legend: legend.map((row) => ({
+        code: row.code,
+        name: row.name,
+        manufacturer: row.manufacturer,
+        color: controller.doc.glasses[row.glassId]?.color,
+        count: row.count,
+      })),
+    })
+    const path = await exporter.run(scene, panel.name, { saveText: exportText, savePdf: exportPdf })
+    if (path !== null) exporter.open = false
+  }
+
+  /** Save a PNG snapshot of the canvas (F-043). */
+  async function runSnapshot(): Promise<void> {
+    if (!exportPng || !takeSnapshot) return
+    const bytes = await takeSnapshot()
+    await exporter.runPng(bytes, panel.name, exportPng)
   }
 
   /** Set or clear a manual per-piece number override (FR-1). Keyed by content id. */
@@ -494,6 +552,9 @@
     {legend}
     onPrint={exportPdf ? () => (print.open = true) : undefined}
     printAvailable={!!exportPdf && !!bounds}
+    onExport={exportText || exportPdf ? openExport : undefined}
+    onSnapshot={exportPng ? runSnapshot : undefined}
+    {exportAvailable}
   />
   {#if bomReport}
     <BomPanel
@@ -520,6 +581,8 @@
     {viewMode}
     onViewMode={(mode) => (viewMode = mode)}
     onZoomFit={() => viewport.zoomToFit(bounds)}
+    onExport={exportText || exportPdf ? openExport : undefined}
+    exportEnabled={exportAvailable && pieces.length > 0}
   />
   <ReadinessStrip
     pieceCount={pieces.length}
@@ -580,6 +643,7 @@
         {printTiles}
         bomHighlightPieces={bom.highlightPieces}
         bomHighlightSegments={bom.highlightSegments}
+        snapshotRegister={(fn) => (takeSnapshot = fn)}
       />
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
@@ -625,6 +689,14 @@
   drcErrorCount={drc.result.counts.error}
   checksRun={drc.hasRun}
   onExport={runPrint}
+/>
+
+<ExportDialog
+  controller={exporter}
+  canExport={pieces.length > 0 && exportAvailable}
+  drcErrorCount={drc.result.counts.error}
+  checksRun={drc.hasRun}
+  onExport={runExport}
 />
 
 <style>

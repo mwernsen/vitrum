@@ -23,9 +23,21 @@
     viewMode?: ViewMode
     /** Switch the view mode. */
     onViewMode?: (mode: ViewMode) => void
+    /** Open the export dialog (F-043). Absent ⇒ the button stays a "coming soon" placeholder. */
+    onExport?: () => void
+    /** Whether there is anything to export (pieces + a host export port). */
+    exportEnabled?: boolean
   }
 
-  let { title, controller, onZoomFit, viewMode = 'design', onViewMode }: Props = $props()
+  let {
+    title,
+    controller,
+    onZoomFit,
+    viewMode = 'design',
+    onViewMode,
+    onExport,
+    exportEnabled = false,
+  }: Props = $props()
 </script>
 
 <header class="topbar">
@@ -89,9 +101,17 @@
   <Tooltip label="Zoom to fit" side="bottom">
     <IconButton label="Zoom to fit" onclick={() => onZoomFit?.()}><ZoomIn size={18} /></IconButton>
   </Tooltip>
-  <Tooltip label="Export (coming soon)" side="bottom">
-    <IconButton label="Export" variant="outline" disabled><Download size={18} /></IconButton>
-  </Tooltip>
+  {#if onExport}
+    <Tooltip label="Export (SVG, PDF, DXF)" side="bottom">
+      <IconButton label="Export" variant="outline" disabled={!exportEnabled} onclick={onExport}>
+        <Download size={18} />
+      </IconButton>
+    </Tooltip>
+  {:else}
+    <Tooltip label="Export (coming soon)" side="bottom">
+      <IconButton label="Export" variant="outline" disabled><Download size={18} /></IconButton>
+    </Tooltip>
+  {/if}
 
   <span class="avatar" aria-hidden="true">MK</span>
 </header>

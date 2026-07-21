@@ -33,6 +33,12 @@
     onPrint?: () => void
     /** Whether there is something to print (a host export port + non-empty panel). */
     printAvailable?: boolean
+    /** Open the export dialog (F-043). Absent ⇒ the export action stays a placeholder. */
+    onExport?: () => void
+    /** Save a PNG snapshot of the canvas (F-043). Absent ⇒ hidden. */
+    onSnapshot?: () => void
+    /** Whether there is something to export (a host export port + non-empty panel). */
+    exportAvailable?: boolean
   }
 
   let {
@@ -45,6 +51,9 @@
     legend,
     onPrint,
     printAvailable = false,
+    onExport,
+    onSnapshot,
+    exportAvailable = false,
   }: Props = $props()
 
   const SCHEME_OPTIONS = [
@@ -128,9 +137,27 @@
         <span class="ph-label">Print cartoon 1:1</span><span class="feature">F-041</span>
       </div>
     {/if}
-    <div class="scaffold-row">
-      <span class="ph-label">Export (SVG, DXF, machines)</span><span class="feature">F-043</span>
-    </div>
+    {#if onExport}
+      <div class="export-row">
+        <Button
+          size="sm"
+          variant="secondary"
+          onclick={onExport}
+          disabled={!exportAvailable || pieceCount === 0}
+        >
+          Export (SVG, PDF, DXF)…
+        </Button>
+        {#if onSnapshot}
+          <Button size="sm" variant="ghost" onclick={onSnapshot} disabled={pieceCount === 0}>
+            PNG snapshot
+          </Button>
+        {/if}
+      </div>
+    {:else}
+      <div class="scaffold-row">
+        <span class="ph-label">Export (SVG, DXF, machines)</span><span class="feature">F-043</span>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -234,6 +261,12 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--ink-500);
+  }
+
+  .export-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   .scaffold-row {

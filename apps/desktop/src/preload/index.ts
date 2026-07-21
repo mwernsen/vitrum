@@ -41,6 +41,8 @@ const api = {
       ipcRenderer.invoke('export:savePdf', suggestedName, bytes),
     saveText: (suggestedName: string, text: string): Promise<string | null> =>
       ipcRenderer.invoke('export:saveText', suggestedName, text),
+    savePng: (suggestedName: string, bytes: Uint8Array): Promise<string | null> =>
+      ipcRenderer.invoke('export:savePng', suggestedName, bytes),
   },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)
