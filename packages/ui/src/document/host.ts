@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
 /**
  * How the UI reaches its host environment (F-002). The desktop app supplies an
@@ -34,6 +34,18 @@ export interface ExportPort {
   savePng(suggestedName: string, bytes: Uint8Array): Promise<string | null>
 }
 
+/**
+ * Reading a file to import into the active document (F-050 SVG import). Mirrors the read half of
+ * {@link StoragePort} but with its own dialog filter (`.svg`), so the import affordance is distinct
+ * from opening a `.vitrum` project. Kept on the host (not folded into the feature) so `packages/ui`
+ * stays Electron-free; the desktop host shows a native open dialog, the browser stub uses a file
+ * input, and an env override isolates E2E runs.
+ */
+export interface ImportPort {
+  /** Show an open dialog filtered to SVG and read the chosen file. Resolves to null if cancelled. */
+  openSvg(): Promise<OpenedFile | null>
+}
+
 export interface AppHost {
   /** File dialogs, disk I/O and crash-recovery snapshots. */
   readonly storage: StoragePort
@@ -48,6 +60,11 @@ export interface AppHost {
    * then unavailable); the browser stub downloads the file instead.
    */
   readonly export?: ExportPort
+  /**
+   * Reading an SVG file to import into the active document (F-050). Absent means import is
+   * unavailable (the import action is hidden); present on both the desktop and browser hosts.
+   */
+  readonly import?: ImportPort
   /** Subscribe to native-menu commands. Returns an unsubscribe function. */
   onMenuAction?(handler: (action: MenuAction) => void): () => void
   /** Report unsaved-changes state so the host can guard window close. */

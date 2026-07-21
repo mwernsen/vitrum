@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Representative Adobe Illustrator export: real mm document + matching viewBox, a nested matrix
+     transform, an absolute-cubic closed path plus a circle. Square with an inscribed circle → an
+     annulus and a disc, two pieces. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     version="1.1" x="0px" y="0px" width="120mm" height="120mm" viewBox="0 0 120 120"
+     style="enable-background:new 0 0 120 120;" xml:space="preserve">
+  <g transform="matrix(1 0 0 1 10 10)">
+    <path d="M0,0 L100,0 L100,100 L0,100 Z" fill="none" stroke="#1A1A1A"/>
+    <circle cx="50" cy="50" r="30" fill="#CCE" stroke="#1A1A1A"/>
+  </g>
+</svg>

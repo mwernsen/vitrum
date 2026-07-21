@@ -180,6 +180,17 @@ function registerIpc(): void {
     await writeFile(path, contents, 'utf8')
   })
 
+  // Read an SVG file to import (F-050). `VITRUM_IMPORT_SVG_PATH` bypasses the native dialog so E2E
+  // runs read a fixture they control instead of prompting.
+  ipcMain.handle('import:openSvg', async () => {
+    const forced = process.env['VITRUM_IMPORT_SVG_PATH']
+    if (forced) return { path: forced, contents: await readFile(forced, 'utf8') }
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: SVG_FILTERS })
+    const path = result.filePaths[0]
+    if (result.canceled || !path) return null
+    return { path, contents: await readFile(path, 'utf8') }
+  })
+
   ipcMain.handle('storage:saveAs', async (_event, suggestedName: string, contents: string) => {
     const result = await dialog.showSaveDialog({
       defaultPath: suggestedName,
