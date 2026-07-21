@@ -34,10 +34,10 @@ of redrawing it, and have piece detection find the regions I drew.
   - snaps near-coincident endpoints together within tolerance,
   - splits intersecting paths at true crossings (reuse F-020's intersection maths),
   - drops zero-length and duplicate segments.
-  Report a summary of what was healed. **Healing is idempotent and a no-op at
-  tolerance 0 on an already-clean network** (see FR-4). Without healing, piece detection
-  yields garbage.
-- **Import target:** the healed network merges into the *active* project as one undo
+    Report a summary of what was healed. **Healing is idempotent and a no-op at
+    tolerance 0 on an already-clean network** (see FR-4). Without healing, piece detection
+    yields garbage.
+- **Import target:** the healed network merges into the _active_ project as one undo
   step (`patchNetwork` compound command). Import does not create a new document.
 
 ### Non-goals

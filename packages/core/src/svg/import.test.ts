@@ -14,7 +14,9 @@ describe('readSvg', () => {
   })
 
   it('flags an ambiguous unitless file for the scale dialog', () => {
-    const source = readSvg('<svg viewBox="0 0 100 100"><rect x="0" y="0" width="50" height="50"/></svg>')
+    const source = readSvg(
+      '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="50" height="50"/></svg>',
+    )
     expect(source.unit.ambiguous).toBe(true)
     expect(source.unit.userUnitMm).toBe(1)
     expect(source.unit.artworkWidthUser).toBe(100)
@@ -34,7 +36,8 @@ describe('buildImportPreview', () => {
   })
 
   it('surfaces dropped content kinds in the preview', () => {
-    const svg = '<svg viewBox="0 0 10 10"><text x="0" y="0">a</text><rect x="0" y="0" width="5" height="5"/></svg>'
+    const svg =
+      '<svg viewBox="0 0 10 10"><text x="0" y="0">a</text><rect x="0" y="0" width="5" height="5"/></svg>'
     const preview = buildImportPreview(readSvg(svg), {
       userUnitMm: 1,
       toleranceMm: 0,

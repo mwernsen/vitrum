@@ -5,17 +5,21 @@
     leadFlangeMm,
     pieceKey,
     renumber,
+    toDrafts,
     type NumberingScheme,
     type Panel,
   } from '@vitrum/core'
   import { pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
   import {
+    addSegments,
     createEmptyProject,
+    segmentsFromDrafts,
     setGlassAssignments,
     updateBomSettings,
     updateNumbering,
     type BomSettings,
     type GlassId,
+    type OpenedFile,
     type PieceId,
   } from '@vitrum/model'
 
@@ -37,6 +41,8 @@
   import { ExportController, type SavePdf } from '../export/controller.svelte'
   import ExportDialog from '../export/ExportDialog.svelte'
   import { buildExportScene } from '../export/scene'
+  import { ImportController } from '../import/controller.svelte'
+  import ImportDialog from '../import/ImportDialog.svelte'
   import { PrintController } from '../print/controller.svelte'
   import { buildPrintScene } from '../print/scene'
   import { ToolController } from '../tools/controller.svelte'
@@ -75,9 +81,12 @@
     exportText?: (suggestedName: string, text: string) => Promise<string | null>
     /** Writes raw image bytes (the PNG snapshot) to the host (F-043). */
     exportPng?: (suggestedName: string, bytes: Uint8Array) => Promise<string | null>
+    /** Reads an SVG file to import into the active document (F-050). Absent ⇒ import is hidden. */
+    importSvg?: () => Promise<OpenedFile | null>
   }
 
-  let { panel, controller, glassLibrary, exportPdf, exportText, exportPng }: Props = $props()
+  let { panel, controller, glassLibrary, exportPdf, exportText, exportPng, importSvg }: Props =
+    $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -296,6 +305,28 @@
       reinforcements,
       legend: legendRows(),
     })
+  }
+
+  // --- SVG import (F-050) ----------------------------------------------------
+
+  const importer = new ImportController()
+
+  /** Open the import dialog, reading the chosen SVG through the host. */
+  function openImport(): void {
+    if (importSvg) void importer.load(importSvg)
+  }
+
+  /**
+   * Merge the healed imported network into the active document as one undo step (decision #4). The
+   * healed drafts become welded segments (coincident endpoints share a node, F-013) added in a single
+   * `addSegments` command, so one undo removes the whole import and redo reproduces it (FR-3).
+   */
+  function runImport(): void {
+    const p = importer.preview
+    if (!controller || !p || p.segments.length === 0) return
+    const segments = segmentsFromDrafts(toDrafts(p.segments), controller.doc.nodes)
+    controller.execute(addSegments(segments))
+    importer.close()
   }
 
   /** Open the export dialog, seeding technique-aware defaults (F-043). */
@@ -584,6 +615,7 @@
     onZoomFit={() => viewport.zoomToFit(bounds)}
     onExport={exportText || exportPdf ? openExport : undefined}
     exportEnabled={exportAvailable && pieces.length > 0}
+    onImport={importSvg && controller ? openImport : undefined}
   />
   <ReadinessStrip
     pieceCount={pieces.length}
@@ -694,6 +726,8 @@
   checksRun={drc.hasRun}
   onExport={runOutput}
 />
+
+<ImportDialog controller={importer} onImport={runImport} />
 
 <style>
   .shell {

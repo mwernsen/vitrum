@@ -51,10 +51,7 @@ describe('healNetwork — snap near-coincident endpoints', () => {
 describe('healNetwork — split at crossings', () => {
   it('splits an X of two crossing lines into four spans', () => {
     counter = 0
-    const input = [
-      seg(line(vec2(-10, 0), vec2(10, 0))),
-      seg(line(vec2(0, -10), vec2(0, 10))),
-    ]
+    const input = [seg(line(vec2(-10, 0), vec2(10, 0))), seg(line(vec2(0, -10), vec2(0, 10)))]
     const healed = healNetwork(input, 0.1)
     expect(healed.segments).toHaveLength(4)
     expect(healed.summary.split).toBe(2)

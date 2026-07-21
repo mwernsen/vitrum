@@ -1,6 +1,6 @@
 import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
-import type { AppHost, ExportPort } from './host'
+import type { AppHost, ExportPort, ImportPort } from './host'
 
 /**
  * A browser stub of `AppHost` for `pnpm dev:ui`, where no Electron main process exists.
@@ -68,10 +68,15 @@ export function createBrowserHost(): AppHost {
     },
   }
 
+  const importPort: ImportPort = {
+    openSvg: () => pickFile('.svg,image/svg+xml'),
+  }
+
   return {
     storage,
     glassLibrary,
     export: exportPort,
+    import: importPort,
     reportDirty: (value) => {
       dirty = value
     },
@@ -119,12 +124,12 @@ function triggerDownload(name: string, blob: Blob): void {
   URL.revokeObjectURL(url)
 }
 
-function pickFile(): Promise<OpenedFile | null> {
+function pickFile(accept = '.vitrum,application/json'): Promise<OpenedFile | null> {
   if (typeof document === 'undefined') return Promise.resolve(null)
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.vitrum,application/json'
+    input.accept = accept
     input.onchange = () => {
       const file = input.files?.[0]
       if (!file) {

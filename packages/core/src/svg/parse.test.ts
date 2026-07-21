@@ -96,7 +96,9 @@ describe('parseSvg — dropped content (FR-5)', () => {
   })
 
   it('skips shapes defined inside <defs>', () => {
-    const { geometries } = parseSvg('<svg><defs><rect x="0" y="0" width="5" height="5"/></defs></svg>')
+    const { geometries } = parseSvg(
+      '<svg><defs><rect x="0" y="0" width="5" height="5"/></defs></svg>',
+    )
     expect(geometries).toHaveLength(0)
   })
 })

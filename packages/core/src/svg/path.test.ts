@@ -1,4 +1,12 @@
-import { arcPointAt, cubicPointAt, lerp, vec2, type Arc, type CubicBezier, type Vec2 } from '@vitrum/geometry'
+import {
+  arcPointAt,
+  cubicPointAt,
+  lerp,
+  vec2,
+  type Arc,
+  type CubicBezier,
+  type Vec2,
+} from '@vitrum/geometry'
 import { describe, expect, it } from 'vitest'
 
 import { arcCommand, parsePathData, type PathGeometry } from './path'

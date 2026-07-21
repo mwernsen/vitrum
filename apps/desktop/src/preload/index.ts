@@ -44,6 +44,9 @@ const api = {
     savePng: (suggestedName: string, bytes: Uint8Array): Promise<string | null> =>
       ipcRenderer.invoke('export:savePng', suggestedName, bytes),
   },
+  import: {
+    openSvg: (): Promise<OpenedFile | null> => ipcRenderer.invoke('import:openSvg'),
+  },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)
     ipcRenderer.on('menu:action', listener)

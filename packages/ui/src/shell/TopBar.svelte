@@ -1,6 +1,7 @@
 <script lang="ts">
   import ArrowLeft from 'lucide-svelte/icons/arrow-left'
   import Download from 'lucide-svelte/icons/download'
+  import FileUp from 'lucide-svelte/icons/file-up'
   import Redo2 from 'lucide-svelte/icons/redo-2'
   import Undo2 from 'lucide-svelte/icons/undo-2'
   import ZoomIn from 'lucide-svelte/icons/zoom-in'
@@ -27,6 +28,8 @@
     onExport?: () => void
     /** Whether there is anything to export (pieces + a host export port). */
     exportEnabled?: boolean
+    /** Open the SVG import dialog (F-050). Absent ⇒ the import button is hidden. */
+    onImport?: () => void
   }
 
   let {
@@ -37,6 +40,7 @@
     onViewMode,
     onExport,
     exportEnabled = false,
+    onImport,
   }: Props = $props()
 </script>
 
@@ -101,6 +105,11 @@
   <Tooltip label="Zoom to fit" side="bottom">
     <IconButton label="Zoom to fit" onclick={() => onZoomFit?.()}><ZoomIn size={18} /></IconButton>
   </Tooltip>
+  {#if onImport}
+    <Tooltip label="Import SVG" side="bottom">
+      <IconButton label="Import SVG" onclick={onImport}><FileUp size={18} /></IconButton>
+    </Tooltip>
+  {/if}
   {#if onExport}
     <Tooltip label="Export (SVG, PDF, DXF)" side="bottom">
       <IconButton label="Export" variant="outline" disabled={!exportEnabled} onclick={onExport}>

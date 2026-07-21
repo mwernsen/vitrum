@@ -1,4 +1,11 @@
-import { compose, IDENTITY, rotation, scaling, translation, type Transform2D } from '@vitrum/geometry'
+import {
+  compose,
+  IDENTITY,
+  rotation,
+  scaling,
+  translation,
+  type Transform2D,
+} from '@vitrum/geometry'
 
 /**
  * Parse an SVG `transform` attribute into one composed affine matrix (F-050). SVG transforms

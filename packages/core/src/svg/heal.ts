@@ -204,7 +204,6 @@ export function healNetwork(input: readonly HealSegment[], tolerance: number): H
 }
 
 function healOnce(input: readonly HealSegment[], tol: number): HealResult {
-
   // --- Phase 1: collect split parameters (true crossings + endpoint→curve projections) ----------
   const splitParams: number[][] = input.map(() => [])
   const projections: Projection[] = []
@@ -225,7 +224,10 @@ function healOnce(input: readonly HealSegment[], tol: number): HealResult {
       const [lo, hi] = input[i]!.id <= input[j]!.id ? [i, j] : [j, i]
       for (const x of intersect(input[lo]!.geometry, input[hi]!.geometry)) {
         if (x.tangential) continue
-        if (nearEndpoint(x.point, input[lo]!.geometry) || nearEndpoint(x.point, input[hi]!.geometry))
+        if (
+          nearEndpoint(x.point, input[lo]!.geometry) ||
+          nearEndpoint(x.point, input[hi]!.geometry)
+        )
           continue
         splitParams[lo]!.push(x.t0)
         splitParams[hi]!.push(x.t1)
@@ -364,7 +366,10 @@ function dedupeParams(g: DrawGeometry, params: readonly number[], tol: number): 
   const kept: number[] = []
   for (const t of sorted) {
     const p = pointAt(g, t)
-    if (kept.length === 0 || distance(pointAt(g, kept[kept.length - 1]!), p) > Math.max(tol, 1e-9)) {
+    if (
+      kept.length === 0 ||
+      distance(pointAt(g, kept[kept.length - 1]!), p) > Math.max(tol, 1e-9)
+    ) {
       kept.push(t)
     }
   }
