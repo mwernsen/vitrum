@@ -237,3 +237,9 @@ this file steers every future feature.
   merge their pure logic — the shell dispatches each type to its own runner and the dialog reads the
   active controller's `busy`/`error`. Canvas overlays previously keyed on a per-dialog `open` flag move
   to `hub.open && hub.docType === '<type>'`.
+- (F-050, 2026-07-21) Pure `core` tests that need file fixtures load them via Vite `?raw` + an ambient
+  `*.svg?raw` decl — never `node:fs`/`import.meta.url`, which drag `@types/node`/DOM lib into the
+  package and break `pnpm check` (its `tsc --noEmit` covers test files too).
+- (F-050, 2026-07-21) The F-043↔F-050 SVG round-trip contract lives in `@vitrum/paper` but imports the
+  **real** `@vitrum/core` `parseSvg`, so a wrong export sweep/large-arc flag or an import parse bug
+  fails one shared test; assert by sampling curve points (arcs stay kernel arcs), not `fmt()` strings.
