@@ -24,6 +24,8 @@
     rules?: Snippet
     /** Live manufacturing content (F-040 numbering), rendered when the make section is open. */
     make?: Snippet
+    /** Live version-history content (F-055), rendered when the versions section is open. */
+    versions?: Snippet
     /** The reference-image underlay controller (F-051), for the Layers panel. */
     reference?: ReferenceController
     /** Trigger the host's image picker to add a reference layer (F-051). */
@@ -42,6 +44,7 @@
     glass,
     rules,
     make,
+    versions,
     reference,
     onAddReference,
     symmetry,
@@ -51,13 +54,9 @@
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
 
   // Placeholder section scaffolds — the as-designed structure of an unbuilt panel (turn 3
-  // 3d/3e), shown disabled so the shell reads complete without faking data.
-  const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {
-    versions: {
-      note: 'Named snapshots and auto-saves you can restore or open as a copy.',
-      actions: ['Save version…'],
-    },
-  }
+  // 3d/3e), shown disabled so the shell reads complete without faking data. All sections are
+  // live today; kept for any future placeholder section.
+  const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {}
   const scaffold = $derived(scaffolds[section])
 </script>
 
@@ -83,6 +82,8 @@
       {@render rules?.()}
     {:else if section === 'make'}
       {@render make?.()}
+    {:else if section === 'versions'}
+      {@render versions?.()}
     {:else if scaffold}
       <div class="placeholder">
         {#if scaffold.actions}

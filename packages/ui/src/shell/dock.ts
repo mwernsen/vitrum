@@ -3,7 +3,8 @@
 // Today "layers", "glass", "rules" and "make" are backed by completed features (F-003/012/013/021/
 // 022/023/030/040/042); "make" hosts piece numbering (F-040) and the live cutting list / BOM table
 // (F-042). All outputs (print, SVG/PDF/DXF, cutting list export, PNG) route through the single
-// Export dialog opened from the top bar (F-043), not the dock. "versions" is a placeholder (F-055).
+// Export dialog opened from the top bar (F-043), not the dock. "versions" hosts the version browser
+// and sharing (F-055).
 export type DockSection = 'layers' | 'glass' | 'rules' | 'make' | 'versions'
 
 export interface DockSectionMeta {
@@ -21,5 +22,5 @@ export const DOCK_SECTIONS: DockSectionMeta[] = [
   { id: 'glass', label: 'Glass', live: true },
   { id: 'rules', label: 'Rules', live: true },
   { id: 'make', label: 'Make', live: true },
-  { id: 'versions', label: 'Versions', live: false, feature: 'F-055' },
+  { id: 'versions', label: 'Versions', live: true },
 ]

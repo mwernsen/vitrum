@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort, VersionPort } from '@vitrum/model'
 
 /**
  * How the UI reaches its host environment (F-002). The desktop app supplies an
@@ -78,6 +78,13 @@ export interface AppHost {
    * unavailable (the import action is hidden); present on both the desktop and browser hosts.
    */
   readonly import?: ImportPort
+  /**
+   * Per-document version history storage + thumbnail cache (F-055). Absent means the host does not
+   * persist history — the UI then keeps an in-memory session history. Backed by the app-data
+   * directory on the desktop, `localStorage` in the browser, in-memory in tests. (Named
+   * `versionStore` rather than `versions` to avoid clashing with the preload's version-strings.)
+   */
+  readonly versionStore?: VersionPort
   /** Subscribe to native-menu commands. Returns an unsubscribe function. */
   onMenuAction?(handler: (action: MenuAction) => void): () => void
   /** Report unsaved-changes state so the host can guard window close. */

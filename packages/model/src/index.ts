@@ -143,6 +143,7 @@ export {
   removeSegment,
   removeSegments,
   reorderReferenceLayers,
+  replaceProject,
   replaceSegments,
   setCameOverride,
   setDrcExclusion,
@@ -191,6 +192,34 @@ export {
 
 // File container — zip with embedded image assets (F-051)
 export { assetIdFor, packDocument, unpackDocument, type UnpackedDocument } from './container'
+
+// Version history & sharing (F-055)
+export {
+  addSnapshot,
+  applyProjectDelta,
+  DEFAULT_MAX_AUTO_SNAPSHOTS,
+  deleteSnapshot,
+  deserializeArchive,
+  diffProject,
+  editableCopy,
+  emptyArchive,
+  isReadOnly,
+  KEYFRAME_INTERVAL,
+  listSnapshots,
+  pruneArchive,
+  renameSnapshot,
+  resolveSnapshot,
+  serializeArchive,
+  sharedProject,
+  VERSION_ARCHIVE_VERSION,
+  VersionArchiveVersionError,
+  type AddSnapshotOptions,
+  type ProjectDelta,
+  type SnapshotKind,
+  type SnapshotMeta,
+  type VersionArchive,
+  type VersionPort,
+} from './versions'
 
 // Storage port
 export type { OpenedFile, StoragePort } from './storage'

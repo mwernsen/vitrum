@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort, VersionPort } from '@vitrum/model'
 
 import type { AppHost, ExportPort, ImportPort, MenuAction, OpenedImage } from './host'
 
@@ -27,15 +27,23 @@ export interface FakeHost extends AppHost {
   nextImportSvg: OpenedFile | null
   /** The image returned by the next `import.openImage()` call (F-051). */
   nextImportImage: OpenedImage | null
+  /** Persisted version archives, keyed by document key (F-055). */
+  readonly versionArchives: Map<string, Uint8Array>
+  /** Persisted version thumbnails, keyed by `key/id` (F-055). */
+  readonly versionThumbnails: Map<string, Uint8Array>
   emitMenu(action: MenuAction): void
 }
 
 export function createFakeHost(): FakeHost {
   const files = new Map<string, Uint8Array>()
+  const versionArchives = new Map<string, Uint8Array>()
+  const versionThumbnails = new Map<string, Uint8Array>()
   let menuHandler: ((action: MenuAction) => void) | undefined
 
   const host: FakeHost = {
     files,
+    versionArchives,
+    versionThumbnails,
     autosave: null,
     dirty: false,
     nextOpen: null,
@@ -96,6 +104,16 @@ export function createFakeHost(): FakeHost {
       openSvg: async () => host.nextImportSvg,
       openImage: async () => host.nextImportImage,
     } satisfies ImportPort,
+    versionStore: {
+      loadArchive: async (key) => versionArchives.get(key) ?? null,
+      saveArchive: async (key, bytes) => {
+        versionArchives.set(key, bytes)
+      },
+      loadThumbnail: async (key, id) => versionThumbnails.get(`${key}/${id}`) ?? null,
+      saveThumbnail: async (key, id, bytes) => {
+        versionThumbnails.set(`${key}/${id}`, bytes)
+      },
+    } satisfies VersionPort,
     onMenuAction: (handler) => {
       menuHandler = handler
       return () => {

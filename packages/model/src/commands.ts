@@ -629,7 +629,33 @@ function mergeSettings(base: ProjectSettings, patch: Partial<ProjectSettings>): 
   const units = patch.units ?? base.units
   const name = patch.name ?? base.name
   const panelSize = 'panelSize' in patch ? patch.panelSize : base.panelSize
-  return panelSize ? { units, name, panelSize } : { units, name }
+  const sharedReadOnly = 'sharedReadOnly' in patch ? patch.sharedReadOnly : base.sharedReadOnly
+  const shareNote = 'shareNote' in patch ? patch.shareNote : base.shareNote
+  return {
+    units,
+    name,
+    ...(panelSize ? { panelSize } : {}),
+    ...(sharedReadOnly ? { sharedReadOnly } : {}),
+    ...(shareNote !== undefined ? { shareNote } : {}),
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Whole-document replace (F-055)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Replace the entire document in one reversible step (F-055 restore). Restoring a version snapshot
+ * runs through the store like any other command, so it lands as a single undo entry (Cmd-Z returns
+ * to the pre-restore document) and the store stays the sole mutator. `next` is a resolved snapshot
+ * `Project`; the inverse restores the document that was live before the restore.
+ */
+export function replaceProject(next: Project): Command {
+  return {
+    kind: 'replaceProject',
+    apply: () => next,
+    invert: (before) => replaceProject(before),
+  }
 }
 
 /* -------------------------------------------------------------------------- */
