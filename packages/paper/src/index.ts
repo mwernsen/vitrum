@@ -74,6 +74,9 @@ export { renderPdf } from './pdf'
 export { buildBomDocument, type BomDocOptions } from './bom'
 export { bomToCsv } from './bomCsv'
 
+// Cost estimation / quote (F-056)
+export { buildQuoteDocument, type QuoteDocOptions, type QuotePanelImage } from './quote'
+
 // Export scene + options (F-043)
 export {
   DEFAULT_EXPORT_MARGIN_MM,

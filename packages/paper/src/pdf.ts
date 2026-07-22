@@ -10,6 +10,7 @@ import {
   pushGraphicsState,
   PDFDocument,
   type PDFFont,
+  type PDFImage,
   type PDFPage,
   rgb,
   StandardFonts,
@@ -43,22 +44,61 @@ export async function renderPdf(doc: PdfDoc): Promise<Uint8Array> {
     monoBold: await pdf.embedFont(StandardFonts.CourierBold),
   }
 
-  for (const content of doc.pages) renderPage(pdf, content, fonts)
+  // Images must be embedded (async) before the synchronous render walk can draw them; embed each
+  // unique op once, keyed by op identity (F-056 quote panel snapshot).
+  const images = await embedImages(pdf, doc)
+
+  for (const content of doc.pages) renderPage(pdf, content, fonts, images)
 
   return pdf.save()
 }
 
-function renderPage(pdf: PDFDocument, content: PageContent, fonts: Fonts): void {
+type ImageOp = Extract<DrawOp, { kind: 'image' }>
+
+async function embedImages(pdf: PDFDocument, doc: PdfDoc): Promise<Map<ImageOp, PDFImage>> {
+  const map = new Map<ImageOp, PDFImage>()
+  const ops: ImageOp[] = []
+  for (const content of doc.pages) {
+    forEachDraw(content.ops, (op) => {
+      if (op.kind === 'image') ops.push(op)
+    })
+  }
+  for (const op of ops) {
+    try {
+      const image = op.format === 'jpg' ? await pdf.embedJpg(op.data) : await pdf.embedPng(op.data)
+      map.set(op, image)
+    } catch {
+      // A corrupt / undecodable image is skipped rather than failing the whole document.
+    }
+  }
+  return map
+}
+
+/** Walk every op, descending into groups (local copy so `pdf.ts` needs no import from `page.ts`). */
+function forEachDraw(ops: readonly DrawOp[], visit: (op: DrawOp) => void): void {
+  for (const op of ops) {
+    visit(op)
+    if (op.kind === 'group') forEachDraw(op.ops, visit)
+  }
+}
+
+function renderPage(
+  pdf: PDFDocument,
+  content: PageContent,
+  fonts: Fonts,
+  images: Map<ImageOp, PDFImage>,
+): void {
   const heightPt = mmToPt(content.heightMm)
   const page = pdf.addPage([mmToPt(content.widthMm), heightPt])
   const y = (mm: number): number => heightPt - mmToPt(mm)
-  renderOps(page, content.ops, { heightPt, y, fonts })
+  renderOps(page, content.ops, { heightPt, y, fonts, images })
 }
 
 interface Ctx {
   readonly heightPt: number
   readonly y: (mm: number) => number
   readonly fonts: Fonts
+  readonly images: Map<ImageOp, PDFImage>
 }
 
 function renderOps(page: PDFPage, ops: readonly DrawOp[], ctx: Ctx): void {
@@ -82,10 +122,24 @@ function renderOp(page: PDFPage, op: DrawOp, ctx: Ctx): void {
     case 'text':
       renderText(page, op, ctx)
       break
+    case 'image':
+      renderImage(page, op, ctx)
+      break
     case 'group':
       renderGroup(page, op.ops, op.clip, ctx)
       break
   }
+}
+
+function renderImage(page: PDFPage, op: ImageOp, ctx: Ctx): void {
+  const image = ctx.images.get(op)
+  if (!image) return
+  page.drawImage(image, {
+    x: mmToPt(op.rect.x),
+    y: ctx.y(op.rect.y + op.rect.h),
+    width: mmToPt(op.rect.w),
+    height: mmToPt(op.rect.h),
+  })
 }
 
 function renderGroup(

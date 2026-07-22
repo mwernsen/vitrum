@@ -75,6 +75,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 9, migrate: (file) => ({ schemaVersion: 10, project: file.project }) },
       { from: 10, migrate: (file) => ({ schemaVersion: 11, project: file.project }) },
       { from: 11, migrate: (file) => ({ schemaVersion: 12, project: file.project }) },
+      { from: 12, migrate: (file) => ({ schemaVersion: 13, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -382,6 +383,47 @@ describe('schema versioning (FR-4)', () => {
     )
     expect(withRender.render.backlightIntensity).toBe(1.5)
     expect(withRender.render.backlightWarmth).toBe(0) // defaulted
+  })
+
+  it('v12 → v13 seeds the quote default (F-056)', () => {
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+      bom: { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 },
+      symmetry: {
+        mode: 'none',
+        center: { x: 0, y: 0 },
+        angle: Math.PI / 2,
+        count: 6,
+        mirror: false,
+      },
+      render: { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 12, project: legacyProject }))
+    expect(project.quote.currency).toEqual({ code: 'EUR', symbol: '€' })
+    expect(project.quote.labor.hourlyRate).toBe(45)
+    expect(project.quote.overheadPct).toBe(0.15)
+    expect(project.quote.marginPct).toBe(0.3)
+    expect(project.quote.priceBook.consumables).toEqual([])
+    expect(project.quote.manualLines).toEqual([])
+
+    // A pre-release v12 file that already carries a partial quote block keeps its sub-objects.
+    const withQuote = deserialize(
+      JSON.stringify({
+        schemaVersion: 12,
+        project: { ...legacyProject, quote: { marginPct: 0.5 } },
+      }),
+    )
+    expect(withQuote.quote.marginPct).toBe(0.5)
+    expect(withQuote.quote.labor.hourlyRate).toBe(45) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {

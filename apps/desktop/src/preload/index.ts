@@ -42,6 +42,10 @@ const api = {
       ipcRenderer.invoke('glassLib:export', suggestedName, contents),
     importLibrary: (): Promise<string | null> => ipcRenderer.invoke('glassLib:import'),
   },
+  priceBook: {
+    load: (): Promise<string | null> => ipcRenderer.invoke('priceBook:load'),
+    save: (contents: string): Promise<void> => ipcRenderer.invoke('priceBook:save', contents),
+  },
   export: {
     savePdf: (suggestedName: string, bytes: Uint8Array): Promise<string | null> =>
       ipcRenderer.invoke('export:savePdf', suggestedName, bytes),

@@ -38,6 +38,7 @@ import type {
   PieceTextureTransform,
   Project,
   ProjectSettings,
+  QuoteSettings,
   ReferenceLayer,
   ReinforcementBar,
   ReinforcementId,
@@ -963,6 +964,34 @@ export function updateBomSettings(patch: Partial<BomSettings>): Command {
       const prev: Record<string, number> = {}
       for (const key of Object.keys(patch) as (keyof BomSettings)[]) prev[key] = before.bom[key]
       return updateBomSettings(prev as Partial<BomSettings>)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cost estimation / quoting settings (F-056)                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Update the cost-estimation / quoting intent (F-056 FR-2) in one undo step. A shallow patch over
+ * the top-level {@link QuoteSettings} fields (currency, priceBook, labor, overheadPct, marginPct,
+ * client, manualLines); the inverse restores exactly the fields the patch touched. Nested edits
+ * (a single labor coefficient, a consumable, a manual line) are made by the caller replacing the
+ * whole sub-object in the patch, so each user edit is still a single reversible undo entry. Every
+ * total is derived by `computeQuote`, so a factor tweak re-derives the quote with nothing else to
+ * persist.
+ */
+export function updateQuoteSettings(patch: Partial<QuoteSettings>): Command {
+  return {
+    kind: 'updateQuoteSettings',
+    apply: (doc) => ({ ...doc, quote: { ...doc.quote, ...patch } }),
+    invert: (before) => {
+      const prev: Partial<QuoteSettings> = {}
+      for (const key of Object.keys(patch) as (keyof QuoteSettings)[]) {
+        // Restore the prior value of each touched key (typed via an index assignment helper).
+        ;(prev as Record<string, unknown>)[key] = before.quote[key]
+      }
+      return updateQuoteSettings(prev)
     },
   }
 }

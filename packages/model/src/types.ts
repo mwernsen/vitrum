@@ -344,6 +344,152 @@ export function defaultRenderSettings(): RenderSettings {
   return { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} }
 }
 
+/**
+ * The currency a project's prices and quote are expressed in (F-056). Purely a display concern —
+ * every stored amount is a plain number in this currency; there is no conversion. `symbol` is what
+ * the UI and quote PDF print next to numbers.
+ */
+export interface Currency {
+  /** ISO-4217-ish code, e.g. `EUR`, `USD`, `GBP`. */
+  readonly code: string
+  /** Display symbol, e.g. `€`, `$`, `£`. */
+  readonly symbol: string
+}
+
+/**
+ * One editable consumable line in the price book (F-056): a flat per-panel cost for a shop
+ * consumable the BOM does not quantify (flux, patina, cement/whiting, hanging hardware, …). Kept
+ * simple — a name and a per-panel amount — so a workshop can list its recurring extras once.
+ */
+export interface ConsumableLine {
+  readonly id: string
+  readonly name: string
+  /** Flat cost per panel, in the project currency. */
+  readonly cost: number
+}
+
+/**
+ * The per-project price book (F-056): unit prices for the linear/mass materials the BOM quantifies
+ * (came, copper foil, solder, reinforcement) plus flat consumable lines. Glass is **not** here — its
+ * price comes from each glass's `pricePerM2` (F-022). Stored per project so a shared file quotes
+ * self-contained, with a **global workshop default** the user can save to / load from via
+ * {@link PriceBookPort} (the F-022 library pattern). All amounts are in the project currency.
+ */
+export interface PriceBook {
+  /** Lead came price per metre. */
+  readonly leadPerMetre: number
+  /** Copper-foil tape price per metre. */
+  readonly foilPerMetre: number
+  /** Solder price per kilogram (foil technique). */
+  readonly solderPerKg: number
+  /** Reinforcement-bar price per metre. */
+  readonly reinforcementPerMetre: number
+  /** Flat per-panel consumable lines (flux, patina, hardware, …). */
+  readonly consumables: readonly ConsumableLine[]
+}
+
+/**
+ * The labor-estimation model (F-056): converts design metrics into estimated shop hours, then hours
+ * into money at {@link hourlyRate}. Every coefficient is user-tunable (FR-2) and ships as an
+ * **uncalibrated placeholder default** (Mathieu, 2026-07-22) until calibrated against real workshop
+ * hours. The model is deliberately transparent (FR-4): estimated hours = setup + per-piece (with a
+ * complexity term and a foil multiplier) + per-metre-of-seam, each shown separately in the UI.
+ */
+export interface LaborModel {
+  /** Shop hourly rate, in currency per hour. */
+  readonly hourlyRate: number
+  /** Fixed setup / design / admin hours per panel. */
+  readonly setupHours: number
+  /** Base minutes per piece (cutting + fitting). */
+  readonly minutesPerPiece: number
+  /** Minutes per metre of lead-came / copper-foil seam (leading / foiling / soldering). */
+  readonly minutesPerSeamMetre: number
+  /** Extra minutes per piece per unit of shape complexity (curve-heavy pieces cut slower). */
+  readonly minutesPerComplexity: number
+  /** Multiplier on per-piece time for copper foil (foil is slower per piece than lead came). */
+  readonly foilPieceFactor: number
+}
+
+/** Client / quote header fields (F-056). Persisted intent; the quote date is stamped at export. */
+export interface QuoteClient {
+  readonly clientName: string
+  readonly projectTitle: string
+  readonly quoteNumber: string
+  readonly notes: string
+}
+
+/**
+ * A manual quote line item (F-056): an ad-hoc line the user adds to a specific quote (a delivery
+ * charge, an installation day, a discount as a negative amount). Distinct from price-book
+ * consumables, which are recurring workshop defaults.
+ */
+export interface QuoteLineItem {
+  readonly id: string
+  readonly description: string
+  /** Amount in the project currency; may be negative (a discount). */
+  readonly amount: number
+}
+
+/**
+ * The persisted cost-estimation / quoting intent for a project (F-056). Only *tunable inputs* live
+ * here — every total (materials, labor, overhead, margin, grand total) is derived live by
+ * `@vitrum/core`'s `computeQuote` from this plus the BOM, so paperwork is never stale (FR-2), exactly
+ * as the BOM stores only {@link BomSettings}. `overheadPct`/`marginPct` are fractions (`0.15` = 15%);
+ * both are markups on cost (Decision §2).
+ */
+export interface QuoteSettings {
+  readonly currency: Currency
+  readonly priceBook: PriceBook
+  readonly labor: LaborModel
+  /** Overhead markup on the cost subtotal (fraction; default 0.15). */
+  readonly overheadPct: number
+  /** Margin markup on subtotal + overhead (fraction; default 0.30). */
+  readonly marginPct: number
+  readonly client: QuoteClient
+  readonly manualLines: readonly QuoteLineItem[]
+}
+
+/** The shipped default currency (EUR). */
+export function defaultCurrency(): Currency {
+  return { code: 'EUR', symbol: '€' }
+}
+
+/** The shipped default price book (F-056): plausible placeholder unit prices, no consumables. */
+export function defaultPriceBook(): PriceBook {
+  return {
+    leadPerMetre: 3.5,
+    foilPerMetre: 1.2,
+    solderPerKg: 28,
+    reinforcementPerMetre: 6,
+    consumables: [],
+  }
+}
+
+/** The shipped default labor model (F-056): uncalibrated placeholder coefficients (Decision §1). */
+export function defaultLaborModel(): LaborModel {
+  return {
+    hourlyRate: 45,
+    setupHours: 2,
+    minutesPerPiece: 12,
+    minutesPerSeamMetre: 15,
+    minutesPerComplexity: 8,
+    foilPieceFactor: 1.4,
+  }
+}
+
+/** Fresh quote settings, seeded with the shipped defaults and empty client / manual-line fields. */
+export function defaultQuoteSettings(): QuoteSettings {
+  return {
+    currency: defaultCurrency(),
+    priceBook: defaultPriceBook(),
+    labor: defaultLaborModel(),
+    overheadPct: 0.15,
+    marginPct: 0.3,
+    client: { clientName: '', projectTitle: '', quoteNumber: '', notes: '' },
+    manualLines: [],
+  }
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -402,6 +548,12 @@ export interface Project {
    * Tunable intent only — the render is a derived view, never stored.
    */
   readonly render: RenderSettings
+  /**
+   * Cost-estimation / quoting intent (F-056): currency, price book, labor model, overhead/margin,
+   * client fields and manual quote lines. Only tunable inputs are stored; every total is derived by
+   * `@vitrum/core`'s `computeQuote`, so the quote is never stale.
+   */
+  readonly quote: QuoteSettings
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -432,5 +584,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     bom: defaultBomSettings(),
     symmetry: defaultSymmetry(),
     render: defaultRenderSettings(),
+    quote: defaultQuoteSettings(),
   }
 }

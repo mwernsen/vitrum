@@ -7,12 +7,53 @@ import { createSegment } from './factory'
 import { deserialize, serialize } from './serialize'
 import { DocumentStore } from './store'
 
-// Model the snapshot payload as bytes, mirroring the real zip container. Char-code (Latin-1)
-// round-trip keeps the pure model package free of a TextEncoder/DOM/node lib dependency.
-const snapshot = (doc: Parameters<typeof serialize>[0]): Uint8Array =>
-  Uint8Array.from(serialize(doc), (ch) => ch.charCodeAt(0))
-const readSnapshot = (bytes: Uint8Array) =>
-  deserialize(String.fromCharCode(...(bytes as unknown as number[])))
+// Model the snapshot payload as bytes, mirroring the real zip container. A minimal UTF-8
+// round-trip (not Latin-1) keeps the pure model package free of a TextEncoder/DOM/node lib
+// dependency while still surviving multibyte characters like the default currency symbol (€).
+function utf8Encode(text: string): Uint8Array {
+  const out: number[] = []
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!
+    if (cp < 0x80) out.push(cp)
+    else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f))
+    else if (cp < 0x10000)
+      out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
+    else {
+      out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f))
+      out.push(0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
+    }
+  }
+  return Uint8Array.from(out)
+}
+function utf8Decode(bytes: Uint8Array): string {
+  let text = ''
+  for (let i = 0; i < bytes.length;) {
+    const b0 = bytes[i]!
+    if (b0 < 0x80) {
+      text += String.fromCodePoint(b0)
+      i += 1
+    } else if (b0 < 0xe0) {
+      text += String.fromCodePoint(((b0 & 0x1f) << 6) | (bytes[i + 1]! & 0x3f))
+      i += 2
+    } else if (b0 < 0xf0) {
+      text += String.fromCodePoint(
+        ((b0 & 0x0f) << 12) | ((bytes[i + 1]! & 0x3f) << 6) | (bytes[i + 2]! & 0x3f),
+      )
+      i += 3
+    } else {
+      text += String.fromCodePoint(
+        ((b0 & 0x07) << 18) |
+          ((bytes[i + 1]! & 0x3f) << 12) |
+          ((bytes[i + 2]! & 0x3f) << 6) |
+          (bytes[i + 3]! & 0x3f),
+      )
+      i += 4
+    }
+  }
+  return text
+}
+const snapshot = (doc: Parameters<typeof serialize>[0]): Uint8Array => utf8Encode(serialize(doc))
+const readSnapshot = (bytes: Uint8Array) => deserialize(utf8Decode(bytes))
 
 /** A controllable clock: timers fire only when the test calls `tick`. */
 class FakeScheduler implements Scheduler {

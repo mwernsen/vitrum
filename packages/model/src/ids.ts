@@ -34,3 +34,13 @@ export function newCameProfileId(): CameProfileId {
 export function newReinforcementId(): ReinforcementId {
   return nanoid()
 }
+
+/** A fresh id for a price-book consumable line (F-056). */
+export function newConsumableId(): string {
+  return `con-${nanoid(8)}`
+}
+
+/** A fresh id for a manual quote line item (F-056). */
+export function newQuoteLineId(): string {
+  return `ql-${nanoid(8)}`
+}

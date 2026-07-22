@@ -7,6 +7,21 @@ export {
   type Point,
 } from './geometry'
 export { computeBom } from './bom'
+export { computeQuote, pieceComplexity } from './quote'
+export type {
+  LaborBreakdown,
+  PieceLaborRow,
+  QuoteConsumable,
+  QuoteCurrency,
+  QuoteInput,
+  QuoteLaborModel,
+  QuoteLine,
+  QuoteManualLine,
+  QuoteMaterials,
+  QuotePieceMetric,
+  QuotePriceBook,
+  QuoteReport,
+} from './quote'
 export { REFERENCE_IMAGE_MAX_PX, downscaleSize, type ImageSize } from './image'
 export type {
   BomFactors,

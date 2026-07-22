@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, PriceBookPort, StoragePort } from '@vitrum/model'
 
 /**
  * How the UI reaches its host environment (F-002). The desktop app supplies an
@@ -68,6 +68,11 @@ export interface AppHost {
    * the session only.
    */
   readonly glassLibrary?: GlassLibraryPort
+  /**
+   * The global workshop price book's persistent storage (F-056). Absent means the host does not
+   * persist a global default — the UI then keeps the shipped default price book for the session only.
+   */
+  readonly priceBook?: PriceBookPort
   /**
    * Writing generated PDFs to disk (F-041). Absent means the host cannot export (the print action is
    * then unavailable); the browser stub downloads the file instead.

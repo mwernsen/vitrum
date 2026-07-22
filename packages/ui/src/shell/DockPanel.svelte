@@ -24,6 +24,8 @@
     rules?: Snippet
     /** Live manufacturing content (F-040 numbering), rendered when the make section is open. */
     make?: Snippet
+    /** Live cost / quote content (F-056), rendered when the cost section is open. */
+    cost?: Snippet
     /** The reference-image underlay controller (F-051), for the Layers panel. */
     reference?: ReferenceController
     /** Trigger the host's image picker to add a reference layer (F-051). */
@@ -42,6 +44,7 @@
     glass,
     rules,
     make,
+    cost,
     reference,
     onAddReference,
     symmetry,
@@ -83,6 +86,8 @@
       {@render rules?.()}
     {:else if section === 'make'}
       {@render make?.()}
+    {:else if section === 'cost'}
+      {@render cost?.()}
     {:else if scaffold}
       <div class="placeholder">
         {#if scaffold.actions}

@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, PriceBookPort, StoragePort } from '@vitrum/model'
 
 import type { AppHost, ExportPort, ImportPort, MenuAction, OpenedImage } from './host'
 
@@ -13,6 +13,8 @@ export interface FakeHost extends AppHost {
   recoverAnswer: boolean
   /** Persisted global glass library JSON (null = first run). */
   glassLibraryStore: string | null
+  /** Persisted global price book JSON (null = first run). */
+  priceBookStore: string | null
   /** The JSON returned by the next `importLibrary()` call. */
   nextImportLibrary: string | null
   /** The most recent library JSON handed to `exportLibrary()`. */
@@ -43,6 +45,7 @@ export function createFakeHost(): FakeHost {
     discardAnswer: true,
     recoverAnswer: false,
     glassLibraryStore: null,
+    priceBookStore: null,
     nextImportLibrary: null,
     lastExportedLibrary: null,
     lastExportedPdf: null,
@@ -78,6 +81,12 @@ export function createFakeHost(): FakeHost {
       },
       importLibrary: async () => host.nextImportLibrary,
     } satisfies GlassLibraryPort,
+    priceBook: {
+      load: async () => host.priceBookStore,
+      save: async (contents) => {
+        host.priceBookStore = contents
+      },
+    } satisfies PriceBookPort,
     export: {
       savePdf: async (name, bytes) => {
         host.lastExportedPdf = { name, bytes }
