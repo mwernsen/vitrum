@@ -72,6 +72,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 6, migrate: (file) => ({ schemaVersion: 7, project: file.project }) },
       { from: 7, migrate: (file) => ({ schemaVersion: 8, project: file.project }) },
       { from: 8, migrate: (file) => ({ schemaVersion: 9, project: file.project }) },
+      { from: 9, migrate: (file) => ({ schemaVersion: 10, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -291,6 +292,26 @@ describe('schema versioning (FR-4)', () => {
     expect(withBom.bom.solderGramsPerMetre).toBe(15)
     expect(withBom.bom.leadWaste).toBe(0.1)
     expect(withBom.bom.foilRollLengthMm).toBe(33_000)
+  })
+
+  it('v9 → v10 drops placeholder reference layers lacking an embedded image (F-051)', () => {
+    // A legacy v9 file whose `layers` list is the old id/name/visible placeholder (no assetId).
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [{ id: 'l1', name: 'old placeholder', visible: true }],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+      bom: { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 9, project: legacyProject }))
+    // The placeholder had no embedded bytes, so it is dropped rather than half-migrated.
+    expect(project.layers).toEqual([])
   })
 
   it('throws when no migration path exists for an older version', () => {

@@ -25,6 +25,15 @@ const CSV_FILTERS = [{ name: 'CSV spreadsheet', extensions: ['csv'] }]
 const SVG_FILTERS = [{ name: 'SVG image', extensions: ['svg'] }]
 const DXF_FILTERS = [{ name: 'DXF drawing', extensions: ['dxf'] }]
 const PNG_FILTERS = [{ name: 'PNG image', extensions: ['png'] }]
+const IMAGE_FILTERS = [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+
+/** Best-effort MIME from a reference-image file's extension (F-051). */
+function mimeForImage(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase()
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  return 'image/png'
+}
 
 /** Choose the save-dialog filter for a text export from the suggested file extension (F-042/F-043). */
 function textFiltersFor(suggestedName: string): { name: string; extensions: string[] }[] {
@@ -169,45 +178,63 @@ function buildMenu(): void {
 }
 
 function registerIpc(): void {
+  // Project files are the `.vitrum` zip container (F-051): read and write raw bytes, not UTF-8.
   ipcMain.handle('storage:open', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: FILE_FILTERS })
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
-    return { path, contents: await readFile(path, 'utf8') }
+    return { path, contents: new Uint8Array(await readFile(path)) }
   })
 
-  ipcMain.handle('storage:save', async (_event, path: string, contents: string) => {
-    await writeFile(path, contents, 'utf8')
+  ipcMain.handle('storage:save', async (_event, path: string, contents: Uint8Array) => {
+    await writeFile(path, Buffer.from(contents))
   })
 
   // Read an SVG file to import (F-050). `VITRUM_IMPORT_SVG_PATH` bypasses the native dialog so E2E
-  // runs read a fixture they control instead of prompting.
+  // runs read a fixture they control instead of prompting. Bytes (the import feature decodes UTF-8).
   ipcMain.handle('import:openSvg', async () => {
     const forced = process.env['VITRUM_IMPORT_SVG_PATH']
-    if (forced) return { path: forced, contents: await readFile(forced, 'utf8') }
+    if (forced) return { path: forced, contents: new Uint8Array(await readFile(forced)) }
     const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: SVG_FILTERS })
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
-    return { path, contents: await readFile(path, 'utf8') }
+    return { path, contents: new Uint8Array(await readFile(path)) }
   })
 
-  ipcMain.handle('storage:saveAs', async (_event, suggestedName: string, contents: string) => {
+  // Read a raster image to import as a reference underlay (F-051). `VITRUM_IMPORT_IMAGE_PATH`
+  // bypasses the dialog for E2E.
+  ipcMain.handle('import:openImage', async () => {
+    const forced = process.env['VITRUM_IMPORT_IMAGE_PATH']
+    if (forced) {
+      return {
+        path: forced,
+        mime: mimeForImage(forced),
+        bytes: new Uint8Array(await readFile(forced)),
+      }
+    }
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: IMAGE_FILTERS })
+    const path = result.filePaths[0]
+    if (result.canceled || !path) return null
+    return { path, mime: mimeForImage(path), bytes: new Uint8Array(await readFile(path)) }
+  })
+
+  ipcMain.handle('storage:saveAs', async (_event, suggestedName: string, contents: Uint8Array) => {
     const result = await dialog.showSaveDialog({
       defaultPath: suggestedName,
       filters: FILE_FILTERS,
     })
     if (result.canceled || !result.filePath) return null
-    await writeFile(result.filePath, contents, 'utf8')
+    await writeFile(result.filePath, Buffer.from(contents))
     return result.filePath
   })
 
-  ipcMain.handle('autosave:write', async (_event, contents: string) => {
-    await writeFile(autosavePath(), contents, 'utf8')
+  ipcMain.handle('autosave:write', async (_event, contents: Uint8Array) => {
+    await writeFile(autosavePath(), Buffer.from(contents))
   })
 
   ipcMain.handle('autosave:read', async () => {
     try {
-      return await readFile(autosavePath(), 'utf8')
+      return new Uint8Array(await readFile(autosavePath()))
     } catch {
       return null
     }

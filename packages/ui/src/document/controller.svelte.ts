@@ -13,13 +13,15 @@ import {
   constructionSegmentIds,
   createEmptyProject,
   createSegment,
-  deserialize,
   DocumentStore,
   outputSegments,
+  packDocument,
   removeSegments,
-  serialize,
+  unpackDocument,
 } from '@vitrum/model'
-import type { Command, ExecuteOptions, Project } from '@vitrum/model'
+import type { AssetId, Command, ExecuteOptions, Project, ReferenceAsset } from '@vitrum/model'
+
+import { SvelteMap } from 'svelte/reactivity'
 
 import { stressScene } from '../canvas/scene'
 
@@ -55,6 +57,15 @@ export class DocumentController {
    */
   onBeforeSave: (() => void) | undefined
 
+  /**
+   * How the reference-image feature (F-051) contributes its embedded image blobs to the `.vitrum`
+   * zip. `collectAssets` gathers the bytes for every layer at save/autosave time; `loadAssets`
+   * hands back the bytes read from a file on open/recover. Both default to empty so a build without
+   * the reference feature (or a test) still saves and loads a document with no images.
+   */
+  collectAssets: () => ReadonlyMap<AssetId, ReferenceAsset> = () => new SvelteMap()
+  loadAssets: (assets: ReadonlyMap<AssetId, ReferenceAsset>) => void = () => {}
+
   segmentCount = $derived(Object.keys(this.doc.segments).length)
 
   /**
@@ -83,6 +94,7 @@ export class DocumentController {
         setTimer: (fn, ms) => setTimeout(fn, ms),
         clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       },
+      serialize: (doc) => packDocument(doc, this.collectAssets()),
       write: (contents) => host.storage.writeAutosave(contents),
     })
     this.#autosaver.start()
@@ -166,7 +178,9 @@ export class DocumentController {
     if (!file) return
     this.#detector.reset()
     this.#cutCache.reset()
-    this.#store.load(deserialize(file.contents))
+    const { project, assets } = unpackDocument(file.contents)
+    this.loadAssets(assets)
+    this.#store.load(project)
     this.currentPath = file.path
     await this.#host.storage.clearAutosave()
   }
@@ -178,17 +192,14 @@ export class DocumentController {
       return
     }
     this.onBeforeSave?.()
-    await this.#host.storage.saveFile(this.currentPath, serialize(this.#store.document))
+    await this.#host.storage.saveFile(this.currentPath, this.#packFile())
     this.#store.markSaved()
     await this.#host.storage.clearAutosave()
   }
 
   saveAs = async (): Promise<void> => {
     this.onBeforeSave?.()
-    const path = await this.#host.storage.saveFileAs(
-      this.#suggestedName(),
-      serialize(this.#store.document),
-    )
+    const path = await this.#host.storage.saveFileAs(this.#suggestedName(), this.#packFile())
     if (path === null) return
     this.currentPath = path
     this.#store.markSaved()
@@ -196,11 +207,18 @@ export class DocumentController {
   }
 
   /** Restore an autosave snapshot after a crash. The result is treated as unsaved. */
-  recover = (contents: string): void => {
+  recover = (contents: Uint8Array): void => {
     this.#detector.reset()
     this.#cutCache.reset()
-    this.#store.load(deserialize(contents))
+    const { project, assets } = unpackDocument(contents)
+    this.loadAssets(assets)
+    this.#store.load(project)
     this.currentPath = null
+  }
+
+  /** Pack the current document plus its reference-image assets into the `.vitrum` zip bytes. */
+  #packFile(): Uint8Array {
+    return packDocument(this.#store.document, this.collectAssets())
   }
 
   #runMenuAction(action: MenuAction): void {

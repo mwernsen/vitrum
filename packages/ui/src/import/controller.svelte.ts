@@ -70,7 +70,8 @@ export class ImportController {
     try {
       const file = await openSvg()
       if (!file) return
-      const source = readSvg(file.contents)
+      // `OpenedFile.contents` is bytes (the project container is binary); SVG is UTF-8 text.
+      const source = readSvg(new TextDecoder().decode(file.contents))
       this.source = source
       this.fileName = file.path
       // Default the scale dialog to 1 user unit = 1 mm (decision #3): target width = artwork width.

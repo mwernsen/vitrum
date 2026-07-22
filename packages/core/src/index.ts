@@ -7,6 +7,7 @@ export {
   type Point,
 } from './geometry'
 export { computeBom } from './bom'
+export { REFERENCE_IMAGE_MAX_PX, downscaleSize, type ImageSize } from './image'
 export type {
   BomFactors,
   BomGlass,

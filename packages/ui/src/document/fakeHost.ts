@@ -1,11 +1,11 @@
 import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
-import type { AppHost, ExportPort, ImportPort, MenuAction } from './host'
+import type { AppHost, ExportPort, ImportPort, MenuAction, OpenedImage } from './host'
 
 /** An in-memory `AppHost` for tests: records I/O and answers prompts deterministically. */
 export interface FakeHost extends AppHost {
-  readonly files: Map<string, string>
-  autosave: string | null
+  readonly files: Map<string, Uint8Array>
+  autosave: Uint8Array | null
   dirty: boolean
   nextOpen: OpenedFile | null
   nextSaveAsPath: string | null
@@ -25,11 +25,13 @@ export interface FakeHost extends AppHost {
   lastExportedPng: { name: string; bytes: Uint8Array } | null
   /** The file returned by the next `import.openSvg()` call (F-050). */
   nextImportSvg: OpenedFile | null
+  /** The image returned by the next `import.openImage()` call (F-051). */
+  nextImportImage: OpenedImage | null
   emitMenu(action: MenuAction): void
 }
 
 export function createFakeHost(): FakeHost {
-  const files = new Map<string, string>()
+  const files = new Map<string, Uint8Array>()
   let menuHandler: ((action: MenuAction) => void) | undefined
 
   const host: FakeHost = {
@@ -47,6 +49,7 @@ export function createFakeHost(): FakeHost {
     lastExportedText: null,
     lastExportedPng: null,
     nextImportSvg: null,
+    nextImportImage: null,
     storage: {
       openFile: async () => host.nextOpen,
       saveFile: async (path, contents) => {
@@ -91,6 +94,7 @@ export function createFakeHost(): FakeHost {
     } satisfies ExportPort,
     import: {
       openSvg: async () => host.nextImportSvg,
+      openImage: async () => host.nextImportImage,
     } satisfies ImportPort,
     onMenuAction: (handler) => {
       menuHandler = handler

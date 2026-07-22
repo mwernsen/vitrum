@@ -30,12 +30,14 @@ import type {
   DrcRuleOverride,
   Glass,
   GlassId,
+  LayerId,
   Node,
   NodeId,
   NumberingScheme,
   PieceId,
   Project,
   ProjectSettings,
+  ReferenceLayer,
   ReinforcementBar,
   ReinforcementId,
   Segment,
@@ -989,6 +991,106 @@ export function removeReinforcement(id: ReinforcementId): Command {
 /** Tag `updateReinforcement` commands with the bar id they touch, so `merge` can compare cheaply. */
 interface ReinforcementCommand extends Command {
   readonly barId: ReinforcementId
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reference-image layer commands (F-051)                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Fields of a {@link ReferenceLayer} that an edit may change (everything but its id). */
+export type ReferenceLayerPatch = Partial<Omit<ReferenceLayer, 'id'>>
+
+/** Add a reference-image underlay layer (F-051). Fails if its id is already present. */
+export function addReferenceLayer(layer: ReferenceLayer): Command {
+  return {
+    kind: 'addReferenceLayer',
+    apply: (doc) => {
+      if (doc.layers.some((l) => l.id === layer.id)) {
+        throw new Error(`addReferenceLayer: id ${layer.id} already exists`)
+      }
+      return { ...doc, layers: [...doc.layers, layer] }
+    },
+    invert: () => removeReferenceLayer(layer.id),
+  }
+}
+
+/**
+ * Patch a reference layer's fields — the single mutation behind every layer op (move/scale/rotate
+ * via `dstQuad`, perspective via `srcQuad`, opacity/desaturate/visible/locked/rename). The inverse
+ * restores exactly the fields this patch changed. `merge` coalesces a live drag (same layer, same
+ * set of patched keys) into one undo entry, mirroring `updateReinforcement`.
+ */
+export function updateReferenceLayer(id: LayerId, patch: ReferenceLayerPatch): Command {
+  const command: ReferenceLayerCommand = {
+    kind: 'updateReferenceLayer',
+    layerId: id,
+    patchKeys: Object.keys(patch).sort().join(','),
+    apply: (doc) => {
+      if (!doc.layers.some((l) => l.id === id)) {
+        throw new Error(`updateReferenceLayer: id ${id} does not exist`)
+      }
+      return { ...doc, layers: doc.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)) }
+    },
+    invert: (before) => {
+      const prior = before.layers.find((l) => l.id === id)
+      if (!prior) throw new Error(`updateReferenceLayer: id ${id} does not exist`)
+      // Restore only the keys this patch touched, read from the pre-state.
+      const undo: ReferenceLayerPatch = {}
+      for (const key of Object.keys(patch) as (keyof ReferenceLayerPatch)[]) {
+        ;(undo as Record<string, unknown>)[key] = prior[key]
+      }
+      return updateReferenceLayer(id, undo)
+    },
+    merge: (next) => {
+      if (next.kind !== 'updateReferenceLayer') return undefined
+      const other = next as ReferenceLayerCommand
+      // Only coalesce when the same layer and the same fields are being edited, so a drag stays
+      // one entry but a drag followed by an opacity change stay separate.
+      return other.layerId === id && other.patchKeys === command.patchKeys ? next : undefined
+    },
+  }
+  return command
+}
+
+/** Remove a reference layer by id (F-051). Reversible — the inverse re-adds the exact layer. */
+export function removeReferenceLayer(id: LayerId): Command {
+  return {
+    kind: 'removeReferenceLayer',
+    apply: (doc) => ({ ...doc, layers: doc.layers.filter((l) => l.id !== id) }),
+    invert: (before) => {
+      const prior = before.layers.find((l) => l.id === id)
+      return prior ? addReferenceLayer(prior) : noop()
+    },
+  }
+}
+
+/**
+ * Reorder the reference layers to exactly `orderedIds` (F-051 stacking order — later layers draw
+ * on top). Must be a permutation of the current layer ids. Self-inverting from the pre-state order.
+ */
+export function reorderReferenceLayers(orderedIds: readonly LayerId[]): Command {
+  return {
+    kind: 'reorderReferenceLayers',
+    apply: (doc) => {
+      if (orderedIds.length !== doc.layers.length) {
+        throw new Error('reorderReferenceLayers: id list is not a permutation of the layers')
+      }
+      const byId = new Map(doc.layers.map((l) => [l.id, l]))
+      const layers = orderedIds.map((lid) => {
+        const layer = byId.get(lid)
+        if (!layer) throw new Error(`reorderReferenceLayers: unknown layer ${lid}`)
+        return layer
+      })
+      return { ...doc, layers }
+    },
+    invert: (before) => reorderReferenceLayers(before.layers.map((l) => l.id)),
+  }
+}
+
+/** Tag `updateReferenceLayer` commands with the layer + fields they touch, for cheap `merge`. */
+interface ReferenceLayerCommand extends Command {
+  readonly layerId: LayerId
+  readonly patchKeys: string
 }
 
 /** A do-nothing command (the inverse of removing a bar that no longer exists). */

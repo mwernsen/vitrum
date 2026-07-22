@@ -4,8 +4,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { Autosaver, type Scheduler } from './autosave'
 import { addSegment } from './commands'
 import { createSegment } from './factory'
-import { deserialize } from './serialize'
+import { deserialize, serialize } from './serialize'
 import { DocumentStore } from './store'
+
+// Model the snapshot payload as bytes, mirroring the real zip container. Char-code (Latin-1)
+// round-trip keeps the pure model package free of a TextEncoder/DOM/node lib dependency.
+const snapshot = (doc: Parameters<typeof serialize>[0]): Uint8Array =>
+  Uint8Array.from(serialize(doc), (ch) => ch.charCodeAt(0))
+const readSnapshot = (bytes: Uint8Array) =>
+  deserialize(String.fromCharCode(...(bytes as unknown as number[])))
 
 /** A controllable clock: timers fire only when the test calls `tick`. */
 class FakeScheduler implements Scheduler {
@@ -37,7 +44,7 @@ class FakeScheduler implements Scheduler {
 describe('Autosaver (FR-5)', () => {
   let store: DocumentStore
   let scheduler: FakeScheduler
-  let writes: string[]
+  let writes: Uint8Array[]
   let autosaver: Autosaver
 
   beforeEach(() => {
@@ -47,6 +54,7 @@ describe('Autosaver (FR-5)', () => {
     autosaver = new Autosaver({
       store,
       scheduler,
+      serialize: snapshot,
       write: (contents) => {
         writes.push(contents)
       },
@@ -62,7 +70,7 @@ describe('Autosaver (FR-5)', () => {
 
     scheduler.tick()
     expect(writes).toHaveLength(1)
-    expect(deserialize(writes[0]!)).toEqual(store.document)
+    expect(readSnapshot(writes[0]!)).toEqual(store.document)
   })
 
   it('collapses a burst of edits within one interval into a single snapshot', () => {
@@ -74,7 +82,7 @@ describe('Autosaver (FR-5)', () => {
     scheduler.tick()
     expect(writes).toHaveLength(1)
     // The single snapshot reflects the latest state (all three segments).
-    expect(Object.keys(deserialize(writes[0]!).segments)).toHaveLength(3)
+    expect(Object.keys(readSnapshot(writes[0]!).segments)).toHaveLength(3)
   })
 
   it('schedules again after a snapshot when new edits arrive', () => {

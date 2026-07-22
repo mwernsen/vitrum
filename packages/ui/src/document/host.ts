@@ -41,9 +41,22 @@ export interface ExportPort {
  * stays Electron-free; the desktop host shows a native open dialog, the browser stub uses a file
  * input, and an env override isolates E2E runs.
  */
+/** A raster image the user chose to import as a reference underlay (F-051). */
+export interface OpenedImage {
+  readonly path: string
+  readonly mime: string
+  readonly bytes: Uint8Array
+}
+
 export interface ImportPort {
   /** Show an open dialog filtered to SVG and read the chosen file. Resolves to null if cancelled. */
   openSvg(): Promise<OpenedFile | null>
+  /**
+   * Show an open dialog filtered to raster images (PNG/JPEG/WebP) and read the chosen file as
+   * bytes (F-051 reference underlay). Resolves to null if cancelled. Optional so an older host
+   * without image support degrades gracefully (the "add reference image" action hides).
+   */
+  openImage?(): Promise<OpenedImage | null>
 }
 
 export interface AppHost {
