@@ -158,6 +158,21 @@ export {
   type UnitResolution,
 } from './svg'
 export {
+  canonicalizeToSource,
+  expandNetwork,
+  expandReplicas,
+  geometryEnds,
+  noSymmetry,
+  radialCount,
+  reflection,
+  symmetryTransforms,
+  transformSymGeometry,
+  type NetworkSegment,
+  type SymGeometry,
+  type SymmetryMode,
+  type SymmetrySetup,
+} from './symmetry'
+export {
   buildPickScene,
   marqueeMode,
   marqueeSelect,

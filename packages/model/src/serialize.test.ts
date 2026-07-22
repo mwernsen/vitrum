@@ -73,6 +73,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 7, migrate: (file) => ({ schemaVersion: 8, project: file.project }) },
       { from: 8, migrate: (file) => ({ schemaVersion: 9, project: file.project }) },
       { from: 9, migrate: (file) => ({ schemaVersion: 10, project: file.project }) },
+      { from: 10, migrate: (file) => ({ schemaVersion: 11, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -312,6 +313,37 @@ describe('schema versioning (FR-4)', () => {
     const project = deserialize(JSON.stringify({ schemaVersion: 9, project: legacyProject }))
     // The placeholder had no embedded bytes, so it is dropped rather than half-migrated.
     expect(project.layers).toEqual([])
+  })
+
+  it('v10 → v11 seeds the inert symmetry default (F-052)', () => {
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+      bom: { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 10, project: legacyProject }))
+    expect(project.symmetry.mode).toBe('none')
+    expect(project.symmetry.count).toBe(6)
+    expect(project.symmetry.mirror).toBe(false)
+
+    // A pre-release v10 file that already carries a partial symmetry block keeps its fields.
+    const withSymmetry = deserialize(
+      JSON.stringify({
+        schemaVersion: 10,
+        project: { ...legacyProject, symmetry: { mode: 'radial', count: 8 } },
+      }),
+    )
+    expect(withSymmetry.symmetry.mode).toBe('radial')
+    expect(withSymmetry.symmetry.count).toBe(8)
+    expect(withSymmetry.symmetry.mirror).toBe(false) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {

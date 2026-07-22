@@ -298,6 +298,39 @@ export function drawContent(
 }
 
 /**
+ * Draw the live-symmetry axes/spokes and center as construction-like guides (F-052): dashed lines
+ * in the guide colour, with a small ring at the center. Overlay-only chrome (tokens), never part of
+ * the rendered document — the replica *content* is drawn as ordinary segments by {@link drawContent}.
+ */
+export function drawSymmetryAxes(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  axes: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[],
+  center: { x: number; y: number },
+  palette: CanvasPalette,
+): void {
+  if (!ctx || axes.length === 0) return
+  ctx.save()
+  ctx.strokeStyle = palette.construction
+  ctx.lineWidth = 1
+  ctx.setLineDash([6, 5])
+  for (const axis of axes) {
+    const a = worldToScreen(vp, vec2(axis.a.x, axis.a.y))
+    const b = worldToScreen(vp, vec2(axis.b.x, axis.b.y))
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.stroke()
+  }
+  ctx.setLineDash([])
+  const c = worldToScreen(vp, vec2(center.x, center.y))
+  ctx.beginPath()
+  ctx.arc(c.x, c.y, 4, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
  * Draw the technique-derived cut contours (F-021 dev overlay): the inset outline where each piece
  * of glass is actually cut, so toggling lead⇄foil or a per-segment came override visibly shifts the
  * cut lines. Degenerate contours (a piece too small to inset) are drawn in the danger colour.

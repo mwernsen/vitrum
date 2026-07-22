@@ -44,6 +44,7 @@ import type {
   SegmentGeometry,
   SegmentId,
   SegmentRole,
+  SymmetrySetup,
 } from './types'
 
 /**
@@ -627,6 +628,79 @@ function mergeSettings(base: ProjectSettings, patch: Partial<ProjectSettings>): 
   const name = patch.name ?? base.name
   const panelSize = 'panelSize' in patch ? patch.panelSize : base.panelSize
   return panelSize ? { units, name, panelSize } : { units, name }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Symmetry commands (F-052)                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Replace the whole symmetry setup. The primitive every symmetry edit is expressed in: its inverse
+ * restores the exact previous setup, so switching mode, moving the center or nudging the axis is a
+ * single, precise undo entry (FR-4). Not exported — callers use {@link setSymmetry}.
+ */
+function replaceSymmetry(next: SymmetrySetup, kind = 'replaceSymmetry'): Command {
+  return {
+    kind,
+    apply: (doc) => ({ ...doc, symmetry: next }),
+    invert: (before) => replaceSymmetry(before.symmetry, kind),
+  }
+}
+
+/** Patch the live-symmetry setup (F-052). One undo entry per edit (FR-4). */
+export function setSymmetry(patch: Partial<SymmetrySetup>): Command {
+  return {
+    kind: 'setSymmetry',
+    apply: (doc) => replaceSymmetry({ ...doc.symmetry, ...patch }).apply(doc),
+    invert: (before) => replaceSymmetry(before.symmetry),
+  }
+}
+
+/**
+ * Bake live symmetry (F-052 FR-3): materialize the derived replicas — computed by `@vitrum/core`'s
+ * `expandReplicas` and welded into concrete segments by the shell — into ordinary stored segments
+ * and turn the mode off, all as **one** compound command = one undo step. Reversible exactly: undo
+ * removes precisely the segments this command added and restores the prior symmetry setup. The
+ * concrete segments are minted once at command construction and captured here, so redo reproduces
+ * the same ids (the F-013/F-020 determinism pattern). Fails if any id collides with an existing
+ * segment (ids are never reused).
+ */
+export function bakeSymmetry(replicas: readonly Segment[]): Command {
+  const addIds = replicas.map((s) => s.id)
+  return {
+    kind: 'bakeSymmetry',
+    apply: (doc) => {
+      const next = { ...doc.segments }
+      for (const segment of replicas) {
+        if (segment.id in next)
+          throw new Error(`bakeSymmetry: segment ${segment.id} already exists`)
+        next[segment.id] = segment
+      }
+      return {
+        ...doc,
+        segments: next,
+        nodes: reconcileNodes(next, doc.nodes, replicas),
+        symmetry: { ...doc.symmetry, mode: 'none' },
+      }
+    },
+    invert: (before) => {
+      const priorSymmetry = before.symmetry
+      return {
+        kind: 'unbakeSymmetry',
+        apply: (doc) => {
+          let segments = doc.segments
+          for (const id of addIds) segments = withoutSegment(segments, id)
+          return {
+            ...doc,
+            segments,
+            nodes: reconcileNodes(segments, doc.nodes),
+            symmetry: priorSymmetry,
+          }
+        },
+        invert: () => bakeSymmetry(replicas),
+      }
+    },
+  }
 }
 
 /* -------------------------------------------------------------------------- */

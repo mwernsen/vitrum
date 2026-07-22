@@ -9,7 +9,7 @@ glass. It runs on your own machine, keeps your hands on the work, and gets out o
 the way.
 
 Think of it as the graph paper, the light table, and the fussy friend who reminds
-you that *no, that reverse curve will never cut clean* — rolled into one. You draw
+you that _no, that reverse curve will never cut clean_ — rolled into one. You draw
 the design; Vitrum keeps track of every piece, every colour, and every awkward angle
 so that when you finally reach for the glass cutter, the surprises are the good kind.
 
@@ -20,8 +20,8 @@ write code, or both, you're in the right place.
 
 ![Vitrum's design view: a stained-glass panel mid-cut, with a layers list, lead-came technique settings, and a live readiness strip up top](docs/screenshots/home.png)
 
-*The design view — layers and technique on the left, glass and lead on the canvas,
-and a readiness strip that tracks geometry, glass, checks, and numbering as you work.*
+_The design view — layers and technique on the left, glass and lead on the canvas,
+and a readiness strip that tracks geometry, glass, checks, and numbering as you work._
 
 ---
 

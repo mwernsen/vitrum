@@ -243,3 +243,15 @@ this file steers every future feature.
 - (F-050, 2026-07-21) The F-043↔F-050 SVG round-trip contract lives in `@vitrum/paper` but imports the
   **real** `@vitrum/core` `parseSvg`, so a wrong export sweep/large-arc flag or an import parse bug
   fails one shared test; assert by sampling curve points (arcs stay kernel arcs), not `fmt()` strings.
+- (F-052, 2026-07-22) Live symmetry replicas are pure derived output: a `@vitrum/core` transform
+  (`expandNetwork`) mirrors `Segment` structurally (no `core→model` edge) with derived ids
+  (`${id}~sym${k}`) so per-sector welds hold by construction; the doc stores only source +
+  `Project.symmetry`. Undo is free (undo the one source command → replicas vanish). Centralise expansion
+  on `DocumentController.outputNetwork()` so detection/DRC/BOM/exports share one path.
+- (F-052, 2026-07-22) The kernel's `transformShape` refuses to reflect an arc; reflect analytically
+  (reflected center, angles `2α−φ`, flip `ccw`) to keep arcs as arcs instead of demoting to cubics
+  (F-013's choice). Seam coherence needs no doc mutation — F-020's 0.01 mm clustering welds sector
+  seams; assert via `detectPieces` over the expanded network.
+- (F-052, 2026-07-22) Source-confined drawing costs nothing at the tool layer: compose a
+  `canonicalizeToSource` fold in front of the F-012 resolver (`snap.resolver(canonicalize(world), ctx)`)
+  — no `ResolvedPoint`/tool contract change, mirroring the F-012 seam-decoration pattern.

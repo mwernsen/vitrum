@@ -272,6 +272,34 @@ export interface BomSettings {
   readonly foilRollLengthMm: number
 }
 
+/**
+ * The kind of live symmetry a project is set up with (F-052). `none` disables replication.
+ * Structurally identical to `@vitrum/core`'s `SymmetryMode`; kept here so the model stays
+ * core-free (the pure expansion transform lives in `@vitrum/core` and consumes this shape).
+ */
+export type SymmetryMode = 'none' | 'mirror' | 'double-mirror' | 'radial'
+
+/**
+ * The persisted live-symmetry setup (F-052 Decision §2) — **setup only**, never any replica
+ * geometry. `center` is the mirror/rotation origin in mm; `angle` (radians) orients the primary
+ * axis; `count` is the radial N-fold order (used only for `radial`, clamped ≥ 2 by the transform);
+ * `mirror` adds a reflected copy per radial sector (a full dihedral group). Replicas are derived on
+ * demand by `@vitrum/core`'s `expandNetwork`; only this intent is stored, so a symmetric document
+ * keeps its source + this block and always has perfect symmetry until baked (FR-3).
+ */
+export interface SymmetrySetup {
+  readonly mode: SymmetryMode
+  readonly center: Vec2
+  readonly angle: number
+  readonly count: number
+  readonly mirror: boolean
+}
+
+/** A fresh, inert symmetry setup (no replication): center at the origin, vertical primary axis. */
+export function defaultSymmetry(): SymmetrySetup {
+  return { mode: 'none', center: { x: 0, y: 0 }, angle: Math.PI / 2, count: 6, mirror: false }
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -319,6 +347,12 @@ export interface Project {
    * and the foil roll length. Only tunable intent is stored; the lists themselves are derived.
    */
   readonly bom: BomSettings
+  /**
+   * Live-symmetry setup (F-052): mode, center, primary-axis angle, radial count and mirror flag.
+   * Setup only — replicas are derived by `@vitrum/core`, never stored. A `none` setup is the
+   * inert default.
+   */
+  readonly symmetry: SymmetrySetup
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -347,5 +381,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     reinforcements: [],
     numbering: defaultNumbering(),
     bom: defaultBomSettings(),
+    symmetry: defaultSymmetry(),
   }
 }

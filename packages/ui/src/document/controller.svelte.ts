@@ -1,6 +1,8 @@
 import {
   CutContourCache,
   curveEndpoints,
+  expandNetwork,
+  expandReplicas,
   PieceDetector,
   type CutContour,
   type DetectionResult,
@@ -19,7 +21,14 @@ import {
   removeSegments,
   unpackDocument,
 } from '@vitrum/model'
-import type { AssetId, Command, ExecuteOptions, Project, ReferenceAsset } from '@vitrum/model'
+import type {
+  AssetId,
+  Command,
+  ExecuteOptions,
+  Project,
+  ReferenceAsset,
+  Segment,
+} from '@vitrum/model'
 
 import { SvelteMap } from 'svelte/reactivity'
 
@@ -115,7 +124,20 @@ export class DocumentController {
    * the incremental `PieceDetector`, so redrawing one line reuses unchanged components and
    * keeps piece ids stable across the session (FR-3/FR-5).
    */
-  detect = (): DetectionResult => this.#detector.update(outputSegments(this.doc))
+  detect = (): DetectionResult => this.#detector.update(this.outputNetwork())
+
+  /**
+   * The full output network piece detection, DRC and every export operate on (F-052): the source
+   * output segments plus the live symmetry replicas, expanded by the pure `@vitrum/core` transform.
+   * With symmetry off this is just `outputSegments(doc)`, unchanged. Replicas are derived on demand
+   * and never stored — the document keeps only source + setup (Decision §2).
+   */
+  outputNetwork = (): Segment[] =>
+    expandNetwork(outputSegments(this.doc), this.doc.symmetry) as Segment[]
+
+  /** Only the derived symmetry replicas (empty when symmetry is off) — the read-only linework. */
+  replicaNetwork = (): Segment[] =>
+    expandReplicas(outputSegments(this.doc), this.doc.symmetry) as Segment[]
 
   /**
    * Derive the technique-aware cut contours for the given pieces (F-021), inset from the drawn
@@ -125,7 +147,7 @@ export class DocumentController {
    * {@link detect} so the two stay in sync.
    */
   cutContours = (pieces: readonly Piece[]): CutContour[] =>
-    this.#cutCache.update(pieces, outputSegments(this.doc), this.doc.technique)
+    this.#cutCache.update(pieces, this.outputNetwork(), this.doc.technique)
 
   undo = (): void => this.#store.undo()
   redo = (): void => this.#store.redo()

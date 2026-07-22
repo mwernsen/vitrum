@@ -28,6 +28,7 @@
     drawReinforcements,
     drawRuler,
     drawSnapMarker,
+    drawSymmetryAxes,
     drawToolPreview,
     drawViolations,
     fillBackground,
@@ -60,6 +61,12 @@
     referenceVersion?: number
     /** The lead-line network to render. Empty until a document is loaded. */
     segments?: readonly Segment[]
+    /** Derived, read-only symmetry replicas to render as live linework (F-052). */
+    replicaSegments?: readonly Segment[]
+    /** Symmetry axis/spoke guides to overlay (F-052). Empty ⇒ none drawn. */
+    symmetryAxes?: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[]
+    /** Symmetry center for the guide overlay (F-052). */
+    symmetryCenter?: { x: number; y: number } | null
     /** World bounds for zoom-to-fit; `null` frames the default panel region. */
     bounds?: BBox | null
     /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
@@ -126,6 +133,9 @@
     resolveReferenceSource = () => undefined,
     referenceVersion = 0,
     segments = [],
+    replicaSegments = [],
+    symmetryAxes = [],
+    symmetryCenter = null,
     bounds = null,
     tools,
     snap,
@@ -273,6 +283,17 @@
         drawContent(ctx, viewport.transform, size, segments, palette, technique)
         if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       }
+      // Derived symmetry replicas (F-052): read-only linework, styled like the source.
+      if (replicaSegments.length > 0) {
+        drawContent(
+          ctx,
+          viewport.transform,
+          size,
+          replicaSegments,
+          palette,
+          cartoon ? undefined : technique,
+        )
+      }
       if (reinforcements.length > 0 || placingBar()) {
         drawReinforcements(
           ctx,
@@ -311,6 +332,9 @@
         )
       }
       drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
+      if (symmetryAxes.length > 0 && symmetryCenter) {
+        drawSymmetryAxes(ctx, viewport.transform, symmetryAxes, symmetryCenter, palette)
+      }
       if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
@@ -373,6 +397,7 @@
     void viewport.height
     void viewport.gridVisible
     void segments
+    void replicaSegments
     void pieces
     void showPieces
     void showGlass
@@ -413,6 +438,8 @@
     void selectedPieces?.size
     void violations
     void selectedViolationKey
+    void symmetryAxes
+    void symmetryCenter
     void printTiles
     void bomHighlightPieces?.size
     void bomHighlightSegments?.size

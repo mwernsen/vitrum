@@ -3,6 +3,7 @@ import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './
 import {
   defaultBomSettings,
   defaultNumbering,
+  defaultSymmetry,
   type BomSettings,
   type DrcState,
   type Glass,
@@ -10,6 +11,7 @@ import {
   type Project,
   type ReinforcementBar,
   type Segment,
+  type SymmetrySetup,
 } from './types'
 
 /**
@@ -22,7 +24,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 10
+export const CURRENT_SCHEMA_VERSION = 11
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -237,6 +239,30 @@ const migrateV9ToV10: Migration = {
   },
 }
 
+/**
+ * v10 → v11 (F-052): live-symmetry setup. v10 files have no `symmetry` block; add the inert default
+ * (`mode: 'none'`) so a pre-F-052 project loads with no replication. Any partial `symmetry` a
+ * pre-release v10 file might carry is preserved, with its fields defaulted.
+ */
+const migrateV10ToV11: Migration = {
+  from: 10,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'symmetry'> & {
+      symmetry?: Partial<SymmetrySetup>
+    }
+    const base = defaultSymmetry()
+    const prior = project.symmetry
+    const symmetry: SymmetrySetup = {
+      mode: prior?.mode ?? base.mode,
+      center: prior?.center ?? base.center,
+      angle: prior?.angle ?? base.angle,
+      count: prior?.count ?? base.count,
+      mirror: prior?.mirror ?? base.mirror,
+    }
+    return { schemaVersion: 11, project: { ...project, symmetry } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -247,6 +273,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV7ToV8,
   migrateV8ToV9,
   migrateV9ToV10,
+  migrateV10ToV11,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
