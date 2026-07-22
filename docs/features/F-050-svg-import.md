@@ -146,8 +146,8 @@ _Delivered 2026-07-21. All five gates green (lint, format:check, check, test —
 - **Import dialog** (`packages/ui/src/import/`): `ImportController` (runes) caches the parsed
   source, holds the single tolerance slider (debounced heal, live read-out), the scale field for
   ambiguous-unit files, and the role; `ImportDialog.svelte` composes `components/core` primitives
-  + a new `Slider.svelte`, with a live piece-count preview and dropped-content notice (FR-5).
-  Reached from `TopBar`; merges via one `addSegments` command in `AppShell` (decision #4, FR-3).
+  - a new `Slider.svelte`, with a live piece-count preview and dropped-content notice (FR-5).
+    Reached from `TopBar`; merges via one `addSegments` command in `AppShell` (decision #4, FR-3).
 - **`ImportPort`** on `AppHost` (host.ts) — stubbed in `browserHost`/`fakeHost`, real open dialog
   on desktop, `VITRUM_*_PATH` env override for E2E; no Electron imports leak into `packages/ui`.
 - **Shared round-trip contract** lives in `packages/paper/src/svgRoundTrip.test.ts` and drives the

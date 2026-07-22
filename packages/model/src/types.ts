@@ -1,4 +1,4 @@
-import type { Arc, CubicBezier, Line, Vec2 } from '@vitrum/geometry'
+import type { Arc, CubicBezier, Line, Quad, Vec2 } from '@vitrum/geometry'
 
 import { defaultTechnique, type TechniqueSettings } from './technique'
 
@@ -110,11 +110,54 @@ export interface Glass {
   readonly swatch?: string
 }
 
-/** A reference-image underlay. Placeholder until F-051. */
+/** A content-addressed key for an embedded image blob (F-051). Stable across save/load. */
+export type AssetId = string
+
+/**
+ * An embedded image blob (F-051). The *bytes* live in the `.vitrum` zip container
+ * (`assets/<id>`), never in `document.json`, so the JSON stays small and text-diffable;
+ * only the {@link ReferenceLayer}'s `assetId` reference is persisted in the document. This
+ * type is therefore a container/runtime concern — it is not part of {@link Project}.
+ */
+export interface ReferenceAsset {
+  readonly mime: string
+  readonly bytes: Uint8Array
+}
+
+/**
+ * A reference-image underlay layer (F-051): a photo or scan placed below the drawing to trace
+ * over. Two quads fully describe how the image is drawn, so placement, calibration and
+ * perspective correction are all just quad edits (one undo entry each):
+ *
+ * - `srcQuad` — four corners in **image pixel space** (TL, TR, BR, BL). Un-rectified this is the
+ *   whole image `(0,0)–(w,0)–(w,h)–(0,h)`; perspective correction drags these onto the four
+ *   corners of the photographed rectangle.
+ * - `dstQuad` — where those corners land in **world mm space**. Move/scale/rotate/calibrate
+ *   transform this quad; rectifying replaces it with the axis-aligned real rectangle.
+ *
+ * The renderer samples the image through the homography `dstQuad → srcQuad` (the same matrix is
+ * measured against on the CPU for FR-1), so an un-rectified layer degenerates to an affine
+ * placement and a rectified one warps correctly (FR-2). The image bytes are referenced by
+ * `assetId` and embedded in the zip container.
+ */
 export interface ReferenceLayer {
   readonly id: LayerId
   readonly name: string
+  readonly assetId: AssetId
+  /** The imported (already downscaled) image's pixel dimensions. */
+  readonly naturalWidthPx: number
+  readonly naturalHeightPx: number
+  readonly srcQuad: Quad
+  readonly dstQuad: Quad
+  /** Layer opacity, 0–1. */
+  readonly opacity: number
+  /** Render greyscale so it reads clearly under coloured linework. */
+  readonly desaturate: boolean
   readonly visible: boolean
+  /** A locked layer ignores pointer edits (no accidental drags while tracing). */
+  readonly locked: boolean
+  /** Whether perspective correction is active (drives which handles the UI shows). */
+  readonly rectified: boolean
 }
 
 /** A stable, never-reused id for a reinforcement bar (F-032). */

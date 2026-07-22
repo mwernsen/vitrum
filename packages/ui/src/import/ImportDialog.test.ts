@@ -21,7 +21,10 @@ const CLEAN_MM =
 
 async function open(svg: string): Promise<ImportController> {
   const controller = new ImportController()
-  await controller.load(async () => ({ path: 'drawing.svg', contents: svg }))
+  await controller.load(async () => ({
+    path: 'drawing.svg',
+    contents: new TextEncoder().encode(svg),
+  }))
   return controller
 }
 

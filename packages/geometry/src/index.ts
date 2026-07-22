@@ -135,6 +135,17 @@ export {
 // Simplification
 export { douglasPeucker, removeCollinear, simplifyPolyline } from './simplify'
 
+// Projective transforms (homography — F-051 perspective correction)
+export {
+  IDENTITY_MAT3,
+  applyHomography,
+  homographyFromQuadToQuad,
+  invertMat3,
+  multiplyMat3,
+  type Mat3,
+  type Quad,
+} from './homography'
+
 // Transforms
 export {
   IDENTITY,

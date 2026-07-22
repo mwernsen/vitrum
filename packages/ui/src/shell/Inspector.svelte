@@ -23,6 +23,7 @@
   import Select from '../components/Select.svelte'
   import type { AssignmentController } from '../glass/assignment.svelte'
   import type { NumberingController } from '../numbering/controller.svelte'
+  import type { ReferenceController } from '../reference/controller.svelte'
   import type { EditController } from '../tools/edit.svelte'
   import type { PaintController } from '../tools/paint.svelte'
   import type { ReinforcementController } from '../tools/reinforcement.svelte'
@@ -38,6 +39,8 @@
     paint?: PaintController
     /** The reinforcement-bar controller (F-032). */
     reinforce?: ReinforcementController
+    /** The reference-image underlay controller (F-051). */
+    reference?: ReferenceController
     /** The glass assignment resolver (F-023). */
     assignments?: AssignmentController
     /** The piece-numbering resolver (F-040). */
@@ -58,6 +61,7 @@
     selection,
     paint,
     reinforce,
+    reference,
     assignments,
     numbering,
     onSetNumber,
@@ -65,6 +69,13 @@
     pieces = [],
     execute,
   }: Props = $props()
+
+  // Reference-image layer editing (F-051): calibration and perspective scratch fields.
+  let calibrationMm = $state('')
+  let rectifyW = $state('')
+  let rectifyH = $state('')
+  const refLayer = $derived(reference?.selected ?? null)
+  const refSelected = $derived(!!refLayer)
 
   // Pieces selected in piece-select mode (F-023), resolved from their content keys.
   const selectedPieceList = $derived<Piece[]>(
@@ -113,7 +124,7 @@
     { value: 'brass', label: 'Brass' },
     { value: 'lead', label: 'Lead' },
   ]
-  const collapsed = $derived(!pieceSelected && !segmentSelected && !barSelected)
+  const collapsed = $derived(!pieceSelected && !segmentSelected && !barSelected && !refSelected)
 
   // Display a mm value in the active unit as a plain, trimmed number string (FR-5: the number
   // the user types round-trips exactly, since editing converts straight back to mm).
@@ -197,7 +208,138 @@
 </script>
 
 <aside class="inspector" class:collapsed aria-label="Inspector">
-  {#if barSelected && selectedBar}
+  {#if refSelected && refLayer && reference}
+    <h2>Reference image</h2>
+    <dl class="props">
+      <div>
+        <dt>Size</dt>
+        <dd>{refLayer.naturalWidthPx} × {refLayer.naturalHeightPx} px</dd>
+      </div>
+    </dl>
+
+    <h3>Opacity</h3>
+    <div class="opacity">
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={Math.round(refLayer.opacity * 100)}
+        aria-label="Layer opacity"
+        oninput={(e) => reference.setOpacity(refLayer.id, e.currentTarget.valueAsNumber / 100)}
+      />
+      <span class="pct">{Math.round(refLayer.opacity * 100)}%</span>
+    </div>
+
+    <div class="toggles">
+      <Button
+        size="sm"
+        variant={refLayer.desaturate ? 'primary' : 'secondary'}
+        onclick={() => reference.toggleDesaturate(refLayer.id)}
+      >
+        Desaturate
+      </Button>
+      <Button
+        size="sm"
+        variant={refLayer.locked ? 'primary' : 'secondary'}
+        onclick={() => reference.toggleLock(refLayer.id)}
+      >
+        {refLayer.locked ? 'Locked' : 'Lock'}
+      </Button>
+    </div>
+
+    <h3>Scale calibration</h3>
+    {#if reference.mode === 'calibrate'}
+      <p class="hint">
+        {reference.calibrationPoints.length < 2
+          ? `Click two points on the image (${reference.calibrationPoints.length}/2).`
+          : 'Enter the real distance between the two points.'}
+      </p>
+      {#if reference.calibrationPoints.length === 2}
+        <div class="field">
+          <Input
+            label="Real distance (mm)"
+            size="sm"
+            value={calibrationMm}
+            placeholder="distance"
+            onchange={(v) => (calibrationMm = v)}
+          />
+        </div>
+        <div class="actions">
+          <Button
+            size="sm"
+            onclick={() => {
+              const mm = Number(calibrationMm)
+              if (Number.isFinite(mm) && mm > 0) reference.applyCalibration(mm)
+              calibrationMm = ''
+            }}
+          >
+            Apply scale
+          </Button>
+          <Button size="sm" variant="ghost" onclick={() => reference.setMode('place')}
+            >Cancel</Button
+          >
+        </div>
+      {/if}
+    {:else}
+      <Button size="sm" variant="secondary" onclick={() => reference.setMode('calibrate')}>
+        Calibrate scale…
+      </Button>
+    {/if}
+
+    <h3>Perspective</h3>
+    {#if reference.mode === 'rectify'}
+      <p class="hint">
+        Drag the four handles onto the corners of the window, then enter its real size.
+      </p>
+      <div class="field">
+        <Input
+          label="Width (mm)"
+          size="sm"
+          value={rectifyW}
+          placeholder="width"
+          onchange={(v) => (rectifyW = v)}
+        />
+        <Input
+          label="Height (mm)"
+          size="sm"
+          value={rectifyH}
+          placeholder="height"
+          onchange={(v) => (rectifyH = v)}
+        />
+      </div>
+      <div class="actions">
+        <Button
+          size="sm"
+          onclick={() => {
+            const w = Number(rectifyW)
+            const h = Number(rectifyH)
+            if (w > 0 && h > 0) reference.applyRectify(w, h)
+            rectifyW = ''
+            rectifyH = ''
+          }}
+        >
+          Rectify
+        </Button>
+        <Button size="sm" variant="ghost" onclick={() => reference.setMode('place')}>Cancel</Button>
+      </div>
+    {:else}
+      <div class="toggles">
+        <Button size="sm" variant="secondary" onclick={() => reference.setMode('rectify')}>
+          Correct perspective…
+        </Button>
+        {#if refLayer.rectified}
+          <Button size="sm" variant="ghost" onclick={() => reference.resetRectify(refLayer.id)}>
+            Reset
+          </Button>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="actions">
+      <Button size="sm" variant="ghost" onclick={() => reference.remove(refLayer.id)}>Remove</Button
+      >
+    </div>
+  {:else if barSelected && selectedBar}
     <h2>Reinforcement bar</h2>
     <dl class="props">
       <div>
@@ -450,5 +592,40 @@
     margin: 0;
     font-family: var(--font-mono);
     color: var(--text-body);
+  }
+
+  .opacity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .opacity input[type='range'] {
+    flex: 1;
+    accent-color: var(--cobalt-500);
+  }
+  .opacity .pct {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 34px;
+    text-align: right;
+  }
+
+  .toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .field {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-2);
+  }
+
+  .hint {
+    margin: 0;
+    font: var(--text-caption);
+    color: var(--text-muted);
   }
 </style>

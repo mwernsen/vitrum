@@ -1,5 +1,5 @@
-import { serialize } from './serialize'
 import type { DocumentStore } from './store'
+import type { Project } from './types'
 
 /** Opaque timer handle — whatever the injected scheduler returns. */
 export type TimerHandle = unknown
@@ -17,8 +17,14 @@ export interface Scheduler {
 export interface AutosaverOptions {
   readonly store: DocumentStore
   readonly scheduler: Scheduler
+  /**
+   * Turn the current document into the snapshot payload. Injected (rather than calling
+   * `serialize` directly) because the `.vitrum` container now embeds image assets (F-051): the
+   * UI adapter packs the document plus its assets into the zip bytes here.
+   */
+  serialize(document: Project): Uint8Array
   /** Persist a recovery snapshot (typically `StoragePort.writeAutosave`). */
-  write(contents: string): void | Promise<void>
+  write(contents: Uint8Array): void | Promise<void>
   /** Throttle interval; a snapshot is written at most once per this window. Default 5000. */
   readonly intervalMs?: number
   /** Reported if a snapshot write rejects; autosave never throws into the app. */
@@ -34,7 +40,8 @@ export interface AutosaverOptions {
 export class Autosaver {
   readonly #store: DocumentStore
   readonly #scheduler: Scheduler
-  readonly #write: (contents: string) => void | Promise<void>
+  readonly #serialize: (document: Project) => Uint8Array
+  readonly #write: (contents: Uint8Array) => void | Promise<void>
   readonly #intervalMs: number
   readonly #onError: (error: unknown) => void
 
@@ -44,6 +51,7 @@ export class Autosaver {
   constructor(options: AutosaverOptions) {
     this.#store = options.store
     this.#scheduler = options.scheduler
+    this.#serialize = options.serialize
     this.#write = options.write
     this.#intervalMs = options.intervalMs ?? 5000
     this.#onError = options.onError ?? (() => {})
@@ -81,7 +89,7 @@ export class Autosaver {
 
   #snapshot(): void {
     try {
-      const result = this.#write(serialize(this.#store.document))
+      const result = this.#write(this.#serialize(this.#store.document))
       if (result instanceof Promise) result.catch((error: unknown) => this.#onError(error))
     } catch (error) {
       this.#onError(error)

@@ -1,9 +1,13 @@
 import { line, vec2 } from '@vitrum/geometry'
-import { addSegment, createEmptyProject, createSegment, serialize } from '@vitrum/model'
+import { addSegment, createEmptyProject, createSegment, packDocument } from '@vitrum/model'
+import type { Project } from '@vitrum/model'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { DocumentController } from './controller.svelte'
 import { createFakeHost, type FakeHost } from './fakeHost'
+
+/** Pack a project into the `.vitrum` zip bytes the storage port now carries (no assets). */
+const pack = (project: Project): Uint8Array => packDocument(project, new Map())
 
 let controller: DocumentController | undefined
 
@@ -94,7 +98,7 @@ describe('DocumentController', () => {
   it('opens a file, replacing the document and clearing history', async () => {
     const { host, controller } = setup()
     const project = { ...createEmptyProject({ name: 'Opened' }) }
-    host.nextOpen = { path: '/tmp/opened.vitrum', contents: serialize(project) }
+    host.nextOpen = { path: '/tmp/opened.vitrum', contents: pack(project) }
 
     controller.addDebugSegment()
     await controller.open()
@@ -108,7 +112,7 @@ describe('DocumentController', () => {
   it('respects a declined discard prompt when opening', async () => {
     const { host, controller } = setup()
     host.discardAnswer = false
-    host.nextOpen = { path: '/x', contents: serialize(createEmptyProject({ name: 'Nope' })) }
+    host.nextOpen = { path: '/x', contents: pack(createEmptyProject({ name: 'Nope' })) }
     controller.addDebugSegment()
     await controller.open()
     expect(controller.doc.settings.name).not.toBe('Nope')
@@ -129,7 +133,7 @@ describe('DocumentController', () => {
 
   it('recovers a snapshot as an unsaved document', () => {
     const { controller } = setup()
-    const snapshot = serialize(createEmptyProject({ name: 'Recovered' }))
+    const snapshot = pack(createEmptyProject({ name: 'Recovered' }))
     controller.recover(snapshot)
     expect(controller.doc.settings.name).toBe('Recovered')
     expect(controller.currentPath).toBeNull()

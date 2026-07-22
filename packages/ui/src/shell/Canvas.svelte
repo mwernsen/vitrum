@@ -46,9 +46,18 @@
   import type { ReinforcementController } from '../tools/reinforcement.svelte'
   import type { SelectionController } from '../tools/selection.svelte'
   import type { SnapController } from '../tools/snap.svelte'
+  import type { RenderLayer, ResolveSource } from '../reference/gl'
+
+  import ReferenceUnderlay from './ReferenceUnderlay.svelte'
 
   interface Props {
     viewport: ViewportController
+    /** Reference-image underlay layers to draw beneath the content (F-051). */
+    referenceLayers?: readonly RenderLayer[]
+    /** Resolve a reference layer's decoded texture source (F-051). */
+    resolveReferenceSource?: ResolveSource
+    /** Bumped when a reference texture source decodes, to force an underlay redraw (F-051). */
+    referenceVersion?: number
     /** The lead-line network to render. Empty until a document is loaded. */
     segments?: readonly Segment[]
     /** World bounds for zoom-to-fit; `null` frames the default panel region. */
@@ -113,6 +122,9 @@
 
   let {
     viewport,
+    referenceLayers = [],
+    resolveReferenceSource = () => undefined,
+    referenceVersion = 0,
     segments = [],
     bounds = null,
     tools,
@@ -653,6 +665,12 @@
       onwheel={handleWheel}
     >
       <canvas class="layer" bind:this={gridCanvas}></canvas>
+      <ReferenceUnderlay
+        {viewport}
+        layers={referenceLayers}
+        resolveSource={resolveReferenceSource}
+        version={referenceVersion}
+      />
       <canvas class="layer" bind:this={contentCanvas}></canvas>
       <canvas class="layer" bind:this={overlayCanvas}></canvas>
       {#if tools && (tools.numericBuffer !== '' || tools.hint)}

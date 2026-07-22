@@ -1,9 +1,16 @@
 <script lang="ts">
   import type { Command, Project } from '@vitrum/model'
+  import ChevronDown from 'lucide-svelte/icons/chevron-down'
+  import ChevronUp from 'lucide-svelte/icons/chevron-up'
   import Eye from 'lucide-svelte/icons/eye'
   import EyeOff from 'lucide-svelte/icons/eye-off'
+  import ImagePlus from 'lucide-svelte/icons/image-plus'
+  import Lock from 'lucide-svelte/icons/lock'
+  import Trash2 from 'lucide-svelte/icons/trash-2'
+  import Unlock from 'lucide-svelte/icons/unlock'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
+  import type { ReferenceController } from '../reference/controller.svelte'
 
   import TechniquePanel from './TechniquePanel.svelte'
 
@@ -13,9 +20,16 @@
     doc?: Project
     /** Command sink for technique edits. */
     execute?: (command: Command) => void
+    /** The reference-image underlay controller (F-051). Absent ⇒ the section stays a placeholder. */
+    reference?: ReferenceController
+    /** Trigger the host's image picker to add a reference layer (F-051). Absent ⇒ no add button. */
+    onAddReference?: () => void
   }
 
-  let { viewport, doc, execute }: Props = $props()
+  let { viewport, doc, execute, reference, onAddReference }: Props = $props()
+
+  // Top of the stack first (later layers draw on top).
+  const referenceLayers = $derived(reference ? [...reference.layers].reverse() : [])
 
   // Overlay visibility — the toggles that used to be scattered across the status bar now live here
   // (Portal turn-3 IA: the Layers panel owns overlays). Each maps to a live viewport flag.
@@ -76,15 +90,96 @@
       </button>
     {/each}
 
-    <!-- Reference photo — arrives with the underlay feature (F-051) -->
-    <div class="row placeholder" aria-disabled="true">
-      <span class="ic"><EyeOff size={16} strokeWidth={1.7} /></span>
-      <span class="text">
-        <span class="name">Reference photo</span>
-        <span class="hint">underlay · F-051</span>
-      </span>
-    </div>
+    {#if !reference}
+      <!-- Reference photo — arrives with the underlay feature (F-051) -->
+      <div class="row placeholder" aria-disabled="true">
+        <span class="ic"><EyeOff size={16} strokeWidth={1.7} /></span>
+        <span class="text">
+          <span class="name">Reference photo</span>
+          <span class="hint">underlay · F-051</span>
+        </span>
+      </div>
+    {/if}
   </div>
+
+  {#if reference}
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">Reference images</span>
+        {#if onAddReference}
+          <button class="add" onclick={onAddReference} disabled={reference.busy}>
+            <ImagePlus size={14} strokeWidth={1.7} />
+            <span>Add image</span>
+          </button>
+        {/if}
+      </div>
+
+      {#if referenceLayers.length === 0}
+        <span class="feature">No reference images. Add a photo or scan to trace over.</span>
+      {/if}
+      {#if reference.error}
+        <span class="error" role="alert">{reference.error}</span>
+      {/if}
+
+      <div class="ref-rows">
+        {#each referenceLayers as layer (layer.id)}
+          <div class="ref-row" class:selected={reference.selectedId === layer.id}>
+            <button
+              class="icon-btn"
+              aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+              aria-pressed={layer.visible}
+              onclick={() => reference.toggleVisible(layer.id)}
+            >
+              {#if layer.visible}<Eye size={15} strokeWidth={1.7} />{:else}<EyeOff
+                  size={15}
+                  strokeWidth={1.7}
+                />{/if}
+            </button>
+            <button class="ref-name" onclick={() => reference.select(layer.id)} title={layer.name}>
+              <span class="name">{layer.name}</span>
+              <span class="hint"
+                >{Math.round(layer.opacity * 100)}%{layer.rectified ? ' · rectified' : ''}</span
+              >
+            </button>
+            <div class="ref-actions">
+              <button
+                class="icon-btn"
+                aria-label="Move layer up"
+                onclick={() => reference.reorder(layer.id, 'up')}
+              >
+                <ChevronUp size={15} strokeWidth={1.7} />
+              </button>
+              <button
+                class="icon-btn"
+                aria-label="Move layer down"
+                onclick={() => reference.reorder(layer.id, 'down')}
+              >
+                <ChevronDown size={15} strokeWidth={1.7} />
+              </button>
+              <button
+                class="icon-btn"
+                aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                aria-pressed={layer.locked}
+                onclick={() => reference.toggleLock(layer.id)}
+              >
+                {#if layer.locked}<Lock size={15} strokeWidth={1.7} />{:else}<Unlock
+                    size={15}
+                    strokeWidth={1.7}
+                  />{/if}
+              </button>
+              <button
+                class="icon-btn danger"
+                aria-label="Remove layer"
+                onclick={() => reference.remove(layer.id)}
+              >
+                <Trash2 size={15} strokeWidth={1.7} />
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <!-- Symmetry — arrives with live symmetry (F-052) -->
   <div class="section">
@@ -216,5 +311,100 @@
   .feature {
     font: var(--text-caption);
     color: var(--ink-500);
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .add {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--paper-0);
+    color: var(--ink-800);
+    font: 500 12px/1 var(--font-sans);
+    cursor: pointer;
+  }
+  .add:hover:not(:disabled) {
+    background: var(--paper-50);
+  }
+  .add:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .error {
+    font: var(--text-caption);
+    color: var(--vitrail-ruby-600, var(--ink-700));
+  }
+
+  .ref-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ref-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: var(--radius-xs);
+  }
+  .ref-row.selected {
+    background: var(--cobalt-50, var(--paper-50));
+    box-shadow: inset 0 0 0 1px var(--cobalt-300, var(--border-subtle));
+  }
+
+  .ref-name {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+  }
+  .ref-name .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 600 12.5px/1.2 var(--font-sans);
+  }
+
+  .ref-actions {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ink-700);
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+  }
+  .icon-btn:hover {
+    background: var(--paper-100);
+    color: var(--ink-900);
+  }
+  .icon-btn.danger:hover {
+    color: var(--vitrail-ruby-600, var(--ink-900));
   }
 </style>

@@ -33,6 +33,7 @@
   import { documentBounds } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
+  import type { OpenedImage } from '../document/host'
   import { DrcController } from '../drc/controller.svelte'
   import { AssignmentController } from '../glass/assignment.svelte'
   import GlassDock from '../glass/GlassDock.svelte'
@@ -43,6 +44,7 @@
   import { buildExportScene } from '../export/scene'
   import { ImportController } from '../import/controller.svelte'
   import ImportDialog from '../import/ImportDialog.svelte'
+  import { ReferenceController } from '../reference/controller.svelte'
   import { PrintController } from '../print/controller.svelte'
   import { buildPrintScene } from '../print/scene'
   import { ToolController } from '../tools/controller.svelte'
@@ -61,6 +63,7 @@
   import { type DockSection } from './dock'
   import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
+  import ReferenceOverlay from './ReferenceOverlay.svelte'
   import NumberingPanel, { type LegendEntry } from './NumberingPanel.svelte'
   import ReadinessStrip from './ReadinessStrip.svelte'
   import RulesPanel from './RulesPanel.svelte'
@@ -83,10 +86,20 @@
     exportPng?: (suggestedName: string, bytes: Uint8Array) => Promise<string | null>
     /** Reads an SVG file to import into the active document (F-050). Absent ⇒ import is hidden. */
     importSvg?: () => Promise<OpenedFile | null>
+    /** Reads a raster image to add as a reference underlay (F-051). Absent ⇒ the add button hides. */
+    importImage?: () => Promise<OpenedImage | null>
   }
 
-  let { panel, controller, glassLibrary, exportPdf, exportText, exportPng, importSvg }: Props =
-    $props()
+  let {
+    panel,
+    controller,
+    glassLibrary,
+    exportPdf,
+    exportText,
+    exportPng,
+    importSvg,
+    importImage,
+  }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
   // owns one — tests render without a controller, the app renders with one.
@@ -116,6 +129,21 @@
     getDoc: () => controller?.doc ?? createEmptyProject(),
     execute: (command, options) => controller?.execute(command, options),
   })
+
+  // Reference-image underlay (F-051). Owns the embedded image blobs and layer edits; its assets are
+  // packed into / read from the `.vitrum` zip via the document controller's collect/load hooks.
+  const reference = new ReferenceController({
+    getDoc: () => controller?.doc ?? createEmptyProject(),
+    execute: (command, options) => controller?.execute(command, options),
+  })
+  $effect(() => {
+    if (!controller) return
+    controller.collectAssets = () => reference.collectAssets()
+    controller.loadAssets = (assets) => reference.loadAssets(assets)
+  })
+  function openAddReference(): void {
+    if (importImage) void reference.importImage(importImage)
+  }
 
   const segments = $derived(controller ? Object.values(controller.doc.segments) : [])
   // Hidden guides drop out of both rendering and snapping (F-012 visibility toggle).
@@ -640,6 +668,8 @@
       glass={glassLibrary ? glassPanel : undefined}
       rules={rulesPanel}
       make={makePanel}
+      {reference}
+      onAddReference={importImage && controller ? openAddReference : undefined}
     />
     <div class="stage">
       {#if viewMode !== 'cartoon'}
@@ -647,6 +677,9 @@
       {/if}
       <Canvas
         {viewport}
+        referenceLayers={reference.renderLayers}
+        resolveReferenceSource={reference.resolveSource}
+        referenceVersion={reference.sourcesVersion}
         segments={shownSegments}
         {bounds}
         {tools}
@@ -678,6 +711,9 @@
         bomHighlightSegments={bom.highlightSegments}
         snapshotRegister={(fn) => (takeSnapshot = fn)}
       />
+      {#if viewMode !== 'cartoon'}
+        <ReferenceOverlay controller={reference} {viewport} />
+      {/if}
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
       {/if}
@@ -692,6 +728,7 @@
       {selection}
       {paint}
       {reinforce}
+      {reference}
       {assignments}
       {numbering}
       onSetNumber={setPieceNumber}

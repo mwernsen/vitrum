@@ -10,6 +10,7 @@ export {
   createEmptyProject,
   defaultBomSettings,
   defaultNumbering,
+  type AssetId,
   type BomSettings,
   type DrcExclusion,
   type DrcRuleOverride,
@@ -24,6 +25,7 @@ export {
   type PieceId,
   type Project,
   type ProjectSettings,
+  type ReferenceAsset,
   type ReferenceLayer,
   type ReinforcementBar,
   type ReinforcementId,
@@ -119,6 +121,7 @@ export {
 
 // Commands
 export {
+  addReferenceLayer,
   addReinforcement,
   addSegment,
   addSegments,
@@ -127,9 +130,11 @@ export {
   moveNode,
   removeCameProfile,
   removeGlass,
+  removeReferenceLayer,
   removeReinforcement,
   removeSegment,
   removeSegments,
+  reorderReferenceLayers,
   replaceSegments,
   setCameOverride,
   setDrcExclusion,
@@ -143,6 +148,7 @@ export {
   updateFoilSettings,
   updateLeadSettings,
   updateNumbering,
+  updateReferenceLayer,
   updateReinforcement,
   updateSegmentGeometry,
   updateSegmentsGeometry,
@@ -151,6 +157,7 @@ export {
   upsertGlass,
   type Command,
   type NumberingPatch,
+  type ReferenceLayerPatch,
 } from './commands'
 
 // Network queries
@@ -169,6 +176,9 @@ export {
   type Migration,
   type VitrumFile,
 } from './serialize'
+
+// File container — zip with embedded image assets (F-051)
+export { assetIdFor, packDocument, unpackDocument, type UnpackedDocument } from './container'
 
 // Storage port
 export type { OpenedFile, StoragePort } from './storage'

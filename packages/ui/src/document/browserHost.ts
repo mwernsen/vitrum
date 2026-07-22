@@ -1,6 +1,6 @@
 import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
 
-import type { AppHost, ExportPort, ImportPort } from './host'
+import type { AppHost, ExportPort, ImportPort, OpenedImage } from './host'
 
 /**
  * A browser stub of `AppHost` for `pnpm dev:ui`, where no Electron main process exists.
@@ -24,18 +24,23 @@ export function createBrowserHost(): AppHost {
   }
 
   const storage: StoragePort = {
-    openFile: () => pickFile(),
+    openFile: () => pickFileBytes('.vitrum,application/zip'),
     saveFile: async (_path, contents) => {
-      downloadFile('design.vitrum', contents)
+      downloadBytes('design.vitrum', contents, 'application/octet-stream')
     },
     saveFileAs: async (suggestedName, contents) => {
-      downloadFile(suggestedName, contents)
+      downloadBytes(suggestedName, contents, 'application/octet-stream')
       return suggestedName
     },
+    // localStorage holds strings only, so the binary zip snapshot is base64-encoded here (this is a
+    // dev stub; the desktop host writes real bytes to disk).
     writeAutosave: async (contents) => {
-      safeLocalStorage()?.setItem(AUTOSAVE_KEY, contents)
+      safeLocalStorage()?.setItem(AUTOSAVE_KEY, bytesToBase64(contents))
     },
-    readAutosave: async () => safeLocalStorage()?.getItem(AUTOSAVE_KEY) ?? null,
+    readAutosave: async () => {
+      const stored = safeLocalStorage()?.getItem(AUTOSAVE_KEY)
+      return stored ? base64ToBytes(stored) : null
+    },
     clearAutosave: async () => {
       safeLocalStorage()?.removeItem(AUTOSAVE_KEY)
     },
@@ -47,10 +52,10 @@ export function createBrowserHost(): AppHost {
       safeLocalStorage()?.setItem(GLASS_LIBRARY_KEY, contents)
     },
     exportLibrary: async (suggestedName, contents) => {
-      downloadFile(suggestedName, contents)
+      downloadText(suggestedName, contents)
       return suggestedName
     },
-    importLibrary: () => pickFile().then((f) => f?.contents ?? null),
+    importLibrary: () => pickFileText('.json,application/json'),
   }
 
   const exportPort: ExportPort = {
@@ -69,7 +74,8 @@ export function createBrowserHost(): AppHost {
   }
 
   const importPort: ImportPort = {
-    openSvg: () => pickFile('.svg,image/svg+xml'),
+    openSvg: () => pickFileBytes('.svg,image/svg+xml'),
+    openImage: () => pickImage(),
   }
 
   return {
@@ -97,12 +103,6 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
-function downloadFile(name: string, contents: string): void {
-  if (typeof document === 'undefined') return
-  const blob = new Blob([contents], { type: 'application/json' })
-  triggerDownload(name, blob)
-}
-
 function downloadText(name: string, text: string): void {
   if (typeof document === 'undefined') return
   triggerDownload(name, new Blob([text], { type: 'text/csv;charset=utf-8' }))
@@ -124,20 +124,46 @@ function triggerDownload(name: string, blob: Blob): void {
   URL.revokeObjectURL(url)
 }
 
-function pickFile(accept = '.vitrum,application/json'): Promise<OpenedFile | null> {
+function chooseFile(accept: string): Promise<File | null> {
   if (typeof document === 'undefined') return Promise.resolve(null)
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = accept
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) {
-        resolve(null)
-        return
-      }
-      void file.text().then((contents) => resolve({ path: file.name, contents }))
-    }
+    input.onchange = () => resolve(input.files?.[0] ?? null)
     input.click()
   })
+}
+
+async function pickFileBytes(accept: string): Promise<OpenedFile | null> {
+  const file = await chooseFile(accept)
+  if (!file) return null
+  const buffer = await file.arrayBuffer()
+  return { path: file.name, contents: new Uint8Array(buffer) }
+}
+
+async function pickFileText(accept: string): Promise<string | null> {
+  const file = await chooseFile(accept)
+  return file ? file.text() : null
+}
+
+async function pickImage(): Promise<OpenedImage | null> {
+  const file = await chooseFile('image/png,image/jpeg,image/webp')
+  if (!file) return null
+  const buffer = await file.arrayBuffer()
+  return { path: file.name, mime: file.type || 'image/png', bytes: new Uint8Array(buffer) }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
+  return typeof btoa === 'function' ? btoa(binary) : ''
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  if (typeof atob !== 'function') return new Uint8Array()
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
 }

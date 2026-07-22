@@ -90,6 +90,7 @@
   exportText={host.export ? (name, text) => host.export!.saveText(name, text) : undefined}
   exportPng={host.export ? (name, bytes) => host.export!.savePng(name, bytes) : undefined}
   importSvg={host.import ? () => host.import!.openSvg() : undefined}
+  importImage={host.import?.openImage ? () => host.import!.openImage!() : undefined}
 />
 <DebugPalette {controller} />
 

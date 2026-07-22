@@ -22,7 +22,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 9
+export const CURRENT_SCHEMA_VERSION = 10
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -219,6 +219,24 @@ const migrateV8ToV9: Migration = {
   },
 }
 
+/**
+ * v9 → v10 (F-051): reference-image underlay layers gained real fields (assetId, quads, opacity,
+ * desaturate, locked, rectified). Before F-051 the `layers` list was an unpopulated placeholder, so
+ * any v9 file has `layers: []`; ensure the list is present. Any pre-release layer that predates the
+ * full shape is dropped rather than half-migrated — its image bytes were never embedded, so it could
+ * not render anyway.
+ */
+const migrateV9ToV10: Migration = {
+  from: 9,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'layers'> & {
+      layers?: readonly { readonly assetId?: unknown }[]
+    }
+    const layers = (project.layers ?? []).filter((l) => typeof l.assetId === 'string')
+    return { schemaVersion: 10, project: { ...project, layers } as unknown as Project }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -228,6 +246,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV6ToV7,
   migrateV7ToV8,
   migrateV8ToV9,
+  migrateV9ToV10,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

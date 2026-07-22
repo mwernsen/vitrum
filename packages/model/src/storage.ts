@@ -5,10 +5,13 @@
  * `packages/ui` stay free of Electron and still be exercised in a browser.
  */
 
-/** A file the user opened: its path (for silent save-in-place) and text contents. */
+/**
+ * A file the user opened: its path (for silent save-in-place) and raw bytes. The `.vitrum`
+ * container is a zip (F-051), so file payloads are binary `Uint8Array`, not text.
+ */
 export interface OpenedFile {
   readonly path: string
-  readonly contents: string
+  readonly contents: Uint8Array
 }
 
 export interface StoragePort {
@@ -16,19 +19,19 @@ export interface StoragePort {
   openFile(): Promise<OpenedFile | null>
 
   /** Write to an already-known path — the silent Cmd-S save-in-place path. */
-  saveFile(path: string, contents: string): Promise<void>
+  saveFile(path: string, contents: Uint8Array): Promise<void>
 
   /**
    * Show the save dialog (for a new document or Save-As) and write. Resolves to the
    * chosen path, or null if cancelled. `suggestedName` seeds the dialog's filename.
    */
-  saveFileAs(suggestedName: string, contents: string): Promise<string | null>
+  saveFileAs(suggestedName: string, contents: Uint8Array): Promise<string | null>
 
   /** Write the crash-recovery snapshot to the app-data directory. */
-  writeAutosave(contents: string): Promise<void>
+  writeAutosave(contents: Uint8Array): Promise<void>
 
   /** Read the crash-recovery snapshot, or null if none exists. */
-  readAutosave(): Promise<string | null>
+  readAutosave(): Promise<Uint8Array | null>
 
   /** Remove the crash-recovery snapshot (after a clean save or clean exit). */
   clearAutosave(): Promise<void>
