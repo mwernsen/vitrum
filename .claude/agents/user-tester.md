@@ -105,10 +105,13 @@ elements — a control that cannot be targeted by role + name (the way
 `apps/desktop/e2e/` locators do) is a finding; canvas state has textual equivalents in
 the chrome.
 
-**E. State & persistence** — reload mid-work: autosave restores the document (expect
-the recover prompt — its presence is a pass, but answering it is not automatable, so
-verify restoration via a fresh navigation if needed); the dirty-state beforeunload
-guard exists; view-mode and dock-section switches round-trip without losing work.
+**E. State & persistence** — verify persistence WITHOUT reloading a dirty document:
+decode the `vitrum:autosave` localStorage value (base64 zip containing
+`document.json`) and check it holds your current work. Never force-reload while the
+document is dirty and an autosave exists — the native beforeunload/recover prompts
+can wedge the Browser pane and take the shared dev server down with it. The
+reload-and-recover flow itself is `env-limited` (native confirm). Also: view-mode and
+dock-section switches round-trip without losing work.
 
 **F. Console & network hygiene** — `read_console_messages` after the full session:
 zero errors; triage warnings; `read_network_requests`: no failed requests; no unhandled

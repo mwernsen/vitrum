@@ -25,9 +25,12 @@ then reload. Clearing the autosave **before** reloading also avoids the native
 
 `window.confirm` backs "Discard unsaved changes?" and "Recover unsaved work…?", and a
 `beforeunload` prompt fires on reload/navigation while the document is dirty. Native
-prompts are invisible to the browser tools and can wedge the session. Avoid paths that
-raise them; when a reload is needed mid-test with a dirty document, expect the
-beforeunload guard (its presence is itself a pass for the persistence audit).
+prompts are invisible to the browser tools and can wedge the session. **Never
+force-reload while the document is dirty and an autosave exists** — a 2026-07-22 run
+proved this wedges the Browser pane hard enough to take the managed dev server down
+with it. Verify persistence by decoding `vitrum:autosave` instead (base64 zip;
+`document.json` inside; deflate-raw entries) and mark the reload-and-recover flow
+`env-limited`.
 
 ## Standing environment limits (mark `env-limited`, do not re-diagnose)
 
@@ -90,3 +93,14 @@ a control that cannot be found by role + accessible name is an accessibility fin
 Pixel clicks (`computer` with coordinates) are for the canvas only. On macOS,
 Ctrl+click becomes a right-click — never hold Ctrl to suppress snapping; toggle the
 snap master instead.
+
+Automation quirks observed in practice (2026-07-22 run):
+
+- Synthetic Enter/Return does not finish a line gesture and Escape discards it
+  silently — commit gestures by double-clicking the last point, and confirm via the
+  Cmd+K debug palette's segment count before judging document state.
+- `computer` ref-clicks can land on stale coordinates after Svelte re-renders —
+  re-screenshot and click by fresh coordinates when a panel toggle seems to misfire.
+- The readiness "Checks" pill is a cheap canvas oracle: one open line contributes 2
+  dangling-end diagnostics per symmetry sector, so diagnostic counts quantify replica
+  multiplicity without seeing the canvas.
