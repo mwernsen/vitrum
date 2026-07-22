@@ -255,3 +255,15 @@ this file steers every future feature.
 - (F-052, 2026-07-22) Source-confined drawing costs nothing at the tool layer: compose a
   `canonicalizeToSource` fold in front of the F-012 resolver (`snap.resolver(canonicalize(world), ctx)`)
   — no `ResolvedPoint`/tool contract change, mirroring the F-012 seam-decoration pattern.
+- (F-053, 2026-07-22) Realistic render is a dedicated WebGL2 pass behind the F-051 `gl.ts` factory
+  (null→no-op under jsdom); glass fills use the **stencil buffer even-odd** (no triangulator — mirrors
+  Canvas2D `fill('evenodd')`, holes free). Pure shading maths live in `@vitrum/core/render`,
+  unit-tested, and the fragment shader mirrors them (compute the lit base on CPU with the same
+  `litColor` so GPU/CPU never drift).
+- (F-053, 2026-07-22) A WebGL canvas needs `preserveDrawingBuffer: true` to be read back via
+  `drawImage`/`toBlob` for a PNG snapshot; without it the buffer is cleared post-composite and the
+  snapshot is blank. Only the real `file://` E2E catches this class of GPU issue (F-030 lesson).
+- (F-053, 2026-07-22) TopBar view-mode controls are `role="tab"`, not `button`; single-key tool
+  shortcuts (`l`) activate the tool but don't exit paint mode (only the Toolbar button does, and its
+  accessible name includes the key hint, e.g. `Line (L)`) — drive E2E via the Toolbar button, and
+  disambiguate the TopBar `Export` with `exact: true`.

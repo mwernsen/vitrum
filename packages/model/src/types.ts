@@ -300,6 +300,50 @@ export function defaultSymmetry(): SymmetrySetup {
   return { mode: 'none', center: { x: 0, y: 0 }, angle: Math.PI / 2, count: 6, mirror: false }
 }
 
+/**
+ * A per-piece texture placement (F-053, Glass Eye Pro Plus parity): how the glass's surface texture
+ * (procedural or swatch photo) is rotated, offset and scaled within that one piece, so a streaky or
+ * ripple glass can be oriented per piece the way a real cutter lays out a sheet. Stored keyed by the
+ * piece's **content id** (F-020) so it survives a save/reload, exactly like glass assignments (F-023)
+ * and numbering (F-040). The identity transform (0°, no offset, scale 1) is the default and is never
+ * stored.
+ */
+export interface PieceTextureTransform {
+  /** Rotation of the texture within the piece, in degrees. */
+  readonly rotationDeg: number
+  /** Texture offset in mm, world-axis-aligned before rotation. */
+  readonly offsetXmm: number
+  readonly offsetYmm: number
+  /** Texture scale factor (1 = the glass's natural texture frequency). */
+  readonly scale: number
+}
+
+/** The identity texture placement: unrotated, no offset, natural scale. */
+export function identityTextureTransform(): PieceTextureTransform {
+  return { rotationDeg: 0, offsetXmm: 0, offsetYmm: 0, scale: 1 }
+}
+
+/**
+ * Realistic-render settings (F-053). Only *tunable intent* is persisted — the render itself is a
+ * live derived view, never stored (the F-042 "persist intent, derive the rest" discipline).
+ * `backlightIntensity`/`backlightWarmth` drive the uniform daylight backlight (F-054 later swaps in
+ * the real sun); `textureTransforms` are the per-piece texture placements, keyed by piece content id
+ * so they survive reload. A piece with no entry uses the identity transform.
+ */
+export interface RenderSettings {
+  /** Uniform backlight brightness (1 = neutral daylight; 0..2 in the UI). */
+  readonly backlightIntensity: number
+  /** Backlight warmth, −1 (cool) … 0 (neutral) … +1 (warm). */
+  readonly backlightWarmth: number
+  /** Per-piece texture placement, keyed by piece content id (F-020). */
+  readonly textureTransforms: Readonly<Record<PieceId, PieceTextureTransform>>
+}
+
+/** Fresh render settings: neutral full-intensity daylight, no per-piece texture placements. */
+export function defaultRenderSettings(): RenderSettings {
+  return { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} }
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -353,6 +397,11 @@ export interface Project {
    * inert default.
    */
   readonly symmetry: SymmetrySetup
+  /**
+   * Realistic-render settings (F-053): backlight intensity/warmth and per-piece texture placements.
+   * Tunable intent only — the render is a derived view, never stored.
+   */
+  readonly render: RenderSettings
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -382,5 +431,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     numbering: defaultNumbering(),
     bom: defaultBomSettings(),
     symmetry: defaultSymmetry(),
+    render: defaultRenderSettings(),
   }
 }

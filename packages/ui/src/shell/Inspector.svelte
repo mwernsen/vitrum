@@ -11,9 +11,12 @@
   import { curveLength, vec2 } from '@vitrum/geometry'
   import {
     geometryEndpoints,
+    identityTextureTransform,
     setCameOverride,
+    setPieceTextureTransforms,
     type Command,
     type GlassId,
+    type PieceTextureTransform,
     type Project,
     type Segment,
   } from '@vitrum/model'
@@ -53,6 +56,8 @@
     pieces?: readonly Piece[]
     /** Command sink (F-021 technique edits). Absent ⇒ technique panel is read-only/hidden. */
     execute?: (command: Command) => void
+    /** Whether the realistic render view (F-053) is active — reveals per-piece texture placement. */
+    renderActive?: boolean
   }
 
   let {
@@ -68,7 +73,21 @@
     doc,
     pieces = [],
     execute,
+    renderActive = false,
   }: Props = $props()
+
+  /** A piece's stored per-piece texture placement (F-053), or the identity when none is set. */
+  function textureOf(piece: Piece): PieceTextureTransform {
+    return doc?.render.textureTransforms[pieceKey(piece)] ?? identityTextureTransform()
+  }
+  /** Patch one field of a piece's texture placement — one undo entry (F-053). */
+  function setTexture(piece: Piece, patch: Partial<PieceTextureTransform>): void {
+    execute?.(setPieceTextureTransforms({ [pieceKey(piece)]: { ...textureOf(piece), ...patch } }))
+  }
+  /** Reset a piece to the identity texture placement. */
+  function resetTexture(piece: Piece): void {
+    execute?.(setPieceTextureTransforms({ [pieceKey(piece)]: null }))
+  }
 
   // Reference-image layer editing (F-051): calibration and perspective scratch fields.
   let calibrationMm = $state('')
@@ -401,6 +420,44 @@
             value={numbering?.effectiveOverrides.get(pieceKey(piece)) ?? ''}
             onchange={(v) => onSetNumber?.(pieceKey(piece), v.trim() === '' ? null : v.trim())}
           />
+        </div>
+      {/if}
+
+      {#if renderActive && execute}
+        {@const tt = textureOf(piece)}
+        <h3>Texture placement</h3>
+        <div class="fields">
+          <Input
+            size="sm"
+            label="Rotation (deg)"
+            value={String(tt.rotationDeg)}
+            onchange={(v) => setTexture(piece, { rotationDeg: Number(v) || 0 })}
+          />
+          <div class="row">
+            <Input
+              size="sm"
+              label="Offset x (mm)"
+              value={String(tt.offsetXmm)}
+              onchange={(v) => setTexture(piece, { offsetXmm: Number(v) || 0 })}
+            />
+            <Input
+              size="sm"
+              label="Offset y (mm)"
+              value={String(tt.offsetYmm)}
+              onchange={(v) => setTexture(piece, { offsetYmm: Number(v) || 0 })}
+            />
+          </div>
+          <Input
+            size="sm"
+            label="Scale"
+            value={String(tt.scale)}
+            onchange={(v) => setTexture(piece, { scale: Math.max(0.1, Number(v) || 1) })}
+          />
+          <div class="actions">
+            <Button size="sm" variant="ghost" onclick={() => resetTexture(piece)}>
+              Reset texture
+            </Button>
+          </div>
         </div>
       {/if}
     {/if}

@@ -3,12 +3,14 @@ import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './
 import {
   defaultBomSettings,
   defaultNumbering,
+  defaultRenderSettings,
   defaultSymmetry,
   type BomSettings,
   type DrcState,
   type Glass,
   type NumberingState,
   type Project,
+  type RenderSettings,
   type ReinforcementBar,
   type Segment,
   type SymmetrySetup,
@@ -24,7 +26,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 11
+export const CURRENT_SCHEMA_VERSION = 12
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -263,6 +265,29 @@ const migrateV10ToV11: Migration = {
   },
 }
 
+/**
+ * v11 → v12 (F-053): realistic-render settings. v11 files have no `render` block; add the default
+ * (neutral full-intensity daylight, no per-piece texture placements) so a pre-F-053 project loads
+ * with the shipped render defaults. Any partial `render` a pre-release v11 file might carry is
+ * preserved, with its fields defaulted.
+ */
+const migrateV11ToV12: Migration = {
+  from: 11,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'render'> & {
+      render?: Partial<RenderSettings>
+    }
+    const base = defaultRenderSettings()
+    const prior = project.render
+    const render: RenderSettings = {
+      backlightIntensity: prior?.backlightIntensity ?? base.backlightIntensity,
+      backlightWarmth: prior?.backlightWarmth ?? base.backlightWarmth,
+      textureTransforms: prior?.textureTransforms ?? base.textureTransforms,
+    }
+    return { schemaVersion: 12, project: { ...project, render } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -274,6 +299,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV8ToV9,
   migrateV9ToV10,
   migrateV10ToV11,
+  migrateV11ToV12,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

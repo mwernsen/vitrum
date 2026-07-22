@@ -30,6 +30,8 @@
     onAddReference?: () => void
     /** The live-symmetry controller (F-052), for the Layers panel. */
     symmetry?: SymmetryController
+    /** Whether the realistic render view (F-053) is active — reveals the backlight controls. */
+    renderActive?: boolean
   }
 
   let {
@@ -43,6 +45,7 @@
     reference,
     onAddReference,
     symmetry,
+    renderActive = false,
   }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
@@ -65,7 +68,15 @@
 
   <div class="body" class:flush={section === 'rules'}>
     {#if section === 'layers'}
-      <LayersPanel {viewport} {doc} {execute} {reference} {onAddReference} {symmetry} />
+      <LayersPanel
+        {viewport}
+        {doc}
+        {execute}
+        {reference}
+        {onAddReference}
+        {symmetry}
+        {renderActive}
+      />
     {:else if section === 'glass'}
       {@render glass?.()}
     {:else if section === 'rules'}
