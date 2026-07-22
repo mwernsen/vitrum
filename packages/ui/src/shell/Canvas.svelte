@@ -5,6 +5,7 @@
     type Diagnostic,
     type LabelPlacement,
     type Piece,
+    type PreviewShape,
   } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
@@ -29,6 +30,7 @@
     drawRuler,
     drawSnapMarker,
     drawSymmetryAxes,
+    drawSymmetryDomain,
     drawToolPreview,
     drawViolations,
     fillBackground,
@@ -67,6 +69,10 @@
     symmetryAxes?: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[]
     /** Symmetry center for the guide overlay (F-052). */
     symmetryCenter?: { x: number; y: number } | null
+    /** Source fundamental domain to shade (F-052): `{ start, span }` radians, or `null` for none. */
+    symmetryDomain?: { start: number; span: number } | null
+    /** Live tool preview mirrored into the replica sectors (F-052), drawn faintly. */
+    previewReplicaShapes?: readonly PreviewShape[]
     /** World bounds for zoom-to-fit; `null` frames the default panel region. */
     bounds?: BBox | null
     /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
@@ -136,6 +142,8 @@
     replicaSegments = [],
     symmetryAxes = [],
     symmetryCenter = null,
+    symmetryDomain = null,
+    previewReplicaShapes = [],
     bounds = null,
     tools,
     snap,
@@ -332,11 +340,25 @@
         )
       }
       drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
+      if (symmetryCenter && symmetryDomain) {
+        drawSymmetryDomain(
+          ctx,
+          viewport.transform,
+          size,
+          symmetryCenter,
+          symmetryDomain.start,
+          symmetryDomain.span,
+          palette,
+        )
+      }
       if (symmetryAxes.length > 0 && symmetryCenter) {
         drawSymmetryAxes(ctx, viewport.transform, symmetryAxes, symmetryCenter, palette)
       }
       if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
       if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
+      if (previewReplicaShapes.length > 0) {
+        drawToolPreview(ctx, viewport.transform, previewReplicaShapes, palette, 0.5)
+      }
       if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
       if (edit && selection && editing()) {
         const selected = segments.filter((s) => selection!.has(s.id))
@@ -440,6 +462,8 @@
     void selectedViolationKey
     void symmetryAxes
     void symmetryCenter
+    void symmetryDomain
+    void previewReplicaShapes
     void printTiles
     void bomHighlightPieces?.size
     void bomHighlightSegments?.size

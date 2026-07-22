@@ -2,7 +2,10 @@ import {
   canonicalizeToSource,
   expandReplicas,
   radialCount,
+  symmetryTransforms,
+  transformSymGeometry,
   type NetworkSegment,
+  type PreviewShape,
   type SymmetryMode,
   type SymmetrySetup,
 } from '@vitrum/core'
@@ -65,6 +68,52 @@ export class SymmetryController {
   /** The derived replica segments for a source output network (empty when symmetry is off). */
   replicasOf(source: readonly NetworkSegment[]): Segment[] {
     return expandReplicas(source, this.setup) as Segment[]
+  }
+
+  /**
+   * The source fundamental domain as an angular sector `{ start, span }` from the center (radians),
+   * matching where {@link canonicalize} folds points to — so a canvas tint over it marks exactly
+   * the region the user draws in. `null` when symmetry is off. Spans: mirror π, double-mirror π/2
+   * (opening at `angle + π/2`, the quadrant between the two axes), radial 2π/N, radial + mirror π/N.
+   */
+  get sourceDomain(): { start: number; span: number } | null {
+    const { mode, angle } = this.setup
+    switch (mode) {
+      case 'none':
+        return null
+      case 'mirror':
+        return { start: angle, span: Math.PI }
+      case 'double-mirror':
+        return { start: angle + Math.PI / 2, span: Math.PI / 2 }
+      case 'radial': {
+        const wedge = (2 * Math.PI) / this.count
+        return { start: angle, span: this.setup.mirror ? wedge / 2 : wedge }
+      }
+    }
+  }
+
+  /**
+   * Mirror a tool's live preview shapes into the replica sectors (F-052), so drawing shows the full
+   * symmetric result live — the ghost appears under the cursor in every sector, not just the source
+   * — instead of only materialising on commit. Segment previews only (anchor handles stay single,
+   * so the cursor never looks duplicated); empty when symmetry is off.
+   */
+  previewReplicas(shapes: readonly PreviewShape[]): PreviewShape[] {
+    if (!this.active) return []
+    const replicaTransforms = symmetryTransforms(this.setup).slice(1)
+    const out: PreviewShape[] = []
+    for (const shape of shapes) {
+      if (shape.kind !== 'segment') continue
+      for (const t of replicaTransforms) {
+        out.push({
+          kind: 'segment',
+          geometry: transformSymGeometry(t, shape.geometry),
+          role: shape.role,
+          ghost: shape.ghost,
+        })
+      }
+    }
+    return out
   }
 
   // --- Setup edits (each one undo entry, FR-4) -------------------------------

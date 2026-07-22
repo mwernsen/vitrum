@@ -137,7 +137,7 @@ _None — all resolved in the expansion pass above (Decisions §1–7). Open que
 ## Implementation notes
 
 Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
-`format:check`, `check`, `test` — 918 unit/component, `test:e2e` — 25 including the new
+`format:check`, `check`, `test` — 926 unit/component, `test:e2e` — 25 including the new
 `symmetry.spec.ts`).
 
 - **Pure transform (`@vitrum/core/src/symmetry/`).** `symmetryTransforms` builds the
@@ -171,6 +171,22 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
   change**. The Layers panel placeholder is now live (mode / axis angle / fold count /
   add-mirror / bake). Net-new UI: the Layers symmetry section — flag for back-port to the
   Claude Design project.
+- **Drawing legibility (UX follow-up, Mathieu 2026-07-22).** Pointer confinement alone
+  read as "the cursor is mirrored": while dragging in a replica sector the ghost showed
+  in the source and only snapped into place on release. Two fixes, both display-only:
+  (1) the source fundamental domain is shaded as a translucent wedge from the center
+  (`drawSymmetryDomain`, matched to `canonicalizeToSource` — spans π / π/2 / 2π·N⁻¹ /
+  π·N⁻¹), so the editable sector is unmistakable; (2) the live tool preview is mirrored
+  into every replica sector (`SymmetryController.previewReplicas`, same transform group as
+  the commit path) and drawn at half alpha, so drawing shows the full symmetric result
+  live. Covered by `symmetry.svelte.test.ts` (domain spans + replica multiplicity /
+  reflected geometry). The domain wedge was visually confirmed in `dev:ui`.
+  - **Default center = world origin (0, 0)** (was panel/content center) — the predictable
+    pivot a user expects, and where the grid axes already cross.
+  - The **axes + center pivot now render in the accent (cobalt)** matching the source tint
+    (`drawSymmetryAxes`), with a filled ringed center dot, so the active mirror/rotation
+    line reads distinctly from grey construction guides. Mirror-mode axis-through-origin +
+    tinted source half visually confirmed in `dev:ui`.
 - **Housekeeping.** Ran Prettier on `README.md`, which was already failing
   `format:check` on `main` (pre-existing, commit 8c52ad6) so the gate could go green; no
   content change.

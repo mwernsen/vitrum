@@ -125,12 +125,10 @@
   const symmetry = new SymmetryController({
     getDoc: () => controller?.doc ?? createEmptyProject(),
     execute: (command) => controller?.execute(command),
-    defaultCenter: () => {
-      const size = controller?.doc.settings.panelSize
-      if (size) return vec2(size.width / 2, size.height / 2)
-      const b = controller ? documentBounds(controller.doc) : null
-      return b ? vec2((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2) : vec2(0, 0)
-    },
+    // The world origin: the grid axes cross there and it is the predictable anchor a user
+    // expects a mirror/rotation to pivot about (Mathieu 2026-07-22). Editable once on-canvas
+    // axis handles land (follow-up).
+    defaultCenter: () => vec2(0, 0),
   })
   // Fold every pointer into the source sector before snapping (Decision §1 / FR-5): a click
   // anywhere authors geometry in the source, which then replicates live. No tool contract changes.
@@ -187,6 +185,13 @@
   // Symmetry axis/spoke guides, sized to the framed content so they span the panel.
   const symmetryAxes = $derived(
     symmetry.active ? symmetry.axisSegments(symmetryRadius(bounds)) : [],
+  )
+
+  // The source fundamental domain to shade (where drawing lands) and the live tool preview mirrored
+  // into the replica sectors, so drawing shows the full symmetric result live (F-052 UX).
+  const symmetryDomain = $derived(symmetry.active ? symmetry.sourceDomain : null)
+  const previewReplicaShapes = $derived(
+    symmetry.active ? symmetry.previewReplicas(tools.previewShapes) : [],
   )
 
   /** A guide radius (mm) big enough to span the framed content from the symmetry center. */
@@ -730,6 +735,8 @@
         {replicaSegments}
         symmetryAxes={viewMode === 'cartoon' ? [] : symmetryAxes}
         symmetryCenter={symmetry.active ? symmetry.center : null}
+        symmetryDomain={viewMode === 'cartoon' ? null : symmetryDomain}
+        previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
         {bounds}
         {tools}
         {snap}
