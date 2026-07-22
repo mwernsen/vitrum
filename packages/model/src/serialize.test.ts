@@ -75,6 +75,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 9, migrate: (file) => ({ schemaVersion: 10, project: file.project }) },
       { from: 10, migrate: (file) => ({ schemaVersion: 11, project: file.project }) },
       { from: 11, migrate: (file) => ({ schemaVersion: 12, project: file.project }) },
+      { from: 12, migrate: (file) => ({ schemaVersion: 13, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -382,6 +383,46 @@ describe('schema versioning (FR-4)', () => {
     )
     expect(withRender.render.backlightIntensity).toBe(1.5)
     expect(withRender.render.backlightWarmth).toBe(0) // defaulted
+  })
+
+  it('v12 → v13 seeds the light default (F-054)', () => {
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+      bom: { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 },
+      symmetry: {
+        mode: 'none',
+        center: { x: 0, y: 0 },
+        angle: Math.PI / 2,
+        count: 6,
+        mirror: false,
+      },
+      render: { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 12, project: legacyProject }))
+    expect(project.light.mode).toBe('astronomical')
+    expect(project.light.facadeAzimuthDeg).toBe(180)
+    expect(project.light.tiltDeg).toBe(90)
+    expect(project.light.showTextures).toBe(true)
+
+    // A pre-release v12 file that already carries a partial light block keeps its fields.
+    const withLight = deserialize(
+      JSON.stringify({
+        schemaVersion: 12,
+        project: { ...legacyProject, light: { mode: 'manual', temperatureK: 3000 } },
+      }),
+    )
+    expect(withLight.light.mode).toBe('manual')
+    expect(withLight.light.temperatureK).toBe(3000)
+    expect(withLight.light.tiltDeg).toBe(90) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {

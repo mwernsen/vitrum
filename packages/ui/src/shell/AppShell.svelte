@@ -41,6 +41,7 @@
   import { AssignmentController } from '../glass/assignment.svelte'
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
+  import { LightController } from '../light/controller.svelte'
   import { NumberingController } from '../numbering/controller.svelte'
   import { ExportController, type SavePdf } from '../export/controller.svelte'
   import ExportDialog from '../export/ExportDialog.svelte'
@@ -646,6 +647,22 @@
     return textureTransforms[pieceKey(piece)] ?? identityTextureTransform()
   }
 
+  // Sunlight simulation (F-054): the light view's resolved sun + transient scrub/animation state.
+  // Reads the persisted `light` block; edits are ordinary undoable commands. The resolved sun is a
+  // pure core derivation, so nothing extra is persisted.
+  const light = new LightController({
+    getDoc: () => controller?.doc ?? createEmptyProject(),
+    execute: (command) => controller?.execute(command),
+  })
+  onDestroy(() => light.dispose())
+
+  /** Capture a PNG photo of the lit stage (F-054 FR-6): reuse the F-043 snapshot + export port. */
+  async function capturePhoto(): Promise<void> {
+    if (!exportPng) return
+    const bytes = (await takeSnapshot?.()) ?? null
+    if (bytes) await exporter.runPng(bytes, panel.name, exportPng)
+  }
+
   let calibrationOpen = $state(false)
 
   // Cockpit shell state (Portal "2b"). Only the "design" view and the "glass" dock section are
@@ -705,7 +722,11 @@
     title={panel.name}
     {controller}
     {viewMode}
-    onViewMode={(mode) => (viewMode = mode)}
+    onViewMode={(mode) => {
+      viewMode = mode
+      // Entering the light view opens its dock section, so the stage and controls agree (F-054 IA).
+      if (mode === 'light') dockSection = 'light'
+    }}
     onZoomFit={() => viewport.zoomToFit(bounds)}
     onExport={exportText || exportPdf ? openExport : undefined}
     exportEnabled={exportAvailable && pieces.length > 0}
@@ -738,9 +759,12 @@
       onAddReference={importImage && controller ? openAddReference : undefined}
       symmetry={controller ? symmetry : undefined}
       renderActive={viewMode === 'render'}
+      light={controller ? light : undefined}
+      lightViewActive={viewMode === 'light'}
+      onEnterLightView={() => (viewMode = 'light')}
     />
     <div class="stage">
-      {#if viewMode !== 'cartoon'}
+      {#if viewMode !== 'cartoon' && viewMode !== 'light'}
         <Toolbar {tools} {paint} {reinforce} />
       {/if}
       <Canvas
@@ -786,8 +810,13 @@
         renderMode={viewMode === 'render'}
         {backlight}
         {textureTransformFor}
+        lightMode={viewMode === 'light'}
+        sun={light.sun}
+        lightTextures={controller?.doc.light.showTextures ?? true}
+        photoGrain={controller?.doc.light.photoGrain ?? false}
+        onCapturePhoto={exportPng ? capturePhoto : undefined}
       />
-      {#if viewMode !== 'cartoon'}
+      {#if viewMode !== 'cartoon' && viewMode !== 'light'}
         <ReferenceOverlay controller={reference} {viewport} />
       {/if}
       {#if viewMode === 'cartoon'}

@@ -2,12 +2,14 @@ import { synthesizeNodes } from './nodes'
 import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './technique'
 import {
   defaultBomSettings,
+  defaultLightSettings,
   defaultNumbering,
   defaultRenderSettings,
   defaultSymmetry,
   type BomSettings,
   type DrcState,
   type Glass,
+  type LightSettings,
   type NumberingState,
   type Project,
   type RenderSettings,
@@ -26,7 +28,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 12
+export const CURRENT_SCHEMA_VERSION = 13
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -288,6 +290,23 @@ const migrateV11ToV12: Migration = {
   },
 }
 
+/**
+ * v12 → v13 (F-054): sunlight-simulation settings. v12 files have no `light` block; add the default
+ * (south-facing Amsterdam window at midsummer noon) so a pre-F-054 project loads with the shipped
+ * light setup. Any partial `light` a pre-release v12 file might carry is preserved, its fields
+ * defaulted.
+ */
+const migrateV12ToV13: Migration = {
+  from: 12,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'light'> & {
+      light?: Partial<LightSettings>
+    }
+    const light: LightSettings = { ...defaultLightSettings(), ...project.light }
+    return { schemaVersion: 13, project: { ...project, light } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -300,6 +319,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV9ToV10,
   migrateV10ToV11,
   migrateV11ToV12,
+  migrateV12ToV13,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

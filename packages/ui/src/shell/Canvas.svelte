@@ -6,10 +6,12 @@
     type LabelPlacement,
     type Piece,
     type PreviewShape,
+    type ResolvedSun,
   } from '@vitrum/core'
   import type { BBox } from '@vitrum/geometry'
   import { vec2 } from '@vitrum/geometry'
   import type { Glass, GlassId, PieceId, ReinforcementBar, Segment } from '@vitrum/model'
+  import Camera from 'lucide-svelte/icons/camera'
   import { onMount } from 'svelte'
 
   import {
@@ -52,6 +54,7 @@
   import type { RenderLayer, ResolveSource } from '../reference/gl'
   import GlassRenderLayer from '../render/GlassRenderLayer.svelte'
   import type { TextureTransform } from '../render/glass-gl'
+  import LightLayer from '../light/LightLayer.svelte'
 
   import ReferenceUnderlay from './ReferenceUnderlay.svelte'
 
@@ -139,6 +142,16 @@
     backlight?: { intensity: number; warmth: number }
     /** A piece's per-piece texture placement (F-053), else identity. */
     textureTransformFor?: (piece: Piece) => TextureTransform
+    /** Whether the sunlight simulation (F-054) is showing (the `light` view mode). */
+    lightMode?: boolean
+    /** The resolved sun for the light view (F-054). */
+    sun?: ResolvedSun
+    /** Whether glass surface textures show in the light view (F-054). */
+    lightTextures?: boolean
+    /** Whether the photo-grain overlay is on in the light view (F-054). */
+    photoGrain?: boolean
+    /** Capture a PNG photo of the lit stage (F-054 FR-6). Absent ⇒ no capture button. */
+    onCapturePhoto?: () => void
   }
 
   let {
@@ -184,6 +197,11 @@
     renderMode = false,
     backlight = { intensity: 1, warmth: 0 },
     textureTransformFor = () => IDENTITY_TEXTURE,
+    lightMode = false,
+    sun,
+    lightTextures = true,
+    photoGrain = false,
+    onCapturePhoto,
   }: Props = $props()
 
   /** The identity per-piece texture placement, shared to avoid per-frame allocation. */
@@ -192,6 +210,22 @@
     offsetXmm: 0,
     offsetYmm: 0,
     scale: 1,
+  }
+
+  /** A neutral resolved sun for the light layer when none is supplied (isolation tests). */
+  const DEFAULT_SUN: ResolvedSun = {
+    azimuthDeg: 0,
+    elevationDeg: 45,
+    aboveHorizon: true,
+    frontFactor: 1,
+    inPlaneX: 0,
+    inPlaneY: 0.6,
+    frontal: true,
+    color: { r: 1, g: 0.95, b: 0.85 },
+    intensity: 1,
+    temperatureK: 5500,
+    haloIntensity: 0.6,
+    haloConcentration: 0.5,
   }
 
   // Hand the snapshot getter to the shell once mounted (F-043); the getter reads the live canvas.
@@ -216,25 +250,30 @@
     return numberPlacements?.get(pieceKey(piece))
   }
 
-  /** True when the paint or piece-select layer (F-023) is driving. Inert in the cartoon view. */
+  /** Derived, read-only presentation views (cartoon F-040, light F-054): no editing interactions. */
+  function readOnlyView(): boolean {
+    return cartoon || lightMode
+  }
+
+  /** True when the paint or piece-select layer (F-023) is driving. Inert in read-only views. */
   function painting(): boolean {
-    return !cartoon && !!paint && paint.active
+    return !readOnlyView() && !!paint && paint.active
   }
 
-  /** True when the reinforcement-bar layer (F-032) is driving. Inert in the cartoon view. */
+  /** True when the reinforcement-bar layer (F-032) is driving. Inert in read-only views. */
   function placingBar(): boolean {
-    return !cartoon && !!reinforce && reinforce.active
+    return !readOnlyView() && !!reinforce && reinforce.active
   }
 
-  /** True when a drawing tool is active. Inert in the cartoon view (a derived, read-only view). */
+  /** True when a drawing tool is active. Inert in read-only views. */
   function drawing(): boolean {
-    return !cartoon && !!tools && tools.activeId !== 'select'
+    return !readOnlyView() && !!tools && tools.activeId !== 'select'
   }
 
   /** True when the inert select tool is active, editing is wired in, and paint/bars are off. */
   function editing(): boolean {
     return (
-      !cartoon &&
+      !readOnlyView() &&
       !!edit &&
       !!selection &&
       !painting() &&
@@ -267,9 +306,13 @@
     out.height = contentCanvas.height
     const ctx = out.getContext('2d')
     if (!ctx || typeof out.toBlob !== 'function') return null
-    ctx.fillStyle = '#ffffff'
+    // The light view is a dark stage, so the snapshot grounds on black; other views on white.
+    ctx.fillStyle = lightMode ? '#000000' : '#ffffff'
     ctx.fillRect(0, 0, out.width, out.height)
-    if (renderMode) {
+    if (lightMode) {
+      const gl = stackEl?.querySelector('canvas.light-render') as HTMLCanvasElement | null
+      if (gl) ctx.drawImage(gl, 0, 0, out.width, out.height)
+    } else if (renderMode) {
       const gl = stackEl?.querySelector('canvas.glass-render') as HTMLCanvasElement | null
       if (gl) ctx.drawImage(gl, 0, 0, out.width, out.height)
     }
@@ -302,11 +345,14 @@
       if (viewport.gridVisible) drawGrid(ctx, viewport.transform, size, palette)
       dirty.grid = false
     }
+    // The WebGL presentation views (F-053 render, F-054 light) draw their content on the GL layer
+    // below; the 2D content layer stays clear.
+    const glPresentation = renderMode || lightMode
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
-      if (renderMode) {
-        // The realistic render (F-053) draws glass + came/solder on the WebGL layer below; the 2D
-        // content layer stays clear (prepareContext cleared it) so overlays still show on top.
+      if (glPresentation) {
+        // The realistic render (F-053) / light stage (F-054) draws glass + came on the WebGL layer
+        // below; the 2D content layer stays clear (prepareContext cleared it).
       } else if (cartoon) {
         // A monochrome workshop sheet: white ground, black line work, numbers — no colour fills.
         fillBackground(ctx, size, palette.rulerBg)
@@ -319,9 +365,9 @@
         drawContent(ctx, viewport.transform, size, segments, palette, technique)
         if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       }
-      // Derived symmetry replicas (F-052): read-only linework, styled like the source. The realistic
-      // render (F-053) draws replica glass + came on the WebGL layer instead, so skip the 2D content.
-      if (!renderMode && replicaSegments.length > 0) {
+      // Derived symmetry replicas (F-052): read-only linework, styled like the source. The WebGL
+      // presentation views draw replica glass + came on the GL layer instead, so skip the 2D content.
+      if (!glPresentation && replicaSegments.length > 0) {
         drawContent(
           ctx,
           viewport.transform,
@@ -331,7 +377,7 @@
           cartoon ? undefined : technique,
         )
       }
-      if (!renderMode && (reinforcements.length > 0 || placingBar())) {
+      if (!glPresentation && (reinforcements.length > 0 || placingBar())) {
         drawReinforcements(
           ctx,
           viewport.transform,
@@ -341,76 +387,81 @@
           palette,
         )
       }
-      // Numbers overlay: always in the cartoon, on demand in the coloured view (F-040); off in render.
-      if (!renderMode && (cartoon || showNumbers)) {
+      // Numbers overlay: always in the cartoon, on demand in the coloured view (F-040); off in the
+      // WebGL presentation views.
+      if (!glPresentation && (cartoon || showNumbers)) {
         drawNumbers(ctx, viewport.transform, size, pieces, numberFor, placementFor, palette)
       }
       dirty.content = false
     }
     if (dirty.overlay) {
       const ctx = prepareContext(overlayCanvas, size, dpr)
-      drawOverlay(ctx, size, viewport.cursorScreen, palette)
-      if (painting() && selectedPieces) {
-        drawPieceSelection(ctx, viewport.transform, pieces, selectedPieces, palette)
-      }
-      if (showPieces || painting()) {
-        drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
-      }
-      if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
-      if (bomHighlightPieces || bomHighlightSegments) {
-        drawBomHighlight(
-          ctx,
-          viewport.transform,
-          pieces,
-          bomHighlightPieces ?? EMPTY_SET,
-          segments,
-          bomHighlightSegments ?? EMPTY_SET,
-          palette,
-        )
-      }
-      drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
-      if (symmetryCenter && symmetryDomain) {
-        drawSymmetryDomain(
-          ctx,
-          viewport.transform,
-          size,
-          symmetryCenter,
-          symmetryDomain.start,
-          symmetryDomain.span,
-          palette,
-        )
-      }
-      if (symmetryAxes.length > 0 && symmetryCenter) {
-        drawSymmetryAxes(ctx, viewport.transform, symmetryAxes, symmetryCenter, palette)
-      }
-      if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
-      if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
-      if (previewReplicaShapes.length > 0) {
-        drawToolPreview(ctx, viewport.transform, previewReplicaShapes, palette, 0.5)
-      }
-      if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
-      if (edit && selection && editing()) {
-        const selected = segments.filter((s) => selection!.has(s.id))
-        const preview = edit.preview
-        drawEditLayer(
-          ctx,
-          viewport.transform,
-          {
-            selected,
-            nodeMarkers: edit.nodeMarkers,
-            bezierHandles: edit.bezierHandles,
-            handles: edit.handles,
-            bbox: edit.selectionBBox,
-            marquee: edit.marquee,
-            preview: preview
-              ? {
-                  transform: preview.transform,
-                  segments: segments.filter((s) => preview.ids.includes(s.id)),
-                }
-              : null,
-          },
-          palette,
-        )
+      // The light view (F-054) is a clean presentation stage: no cursor / selection / marker overlays
+      // (the context is cleared by prepareContext above, so nothing draws).
+      if (!lightMode) {
+        drawOverlay(ctx, size, viewport.cursorScreen, palette)
+        if (painting() && selectedPieces) {
+          drawPieceSelection(ctx, viewport.transform, pieces, selectedPieces, palette)
+        }
+        if (showPieces || painting()) {
+          drawPieceHighlight(ctx, viewport.transform, pieces, hoveredPieceId, palette)
+        }
+        if (showPieces) drawDiagnostics(ctx, viewport.transform, diagnostics, palette)
+        if (bomHighlightPieces || bomHighlightSegments) {
+          drawBomHighlight(
+            ctx,
+            viewport.transform,
+            pieces,
+            bomHighlightPieces ?? EMPTY_SET,
+            segments,
+            bomHighlightSegments ?? EMPTY_SET,
+            palette,
+          )
+        }
+        drawViolations(ctx, viewport.transform, violations, selectedViolationKey, palette)
+        if (symmetryCenter && symmetryDomain) {
+          drawSymmetryDomain(
+            ctx,
+            viewport.transform,
+            size,
+            symmetryCenter,
+            symmetryDomain.start,
+            symmetryDomain.span,
+            palette,
+          )
+        }
+        if (symmetryAxes.length > 0 && symmetryCenter) {
+          drawSymmetryAxes(ctx, viewport.transform, symmetryAxes, symmetryCenter, palette)
+        }
+        if (printTiles.length > 0) drawPrintTiles(ctx, viewport.transform, printTiles, palette)
+        if (tools) drawToolPreview(ctx, viewport.transform, tools.previewShapes, palette)
+        if (previewReplicaShapes.length > 0) {
+          drawToolPreview(ctx, viewport.transform, previewReplicaShapes, palette, 0.5)
+        }
+        if (snap) drawSnapMarker(ctx, viewport.transform, snap.hit, palette)
+        if (edit && selection && editing()) {
+          const selected = segments.filter((s) => selection!.has(s.id))
+          const preview = edit.preview
+          drawEditLayer(
+            ctx,
+            viewport.transform,
+            {
+              selected,
+              nodeMarkers: edit.nodeMarkers,
+              bezierHandles: edit.bezierHandles,
+              handles: edit.handles,
+              bbox: edit.selectionBBox,
+              marquee: edit.marquee,
+              preview: preview
+                ? {
+                    transform: preview.transform,
+                    segments: segments.filter((s) => preview.ids.includes(s.id)),
+                  }
+                : null,
+            },
+            palette,
+          )
+        }
       }
       dirty.overlay = false
     }
@@ -465,6 +516,7 @@
     void numberLabels
     void numberPlacements
     void renderMode
+    void lightMode
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {
@@ -671,8 +723,8 @@
 
   function handleWindowKeyDown(event: KeyboardEvent) {
     if (isTyping(event.target)) return
-    // The cartoon view (F-040) is read-only: only pan/zoom keys below apply, no tool/edit keys.
-    if (!cartoon) {
+    // Read-only views (cartoon F-040, light F-054): only pan/zoom keys below apply, no tool/edit keys.
+    if (!readOnlyView()) {
       // The reinforcement layer (F-032) gets first refusal while active (Delete/Esc on a bar).
       if (placingBar() && reinforce!.handleKeyDown(event)) {
         event.preventDefault()
@@ -763,8 +815,28 @@
         {technique}
         {backlight}
       />
+      <LightLayer
+        {viewport}
+        active={lightMode}
+        {pieces}
+        {glassFor}
+        {glasses}
+        {textureTransformFor}
+        segments={[...segments, ...replicaSegments]}
+        {technique}
+        sun={sun ?? DEFAULT_SUN}
+        {bounds}
+        showTextures={lightTextures}
+        {photoGrain}
+      />
       <canvas class="layer" bind:this={contentCanvas}></canvas>
       <canvas class="layer" bind:this={overlayCanvas}></canvas>
+      {#if lightMode && onCapturePhoto}
+        <button class="capture" onclick={onCapturePhoto} aria-label="Capture photo">
+          <Camera size={16} strokeWidth={1.8} />
+          <span>Capture</span>
+        </button>
+      {/if}
       {#if tools && (tools.numericBuffer !== '' || tools.hint)}
         <div class="numeric" aria-label="Tool entry">
           {#if tools.hint}<span class="hint">{tools.hint}</span>{/if}
@@ -861,5 +933,27 @@
     color: var(--text-muted);
     margin-right: var(--space-2);
     text-transform: lowercase;
+  }
+
+  /* Photo-capture control on the light stage (Diafane parity), bottom-centre of the canvas. */
+  .capture {
+    position: absolute;
+    bottom: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    color: var(--ink-800);
+    font: 600 12px/1 var(--font-sans);
+    cursor: pointer;
+    z-index: 6;
+  }
+  .capture:hover {
+    background: var(--paper-50);
   }
 </style>
