@@ -267,3 +267,45 @@ this file steers every future feature.
   shortcuts (`l`) activate the tool but don't exit paint mode (only the Toolbar button does, and its
   accessible name includes the key hint, e.g. `Line (L)`) — drive E2E via the Toolbar button, and
   disambiguate the TopBar `Export` with `exact: true`.
+- (F-054, 2026-07-22) Screen-space volumetric god-rays need a two-pass FBO: emission (sun-lit glass
+  via stencil even-odd, lead stamped **black** as occluders) → full-screen radial scatter toward the
+  sun. Attach `DEPTH24_STENCIL8` to the FBO for the stencil fills; `preserveDrawingBuffer` is required
+  to read it back for the PNG snapshot (the F-030/F-053 file:// lesson — only the real E2E exercises it).
+- (F-054, 2026-07-22) FR-1 solar accuracy is best proved against the **solar-noon identity**
+  (elevation = 90°−|lat−decl|, azimuth 0/180) rather than a hardcoded reference table — it's
+  first-principles geometry the NOAA calculator reproduces, needs no external data, and pins the
+  algorithm to <0.5°.
+- (F-054, 2026-07-22) A moment being scrubbed/animated is view state, not document state: keep it
+  transient in the runes controller and commit once on release; animation stays preview-only.
+  Persisting per-frame would flood undo (the F-053 commit-on-release pattern, extended to playback).
+- (F-055, 2026-07-22) App-data that isn't in the document/undo model but is **per-document** (version
+  history) follows F-022's port pattern but the `*Port` methods take a **document key** (file path, or
+  `scratch` when unsaved); desktop stores under `userData/<feature>/<safeKey>/`, with a `VITRUM_*_PATH`
+  env override for E2E.
+- (F-055, 2026-07-22) A lazy per-row derived asset (thumbnails) must split into a side-effecting
+  `requestX` (called from a panel `$effect`) and a pure `xUrl` reader — mutating a `SvelteMap` inside a
+  `{@const}`/template throws `state_unsafe_mutation`.
+- (F-055, 2026-07-22) Restore/"replace whole document" is a single `replaceProject` command
+  (`apply: () => next`, `invert: (before) => replaceProject(before)`) routed through the store, so it's
+  one undo entry and the store stays the sole mutator.
+- (F-055, 2026-07-22) The desktop preload already exposes a `versions: {electron, chrome}` field — a
+  new `AppHost` port must **not** be named `versions` or it collides on `window.vitrum` (used
+  `versionStore`).
+- (F-055, 2026-07-22) A compact history that needs a provable exact restore is cheaper as a generic
+  structural JSON delta (`$set`/`$obj`/`$del`, fast-check `apply(a,diff(a,b))≡b`) than persisting the
+  semantic command log, which `DocumentStore` doesn't expose.
+- (F-056, 2026-07-22) A money/quote layer is a pure `@vitrum/core` calc (`computeQuote`) that takes the
+  F-042 `BomReport` as input and mirrors model pricing types structurally — keeps `core` a leaf and
+  reuses the BOM's own tests; persist only `QuoteSettings` intent on the doc, derive every total.
+- (F-056, 2026-07-22) To embed a raster in a paper PDF, add an `image` `DrawOp` + a **pre-embed pass**
+  in `renderPdf` (pdf-lib `embedPng`/`embedJpg` are async; the op walk is sync) keyed by op identity;
+  only the real `file://` E2E proves it bundles.
+- (F-056, 2026-07-22) A multibyte default (currency `€`) breaks any test fixture doing a Latin-1
+  `charCodeAt`/`fromCharCode` byte round-trip (e.g. `autosave.test.ts`) — use a real UTF-8 round-trip;
+  production is unaffected (zip container is UTF-8).
+- (F-056, 2026-07-22) `packages/paper` tests have no node types — decode base64 / check `%PDF` with a
+  pure helper + `String.fromCharCode`, never `Buffer`/`TextDecoder` (same class as the F-050 `?raw`
+  lesson).
+- (F-056, 2026-07-22, harness) A git worktree needs its own `pnpm install`; running `pnpm` after
+  `cd`-ing to the shared checkout silently tests `main`, not the worktree — always run gates from the
+  worktree root.
