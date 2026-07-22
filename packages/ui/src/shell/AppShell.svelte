@@ -9,7 +9,7 @@
     type NumberingScheme,
     type Panel,
   } from '@vitrum/core'
-  import { pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
+  import { bboxOf, bboxUnion, pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
   import {
     addSegments,
     createEmptyProject,
@@ -53,6 +53,7 @@
   import { ReinforcementController } from '../tools/reinforcement.svelte'
   import { SelectionController } from '../tools/selection.svelte'
   import { SnapController } from '../tools/snap.svelte'
+  import { SymmetryController } from '../tools/symmetry.svelte'
 
   import type { PrintTileOverlay } from '../canvas/render'
 
@@ -117,7 +118,21 @@
   // The snapping controller (F-012) replaces the tool controller's identity resolver with
   // one that snaps to nodes, intersections, the grid and construction guides.
   const snap = new SnapController(viewport)
-  tools.resolver = snap.resolver
+
+  // Live symmetry (F-052). Owns the document's symmetry setup and the two seams that make replicas
+  // appear: pointer canonicalization (composed in front of the snap resolver below, so drawing is
+  // confined to the source sector) and the pure replica expansion consumed by detection/outputs.
+  const symmetry = new SymmetryController({
+    getDoc: () => controller?.doc ?? createEmptyProject(),
+    execute: (command) => controller?.execute(command),
+    // The world origin: the grid axes cross there and it is the predictable anchor a user
+    // expects a mirror/rotation to pivot about (Mathieu 2026-07-22). Editable once on-canvas
+    // axis handles land (follow-up).
+    defaultCenter: () => vec2(0, 0),
+  })
+  // Fold every pointer into the source sector before snapping (Decision §1 / FR-5): a click
+  // anywhere authors geometry in the source, which then replicates live. No tool contract changes.
+  tools.resolver = (world, ctx) => snap.resolver(symmetry.canonicalize(world), ctx)
 
   // Selection + editing (F-013). Selection lives outside the document; the edit controller
   // drives the inert `select` tool (click/marquee, node & handle drag, transforms).
@@ -150,9 +165,44 @@
   const shownSegments = $derived(
     viewport.guidesVisible ? segments : segments.filter((s) => s.role !== 'construction'),
   )
-  const bounds = $derived(controller ? documentBounds(controller.doc) : null)
+  // Derived symmetry replicas (F-052): read-only linework the canvas renders and the outputs
+  // consume, expanded from the source by the pure core transform. Empty when symmetry is off.
+  const replicaSegments = $derived<readonly import('@vitrum/model').Segment[]>(
+    controller ? controller.replicaNetwork() : [],
+  )
 
-  // Rebuild the snap spatial index whenever the visible network changes.
+  // Bounds frame the full design (source + replicas), so zoom-to-fit sees the whole rosette.
+  const bounds = $derived.by<BBox | null>(() => {
+    if (!controller) return null
+    let box = documentBounds(controller.doc)
+    for (const seg of replicaSegments) {
+      const b = bboxOf(seg.geometry)
+      box = box ? bboxUnion(box, b) : b
+    }
+    return box
+  })
+
+  // Symmetry axis/spoke guides, sized to the framed content so they span the panel.
+  const symmetryAxes = $derived(
+    symmetry.active ? symmetry.axisSegments(symmetryRadius(bounds)) : [],
+  )
+
+  // The source fundamental domain to shade (where drawing lands) and the live tool preview mirrored
+  // into the replica sectors, so drawing shows the full symmetric result live (F-052 UX).
+  const symmetryDomain = $derived(symmetry.active ? symmetry.sourceDomain : null)
+  const previewReplicaShapes = $derived(
+    symmetry.active ? symmetry.previewReplicas(tools.previewShapes) : [],
+  )
+
+  /** A guide radius (mm) big enough to span the framed content from the symmetry center. */
+  function symmetryRadius(b: BBox | null): number {
+    if (!b) return 500
+    const diag = Math.hypot(b.max.x - b.min.x, b.max.y - b.min.y)
+    return Math.max(diag, 100)
+  }
+
+  // Rebuild the snap spatial index whenever the visible network changes. Snapping stays over the
+  // *source* only (replicas are read-only), so editing is confined to the source sector.
   $effect(() => snap.updateScene(shownSegments))
 
   // Piece detection (F-020). Feeds both the inspector (always) and the dev overlay (when its
@@ -295,7 +345,7 @@
   function buildTiledScene(ctrl: DocumentController, b: BBox) {
     return buildPrintScene({
       contentBounds: b,
-      segments: Object.values(ctrl.doc.segments).filter((s) => s.role !== 'construction'),
+      segments: ctrl.outputNetwork(),
       leadWidthMm: (seg) =>
         techniqueRender
           ? techniqueRender.leadWidthMm(seg.id, seg.role)
@@ -316,7 +366,7 @@
   function buildDesignScene(ctrl: DocumentController, b: BBox) {
     return buildExportScene({
       contentBounds: b,
-      segments: Object.values(ctrl.doc.segments).filter((s) => s.role !== 'construction'),
+      segments: ctrl.outputNetwork(),
       leadWidthMm: (seg) =>
         techniqueRender
           ? techniqueRender.leadWidthMm(seg.id, seg.role)
@@ -470,7 +520,7 @@
       technique: controller.doc.technique,
       pieces,
       cutContours: drcCutContours,
-      segments: Object.values(controller.doc.segments).filter((s) => s.role !== 'construction'),
+      segments: controller.outputNetwork(),
       glasses: projectGlasses,
       glassCodes: controller.doc.numbering.glassCodes,
       glassByPiece: effectiveGlass,
@@ -670,6 +720,7 @@
       make={makePanel}
       {reference}
       onAddReference={importImage && controller ? openAddReference : undefined}
+      symmetry={controller ? symmetry : undefined}
     />
     <div class="stage">
       {#if viewMode !== 'cartoon'}
@@ -681,6 +732,11 @@
         resolveReferenceSource={reference.resolveSource}
         referenceVersion={reference.sourcesVersion}
         segments={shownSegments}
+        {replicaSegments}
+        symmetryAxes={viewMode === 'cartoon' ? [] : symmetryAxes}
+        symmetryCenter={symmetry.active ? symmetry.center : null}
+        symmetryDomain={viewMode === 'cartoon' ? null : symmetryDomain}
+        previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
         {bounds}
         {tools}
         {snap}

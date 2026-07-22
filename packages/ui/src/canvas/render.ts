@@ -298,6 +298,93 @@ export function drawContent(
 }
 
 /**
+ * Shade the source fundamental domain (F-052): a translucent wedge from the symmetry center over
+ * the sector where drawing actually lands (matching `canonicalizeToSource`), so it reads at a
+ * glance which region the user edits and which sectors are the live mirror. `start`/`span` are the
+ * sector's opening angle and width in radians (mirror π, double-mirror π/2, radial 2π/N, radial +
+ * mirror π/N). Overlay-only chrome in the accent token; never part of the rendered document.
+ */
+export function drawSymmetryDomain(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  size: ViewSize,
+  center: { x: number; y: number },
+  start: number,
+  span: number,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || span <= 0 || span >= Math.PI * 2) return
+  // A world radius big enough to cover the visible viewport from the center in every direction.
+  const world = visibleWorldBounds(vp, size)
+  const c = vec2(center.x, center.y)
+  let r = 0
+  for (const corner of [
+    vec2(world.min.x, world.min.y),
+    vec2(world.max.x, world.min.y),
+    vec2(world.max.x, world.max.y),
+    vec2(world.min.x, world.max.y),
+  ]) {
+    r = Math.max(r, distance(c, corner))
+  }
+  r *= 1.05
+  const steps = Math.max(2, Math.ceil((span / (Math.PI * 2)) * 64))
+  ctx.save()
+  ctx.fillStyle = palette.cursor
+  ctx.globalAlpha = 0.06
+  ctx.beginPath()
+  const origin = worldToScreen(vp, c)
+  ctx.moveTo(origin.x, origin.y)
+  for (let i = 0; i <= steps; i++) {
+    const t = start + (span * i) / steps
+    const p = worldToScreen(vp, vec2(center.x + r * Math.cos(t), center.y + r * Math.sin(t)))
+    ctx.lineTo(p.x, p.y)
+  }
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * Draw the live-symmetry axes/spokes and center as construction-like guides (F-052): dashed lines
+ * in the guide colour, with a small ring at the center. Overlay-only chrome (tokens), never part of
+ * the rendered document — the replica *content* is drawn as ordinary segments by {@link drawContent}.
+ */
+export function drawSymmetryAxes(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  axes: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[],
+  center: { x: number; y: number },
+  palette: CanvasPalette,
+): void {
+  if (!ctx || axes.length === 0) return
+  ctx.save()
+  // Drawn in the accent (cobalt), matching the source-domain tint, so the axes read as the active
+  // symmetry mirror/rotation lines rather than ordinary grey construction guides.
+  ctx.strokeStyle = palette.cursor
+  ctx.lineWidth = 1.25
+  ctx.setLineDash([6, 5])
+  for (const axis of axes) {
+    const a = worldToScreen(vp, vec2(axis.a.x, axis.a.y))
+    const b = worldToScreen(vp, vec2(axis.b.x, axis.b.y))
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.stroke()
+  }
+  ctx.setLineDash([])
+  // The center of symmetry: a filled dot with a ring, so the pivot the axes turn about is obvious.
+  const c = worldToScreen(vp, vec2(center.x, center.y))
+  ctx.fillStyle = palette.cursor
+  ctx.beginPath()
+  ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(c.x, c.y, 5, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
  * Draw the technique-derived cut contours (F-021 dev overlay): the inset outline where each piece
  * of glass is actually cut, so toggling lead⇄foil or a per-segment came override visibly shifts the
  * cut lines. Degenerate contours (a piece too small to inset) are drawn in the danger colour.
@@ -885,8 +972,11 @@ export function drawToolPreview(
   vp: Viewport,
   shapes: readonly PreviewShape[],
   palette: CanvasPalette,
+  alpha = 1,
 ): void {
   if (!ctx || shapes.length === 0) return
+  ctx.save()
+  ctx.globalAlpha = alpha
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
@@ -911,6 +1001,7 @@ export function drawToolPreview(
     }
   }
   ctx.setLineDash([])
+  ctx.restore()
 }
 
 /** Half-size (screen px) of a snap glyph, and the text-hint offset from the snap point. */

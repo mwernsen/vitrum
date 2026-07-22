@@ -4,6 +4,7 @@
 
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ReferenceController } from '../reference/controller.svelte'
+  import type { SymmetryController } from '../tools/symmetry.svelte'
 
   import { DOCK_SECTIONS, type DockSection } from './dock'
   import LayersPanel from './LayersPanel.svelte'
@@ -27,10 +28,22 @@
     reference?: ReferenceController
     /** Trigger the host's image picker to add a reference layer (F-051). */
     onAddReference?: () => void
+    /** The live-symmetry controller (F-052), for the Layers panel. */
+    symmetry?: SymmetryController
   }
 
-  let { section, viewport, doc, execute, glass, rules, make, reference, onAddReference }: Props =
-    $props()
+  let {
+    section,
+    viewport,
+    doc,
+    execute,
+    glass,
+    rules,
+    make,
+    reference,
+    onAddReference,
+    symmetry,
+  }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
 
@@ -52,7 +65,7 @@
 
   <div class="body" class:flush={section === 'rules'}>
     {#if section === 'layers'}
-      <LayersPanel {viewport} {doc} {execute} {reference} {onAddReference} />
+      <LayersPanel {viewport} {doc} {execute} {reference} {onAddReference} {symmetry} />
     {:else if section === 'glass'}
       {@render glass?.()}
     {:else if section === 'rules'}

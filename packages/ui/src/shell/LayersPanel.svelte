@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Command, Project } from '@vitrum/model'
+  import type { Command, Project, SymmetryMode } from '@vitrum/model'
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
   import ChevronUp from 'lucide-svelte/icons/chevron-up'
   import Eye from 'lucide-svelte/icons/eye'
@@ -11,6 +11,11 @@
 
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ReferenceController } from '../reference/controller.svelte'
+  import type { SymmetryController } from '../tools/symmetry.svelte'
+
+  import Button from '../components/Button.svelte'
+  import Select from '../components/Select.svelte'
+  import Switch from '../components/Switch.svelte'
 
   import TechniquePanel from './TechniquePanel.svelte'
 
@@ -24,9 +29,18 @@
     reference?: ReferenceController
     /** Trigger the host's image picker to add a reference layer (F-051). Absent ⇒ no add button. */
     onAddReference?: () => void
+    /** The live-symmetry controller (F-052). Absent ⇒ the symmetry section stays a placeholder. */
+    symmetry?: SymmetryController
   }
 
-  let { viewport, doc, execute, reference, onAddReference }: Props = $props()
+  let { viewport, doc, execute, reference, onAddReference, symmetry }: Props = $props()
+
+  const SYMMETRY_MODES: { label: string; value: SymmetryMode }[] = [
+    { label: 'None', value: 'none' },
+    { label: 'Mirror (1 axis)', value: 'mirror' },
+    { label: 'Double mirror (2 axes)', value: 'double-mirror' },
+    { label: 'Radial (N-fold)', value: 'radial' },
+  ]
 
   // Top of the stack first (later layers draw on top).
   const referenceLayers = $derived(reference ? [...reference.layers].reverse() : [])
@@ -181,14 +195,72 @@
     </div>
   {/if}
 
-  <!-- Symmetry — arrives with live symmetry (F-052) -->
+  <!-- Symmetry (F-052): live mirror / double-mirror / radial replication. -->
   <div class="section">
     <span class="eyebrow">Symmetry</span>
-    <div class="sym placeholder" aria-disabled="true">
-      <span>Vertical axis mirror</span>
-      <span class="track"><span class="knob"></span></span>
-    </div>
-    <span class="feature">Coming with F-052</span>
+    {#if symmetry}
+      <Select
+        label="Mode"
+        size="sm"
+        options={SYMMETRY_MODES}
+        value={symmetry.setup.mode}
+        onchange={(v) => symmetry.setMode(v as SymmetryMode)}
+      />
+
+      {#if symmetry.active}
+        <label class="num">
+          <span class="num-label">Axis angle</span>
+          <span class="num-field">
+            <input
+              type="number"
+              step="1"
+              value={Math.round(symmetry.angleDeg)}
+              oninput={(e) => symmetry.setAngleDeg(Number(e.currentTarget.value))}
+              aria-label="Symmetry axis angle in degrees"
+            />
+            <span class="unit">deg</span>
+          </span>
+        </label>
+      {/if}
+
+      {#if symmetry.setup.mode === 'radial'}
+        <label class="num">
+          <span class="num-label">Fold count</span>
+          <span class="num-field">
+            <input
+              type="number"
+              min="2"
+              step="1"
+              value={symmetry.count}
+              oninput={(e) => symmetry.setCount(Number(e.currentTarget.value))}
+              aria-label="Radial fold count"
+            />
+          </span>
+        </label>
+        <Switch
+          label="Add mirror"
+          checked={symmetry.setup.mirror}
+          onchange={(on) => symmetry.setMirror(on)}
+        />
+      {/if}
+
+      {#if symmetry.active}
+        <div class="bake">
+          <Button variant="secondary" size="sm" onclick={() => symmetry.bake()}>
+            Bake symmetry
+          </Button>
+          <span class="feature">Materialises replicas as editable segments.</span>
+        </div>
+      {:else}
+        <span class="feature">Draw one sector and mirror it live across the panel.</span>
+      {/if}
+    {:else}
+      <div class="sym placeholder" aria-disabled="true">
+        <span>Vertical axis mirror</span>
+        <span class="track"><span class="knob"></span></span>
+      </div>
+      <span class="feature">Coming with F-052</span>
+    {/if}
   </div>
 
   {#if doc && execute}
@@ -311,6 +383,48 @@
   .feature {
     font: var(--text-caption);
     color: var(--ink-500);
+  }
+
+  .num {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .num-label {
+    font: 500 12.5px/1 var(--font-sans);
+    color: var(--ink-800);
+  }
+
+  .num-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .num-field input {
+    width: 68px;
+    padding: 5px 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--paper-0);
+    color: var(--ink-900);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .num-field .unit {
+    font: var(--text-caption);
+    color: var(--ink-500);
+  }
+
+  .bake {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
   }
 
   .section-head {
