@@ -50,6 +50,8 @@
   import type { SelectionController } from '../tools/selection.svelte'
   import type { SnapController } from '../tools/snap.svelte'
   import type { RenderLayer, ResolveSource } from '../reference/gl'
+  import GlassRenderLayer from '../render/GlassRenderLayer.svelte'
+  import type { TextureTransform } from '../render/glass-gl'
 
   import ReferenceUnderlay from './ReferenceUnderlay.svelte'
 
@@ -131,6 +133,12 @@
     bomHighlightSegments?: ReadonlySet<string>
     /** Register a PNG-snapshot getter with the shell (F-043 snapshot button). */
     snapshotRegister?: (getter: () => Promise<Uint8Array | null>) => void
+    /** Whether the realistic WebGL render (F-053) is showing (the `render` view mode). */
+    renderMode?: boolean
+    /** The realistic-render backlight (F-053): intensity + warmth. */
+    backlight?: { intensity: number; warmth: number }
+    /** A piece's per-piece texture placement (F-053), else identity. */
+    textureTransformFor?: (piece: Piece) => TextureTransform
   }
 
   let {
@@ -173,7 +181,18 @@
     bomHighlightPieces,
     bomHighlightSegments,
     snapshotRegister,
+    renderMode = false,
+    backlight = { intensity: 1, warmth: 0 },
+    textureTransformFor = () => IDENTITY_TEXTURE,
   }: Props = $props()
+
+  /** The identity per-piece texture placement, shared to avoid per-frame allocation. */
+  const IDENTITY_TEXTURE: TextureTransform = {
+    rotationDeg: 0,
+    offsetXmm: 0,
+    offsetYmm: 0,
+    scale: 1,
+  }
 
   // Hand the snapshot getter to the shell once mounted (F-043); the getter reads the live canvas.
   $effect(() => {
@@ -236,8 +255,10 @@
   /**
    * Rasterise the rendered design to PNG bytes for the F-043 snapshot button. Composites the
    * document content layer (glass, lead, numbers — not the selection/cursor overlay or grid) onto a
-   * white ground, so the snapshot is the design as drawn. Resolves null when the canvas or
-   * `toBlob`/2D context is unavailable (e.g. jsdom).
+   * white ground, so the snapshot is the design as drawn. In the realistic render view (F-053) the
+   * WebGL glass layer is composited first (it, not the 2D content layer, carries the render — the
+   * WebGL context keeps its drawing buffer for exactly this readback). Resolves null when the canvas
+   * or `toBlob`/2D context is unavailable (e.g. jsdom).
    */
   export async function toPngBytes(): Promise<Uint8Array | null> {
     if (typeof document === 'undefined' || !contentCanvas) return null
@@ -248,6 +269,10 @@
     if (!ctx || typeof out.toBlob !== 'function') return null
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, out.width, out.height)
+    if (renderMode) {
+      const gl = stackEl?.querySelector('canvas.glass-render') as HTMLCanvasElement | null
+      if (gl) ctx.drawImage(gl, 0, 0, out.width, out.height)
+    }
     ctx.drawImage(contentCanvas, 0, 0)
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (!blob) return null
@@ -279,7 +304,10 @@
     }
     if (dirty.content) {
       const ctx = prepareContext(contentCanvas, size, dpr)
-      if (cartoon) {
+      if (renderMode) {
+        // The realistic render (F-053) draws glass + came/solder on the WebGL layer below; the 2D
+        // content layer stays clear (prepareContext cleared it) so overlays still show on top.
+      } else if (cartoon) {
         // A monochrome workshop sheet: white ground, black line work, numbers — no colour fills.
         fillBackground(ctx, size, palette.rulerBg)
         drawContent(ctx, viewport.transform, size, segments, palette)
@@ -291,8 +319,9 @@
         drawContent(ctx, viewport.transform, size, segments, palette, technique)
         if (showCuts) drawCutContours(ctx, viewport.transform, cutContours, palette)
       }
-      // Derived symmetry replicas (F-052): read-only linework, styled like the source.
-      if (replicaSegments.length > 0) {
+      // Derived symmetry replicas (F-052): read-only linework, styled like the source. The realistic
+      // render (F-053) draws replica glass + came on the WebGL layer instead, so skip the 2D content.
+      if (!renderMode && replicaSegments.length > 0) {
         drawContent(
           ctx,
           viewport.transform,
@@ -302,7 +331,7 @@
           cartoon ? undefined : technique,
         )
       }
-      if (reinforcements.length > 0 || placingBar()) {
+      if (!renderMode && (reinforcements.length > 0 || placingBar())) {
         drawReinforcements(
           ctx,
           viewport.transform,
@@ -312,8 +341,8 @@
           palette,
         )
       }
-      // Numbers overlay: always in the cartoon, on demand in the coloured view (F-040).
-      if (cartoon || showNumbers) {
+      // Numbers overlay: always in the cartoon, on demand in the coloured view (F-040); off in render.
+      if (!renderMode && (cartoon || showNumbers)) {
         drawNumbers(ctx, viewport.transform, size, pieces, numberFor, placementFor, palette)
       }
       dirty.content = false
@@ -435,6 +464,7 @@
     void showNumbers
     void numberLabels
     void numberPlacements
+    void renderMode
     schedule('grid', 'content', 'rulers')
   })
   $effect(() => {
@@ -721,6 +751,17 @@
         layers={referenceLayers}
         resolveSource={resolveReferenceSource}
         version={referenceVersion}
+      />
+      <GlassRenderLayer
+        {viewport}
+        active={renderMode}
+        {pieces}
+        {glassFor}
+        {glasses}
+        {textureTransformFor}
+        segments={[...segments, ...replicaSegments]}
+        {technique}
+        {backlight}
       />
       <canvas class="layer" bind:this={contentCanvas}></canvas>
       <canvas class="layer" bind:this={overlayCanvas}></canvas>

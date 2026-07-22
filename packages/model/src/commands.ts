@@ -35,11 +35,13 @@ import type {
   NodeId,
   NumberingScheme,
   PieceId,
+  PieceTextureTransform,
   Project,
   ProjectSettings,
   ReferenceLayer,
   ReinforcementBar,
   ReinforcementId,
+  RenderSettings,
   Segment,
   SegmentGeometry,
   SegmentId,
@@ -961,6 +963,66 @@ export function updateBomSettings(patch: Partial<BomSettings>): Command {
       const prev: Record<string, number> = {}
       for (const key of Object.keys(patch) as (keyof BomSettings)[]) prev[key] = before.bom[key]
       return updateBomSettings(prev as Partial<BomSettings>)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Realistic-render settings (F-053)                                            */
+/* -------------------------------------------------------------------------- */
+
+/** A shallow patch over the backlight fields of {@link RenderSettings}. */
+export type RenderBacklightPatch = Partial<
+  Pick<RenderSettings, 'backlightIntensity' | 'backlightWarmth'>
+>
+
+/**
+ * Update the realistic-render backlight (F-053 FR-1) in one undo step. A shallow patch over the two
+ * backlight numbers; the inverse restores exactly the fields the patch touched, so an
+ * intensity/warmth tweak sits in the undo history like any other edit (commit on blur to keep one
+ * entry per adjustment). The render is a live derived view, so changing a factor re-renders with
+ * nothing else to persist. Never touches `textureTransforms`.
+ */
+export function updateRenderSettings(patch: RenderBacklightPatch): Command {
+  return {
+    kind: 'updateRenderSettings',
+    apply: (doc) => ({ ...doc, render: { ...doc.render, ...patch } }),
+    invert: (before) => {
+      const prev: { backlightIntensity?: number; backlightWarmth?: number } = {}
+      if (patch.backlightIntensity !== undefined)
+        prev.backlightIntensity = before.render.backlightIntensity
+      if (patch.backlightWarmth !== undefined) prev.backlightWarmth = before.render.backlightWarmth
+      return updateRenderSettings(prev)
+    },
+  }
+}
+
+/**
+ * Set (or clear) per-piece texture placements (F-053, Glass Eye Pro Plus parity) in a single undo
+ * step. The `patch` maps a piece's content id (F-020) to a {@link PieceTextureTransform}, or to
+ * `null` to reset it to the identity placement. Self-inverting: the inverse restores exactly the
+ * prior value (a transform or absence) of every touched key. Keyed by content id so placements
+ * survive a save/reload, exactly like glass assignments. Editing geometry never routes through here.
+ */
+export function setPieceTextureTransforms(
+  patch: Readonly<Record<PieceId, PieceTextureTransform | null>>,
+): Command {
+  return {
+    kind: 'setPieceTextureTransforms',
+    apply: (doc) => {
+      const textureTransforms = { ...doc.render.textureTransforms }
+      for (const [pieceId, transform] of Object.entries(patch)) {
+        if (transform === null) delete textureTransforms[pieceId]
+        else textureTransforms[pieceId] = transform
+      }
+      return { ...doc, render: { ...doc.render, textureTransforms } }
+    },
+    invert: (before) => {
+      const inverse: Record<PieceId, PieceTextureTransform | null> = {}
+      for (const pieceId of Object.keys(patch)) {
+        inverse[pieceId] = before.render.textureTransforms[pieceId] ?? null
+      }
+      return setPieceTextureTransforms(inverse)
     },
   }
 }

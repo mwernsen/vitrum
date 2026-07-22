@@ -1,5 +1,10 @@
 <script lang="ts">
-  import type { Command, Project, SymmetryMode } from '@vitrum/model'
+  import {
+    updateRenderSettings,
+    type Command,
+    type Project,
+    type SymmetryMode,
+  } from '@vitrum/model'
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
   import ChevronUp from 'lucide-svelte/icons/chevron-up'
   import Eye from 'lucide-svelte/icons/eye'
@@ -31,9 +36,19 @@
     onAddReference?: () => void
     /** The live-symmetry controller (F-052). Absent ⇒ the symmetry section stays a placeholder. */
     symmetry?: SymmetryController
+    /** Whether the realistic render view (F-053) is active — reveals the backlight controls. */
+    renderActive?: boolean
   }
 
-  let { viewport, doc, execute, reference, onAddReference, symmetry }: Props = $props()
+  let {
+    viewport,
+    doc,
+    execute,
+    reference,
+    onAddReference,
+    symmetry,
+    renderActive = false,
+  }: Props = $props()
 
   const SYMMETRY_MODES: { label: string; value: SymmetryMode }[] = [
     { label: 'None', value: 'none' },
@@ -263,6 +278,48 @@
     {/if}
   </div>
 
+  <!-- Realistic render backlight (F-053): shown only in the render view. One undo entry per drag
+       (committed on `change`, i.e. slider release). -->
+  {#if renderActive && doc && execute}
+    {@const ex = execute}
+    <div class="section">
+      <span class="eyebrow">Backlight</span>
+      <label class="slider">
+        <span class="slider-label">
+          Intensity
+          <span class="slider-value">{doc.render.backlightIntensity.toFixed(2)}</span>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="2"
+          step="0.05"
+          value={doc.render.backlightIntensity}
+          onchange={(e) =>
+            ex(updateRenderSettings({ backlightIntensity: Number(e.currentTarget.value) }))}
+          aria-label="Backlight intensity"
+        />
+      </label>
+      <label class="slider">
+        <span class="slider-label">
+          Warmth
+          <span class="slider-value">{doc.render.backlightWarmth.toFixed(2)}</span>
+        </span>
+        <input
+          type="range"
+          min="-1"
+          max="1"
+          step="0.05"
+          value={doc.render.backlightWarmth}
+          onchange={(e) =>
+            ex(updateRenderSettings({ backlightWarmth: Number(e.currentTarget.value) }))}
+          aria-label="Backlight warmth"
+        />
+      </label>
+      <span class="feature">Cool north light to warm afternoon sun.</span>
+    </div>
+  {/if}
+
   {#if doc && execute}
     <div class="section">
       <TechniquePanel technique={doc.technique} {execute} />
@@ -383,6 +440,31 @@
   .feature {
     font: var(--text-caption);
     color: var(--ink-500);
+  }
+
+  .slider {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .slider-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    font: 500 12.5px/1 var(--font-sans);
+    color: var(--ink-800);
+  }
+
+  .slider-value {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .slider input[type='range'] {
+    width: 100%;
+    accent-color: var(--cobalt-500);
   }
 
   .num {

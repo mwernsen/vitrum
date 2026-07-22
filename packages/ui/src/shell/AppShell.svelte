@@ -8,11 +8,13 @@
     toDrafts,
     type NumberingScheme,
     type Panel,
+    type Piece,
   } from '@vitrum/core'
   import { bboxOf, bboxUnion, pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
   import {
     addSegments,
     createEmptyProject,
+    identityTextureTransform,
     segmentsFromDrafts,
     setGlassAssignments,
     updateBomSettings,
@@ -21,6 +23,7 @@
     type GlassId,
     type OpenedFile,
     type PieceId,
+    type PieceTextureTransform,
   } from '@vitrum/model'
 
   import { panelWeight, type DrcInput } from '@vitrum/drc'
@@ -630,6 +633,19 @@
     controller && viewport.cutsVisible && pieces.length > 0 ? controller.cutContours(pieces) : [],
   )
 
+  // Realistic render (F-053): the persisted backlight, and a resolver for per-piece texture
+  // placements keyed by content id (identity when the user has not set one). Both feed the WebGL
+  // render pass; the render itself is a derived view, so only this intent is persisted.
+  const renderSettings = $derived(controller?.doc.render)
+  const backlight = $derived({
+    intensity: renderSettings?.backlightIntensity ?? 1,
+    warmth: renderSettings?.backlightWarmth ?? 0,
+  })
+  const textureTransforms = $derived(renderSettings?.textureTransforms ?? {})
+  function textureTransformFor(piece: Piece): PieceTextureTransform {
+    return textureTransforms[pieceKey(piece)] ?? identityTextureTransform()
+  }
+
   let calibrationOpen = $state(false)
 
   // Cockpit shell state (Portal "2b"). Only the "design" view and the "glass" dock section are
@@ -721,6 +737,7 @@
       {reference}
       onAddReference={importImage && controller ? openAddReference : undefined}
       symmetry={controller ? symmetry : undefined}
+      renderActive={viewMode === 'render'}
     />
     <div class="stage">
       {#if viewMode !== 'cartoon'}
@@ -766,6 +783,9 @@
         bomHighlightPieces={bom.highlightPieces}
         bomHighlightSegments={bom.highlightSegments}
         snapshotRegister={(fn) => (takeSnapshot = fn)}
+        renderMode={viewMode === 'render'}
+        {backlight}
+        {textureTransformFor}
       />
       {#if viewMode !== 'cartoon'}
         <ReferenceOverlay controller={reference} {viewport} />
@@ -791,6 +811,7 @@
       doc={controller?.doc}
       {pieces}
       execute={controller ? (command) => controller.execute(command) : undefined}
+      renderActive={viewMode === 'render'}
     />
   </div>
   <StatusBar

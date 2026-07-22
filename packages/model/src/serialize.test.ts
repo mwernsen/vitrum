@@ -74,6 +74,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 8, migrate: (file) => ({ schemaVersion: 9, project: file.project }) },
       { from: 9, migrate: (file) => ({ schemaVersion: 10, project: file.project }) },
       { from: 10, migrate: (file) => ({ schemaVersion: 11, project: file.project }) },
+      { from: 11, migrate: (file) => ({ schemaVersion: 12, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -344,6 +345,43 @@ describe('schema versioning (FR-4)', () => {
     expect(withSymmetry.symmetry.mode).toBe('radial')
     expect(withSymmetry.symmetry.count).toBe(8)
     expect(withSymmetry.symmetry.mirror).toBe(false) // defaulted
+  })
+
+  it('v11 → v12 seeds the render default (F-053)', () => {
+    const legacyProject = {
+      settings: { units: 'mm', name: 'legacy' },
+      technique: { kind: 'lead' },
+      segments: {},
+      nodes: {},
+      glasses: {},
+      assignments: {},
+      layers: [],
+      drc: { exclusions: {}, rules: {} },
+      reinforcements: [],
+      numbering: { scheme: 'grouped', glassCodes: {}, auto: {}, overrides: {} },
+      bom: { glassWaste: 0.3, leadWaste: 0.1, solderGramsPerMetre: 20, foilRollLengthMm: 33_000 },
+      symmetry: {
+        mode: 'none',
+        center: { x: 0, y: 0 },
+        angle: Math.PI / 2,
+        count: 6,
+        mirror: false,
+      },
+    }
+    const project = deserialize(JSON.stringify({ schemaVersion: 11, project: legacyProject }))
+    expect(project.render.backlightIntensity).toBe(1)
+    expect(project.render.backlightWarmth).toBe(0)
+    expect(project.render.textureTransforms).toEqual({})
+
+    // A pre-release v11 file that already carries a partial render block keeps its fields.
+    const withRender = deserialize(
+      JSON.stringify({
+        schemaVersion: 11,
+        project: { ...legacyProject, render: { backlightIntensity: 1.5 } },
+      }),
+    )
+    expect(withRender.render.backlightIntensity).toBe(1.5)
+    expect(withRender.render.backlightWarmth).toBe(0) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {
