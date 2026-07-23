@@ -351,6 +351,72 @@ export function defaultRenderSettings(): RenderSettings {
   return { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} }
 }
 
+/** How the sun is placed for the light simulation (F-054): by hand, or from date/time/location. */
+export type LightMode = 'manual' | 'astronomical'
+
+/**
+ * Sunlight-simulation settings (F-054). Only *tunable intent* is persisted — the resolved sun and
+ * the lit render are derived by `@vitrum/core`, never stored (the F-042 / F-053 discipline). One
+ * block covers both modes: in `manual` mode the sun az/el, intensity and temperature are the user's
+ * direct (panel-relative) values; in `astronomical` mode they are derived from location + facade
+ * orientation + tilt + date/time. The halo, overcast, grain and texture toggles apply in both.
+ */
+export interface LightSettings {
+  readonly mode: LightMode
+  /** North-positive latitude, −90..90 (astronomical). */
+  readonly latitudeDeg: number
+  /** East-positive longitude, −180..180 (astronomical). */
+  readonly longitudeDeg: number
+  /** Compass direction the window front faces, 0 = N … 180 = S (astronomical). */
+  readonly facadeAzimuthDeg: number
+  /** Glass tilt from horizontal: 90 = vertical window, 0 = skylight (astronomical). */
+  readonly tiltDeg: number
+  /** Day of the year, 1..365 (astronomical). */
+  readonly dayOfYear: number
+  /** Local clock minutes past midnight, 0..1439 (astronomical). */
+  readonly timeMinutes: number
+  /** Panel-relative sun azimuth, −90 (left) … +90 (right); 0 = frontal (manual). */
+  readonly manualAzimuthDeg: number
+  /** Panel-relative sun elevation, 0 (horizon) … 90 (zenith) (manual). */
+  readonly manualElevationDeg: number
+  /** Light intensity 0..1 (manual; inert in astronomical, where the sky drives brightness). */
+  readonly intensity: number
+  /** Colour temperature in kelvin (manual; derived from elevation in astronomical). */
+  readonly temperatureK: number
+  /** Solar-halo intensity 0..1. */
+  readonly haloIntensity: number
+  /** Solar-halo concentration 0..1 (higher = tighter halo / rays). */
+  readonly haloConcentration: number
+  /** Overcast toggle: flattens and cools the light. */
+  readonly overcast: boolean
+  /** Photo-grain overlay on the lit stage (Diafane parity). */
+  readonly photoGrain: boolean
+  /** Whether glass surface textures show in the light view (Diafane parity). */
+  readonly showTextures: boolean
+}
+
+/** Fresh light settings: a south-facing Amsterdam window at midsummer noon, clear sky. */
+export function defaultLightSettings(): LightSettings {
+  return {
+    mode: 'astronomical',
+    latitudeDeg: 52.37,
+    longitudeDeg: 4.9,
+    facadeAzimuthDeg: 180,
+    tiltDeg: 90,
+    dayOfYear: 172,
+    timeMinutes: 12 * 60,
+    manualAzimuthDeg: 0,
+    manualElevationDeg: 45,
+    intensity: 1,
+    temperatureK: 5500,
+    haloIntensity: 0.6,
+    haloConcentration: 0.5,
+    overcast: false,
+    photoGrain: false,
+    showTextures: true,
+  }
+}
+
 /** The whole project. Deeply readonly; produced only by command application and load. */
 export interface Project {
   readonly settings: ProjectSettings
@@ -409,6 +475,12 @@ export interface Project {
    * Tunable intent only — the render is a derived view, never stored.
    */
   readonly render: RenderSettings
+  /**
+   * Sunlight-simulation settings (F-054): mode, location, facade orientation, tilt, date/time,
+   * manual sun and the halo/overcast/grain/texture toggles. Tunable intent only — the resolved sun
+   * and the lit stage are derived, never stored.
+   */
+  readonly light: LightSettings
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -439,5 +511,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     bom: defaultBomSettings(),
     symmetry: defaultSymmetry(),
     render: defaultRenderSettings(),
+    light: defaultLightSettings(),
   }
 }

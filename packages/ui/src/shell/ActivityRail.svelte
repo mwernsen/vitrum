@@ -5,6 +5,7 @@
   import Settings from 'lucide-svelte/icons/settings'
   import ShieldCheck from 'lucide-svelte/icons/shield-check'
   import SquareStack from 'lucide-svelte/icons/square-stack'
+  import Sun from 'lucide-svelte/icons/sun'
 
   import Tooltip from '../components/Tooltip.svelte'
 
@@ -36,6 +37,7 @@
     { label: 'Glass', icon: SquareStack, section: 'glass' },
     { label: 'Design rules', icon: ShieldCheck, section: 'rules' },
     { label: 'Manufacturing', icon: List, section: 'make' },
+    { label: 'Light', icon: Sun, section: 'light' },
     { label: 'Versions', icon: History, section: 'versions' },
   ]
 </script>

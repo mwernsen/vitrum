@@ -155,12 +155,11 @@ realistic render, not the (cleared) 2D content layer.
 monotonic in intensity/transmission + clamp, `daylight` warmth, hex round-trip, per-tag texture params
 distinct). Model: `renderCommands.test.ts` (backlight patch + undo + serialize round-trip; per-piece
 transform set/clear/self-invert + content-id reload round-trip) and a v11→v12 migration test in
-`serialize.test.ts`. UI: `LayersPanel.render.test.ts` (backlight hidden unless render active; intensity
-
-- warmth each one undo entry) and `Inspector.render.test.ts` (texture controls hidden unless render
-  active; rotation/scale/reset keyed by content id, undo). E2E: `render.spec.ts` drives the packaged
-  `file://` build — draw + paint, switch to Render (WebGL layer goes live), edit geometry live in render
-  mode, export a PNG snapshot to disk (`VITRUM_EXPORT_PNG_PATH`).
+`serialize.test.ts`. UI: `LayersPanel.render.test.ts` (backlight hidden unless render active;
+intensity and warmth each one undo entry) and `Inspector.render.test.ts` (texture controls hidden
+unless render active; rotation/scale/reset keyed by content id, undo). E2E: `render.spec.ts` drives the packaged
+`file://` build — draw + paint, switch to Render (WebGL layer goes live), edit geometry live in render
+mode, export a PNG snapshot to disk (`VITRUM_EXPORT_PNG_PATH`).
 
 **Verification (by me).** All five gates green from the repo root: `pnpm lint`, `pnpm format:check`,
 `pnpm check` (svelte-check 0 errors), `pnpm test` (954 unit/component), `pnpm test:e2e` (26 E2E incl.

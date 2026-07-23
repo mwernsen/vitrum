@@ -31,6 +31,7 @@ import type {
   Glass,
   GlassId,
   LayerId,
+  LightSettings,
   Node,
   NodeId,
   NumberingScheme,
@@ -1049,6 +1050,34 @@ export function setPieceTextureTransforms(
         inverse[pieceId] = before.render.textureTransforms[pieceId] ?? null
       }
       return setPieceTextureTransforms(inverse)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sunlight-simulation settings (F-054)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** A shallow patch over {@link LightSettings}. */
+export type LightSettingsPatch = Partial<LightSettings>
+
+/**
+ * Update the sunlight-simulation settings (F-054) in one undo step. A shallow patch over
+ * {@link LightSettings}; the inverse restores exactly the fields the patch touched, so an
+ * orientation/date/manual-sun/slider tweak sits in the undo history like any other edit (commit on
+ * release to keep one entry per adjustment — the F-053 backlight pattern). The resolved sun and the
+ * lit render are derived, so changing a factor just re-renders with nothing else to persist.
+ */
+export function updateLightSettings(patch: LightSettingsPatch): Command {
+  return {
+    kind: 'updateLightSettings',
+    apply: (doc) => ({ ...doc, light: { ...doc.light, ...patch } }),
+    invert: (before) => {
+      const prev: Partial<Record<keyof LightSettings, LightSettings[keyof LightSettings]>> = {}
+      for (const key of Object.keys(patch) as (keyof LightSettings)[]) {
+        prev[key] = before.light[key]
+      }
+      return updateLightSettings(prev as LightSettingsPatch)
     },
   }
 }

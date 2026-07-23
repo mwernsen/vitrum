@@ -172,6 +172,26 @@ export {
   type TextureParams,
 } from './render'
 export {
+  SEASON_PRESETS,
+  equationOfTimeMinutes,
+  instantForDay,
+  julianDay,
+  kelvinToRgb,
+  projectSunOnPanel,
+  resolveSun,
+  skyLight,
+  solarDeclinationDeg,
+  solarNoonUtcMinutes,
+  solarPosition,
+  type GeoLocation,
+  type LightInput,
+  type LightMode,
+  type PanelSun,
+  type ResolvedSun,
+  type SkyLight,
+  type SolarPosition,
+} from './solar'
+export {
   canonicalizeToSource,
   expandNetwork,
   expandReplicas,
