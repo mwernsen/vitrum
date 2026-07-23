@@ -77,6 +77,7 @@
   import { type DockSection } from './dock'
   import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
+  import LightControls from './LightControls.svelte'
   import ReferenceOverlay from './ReferenceOverlay.svelte'
   import NumberingPanel, { type LegendEntry } from './NumberingPanel.svelte'
   import ReadinessStrip from './ReadinessStrip.svelte'
@@ -871,11 +872,7 @@
     title={panel.name}
     {controller}
     {viewMode}
-    onViewMode={(mode) => {
-      viewMode = mode
-      // Entering the light view opens its dock section, so the stage and controls agree (F-054 IA).
-      if (mode === 'light') dockSection = 'light'
-    }}
+    onViewMode={(mode) => (viewMode = mode)}
     onZoomFit={() => viewport.zoomToFit(bounds)}
     onExport={exportText || exportPdf ? openExport : undefined}
     exportEnabled={exportAvailable && pieces.length > 0}
@@ -910,9 +907,6 @@
       onAddReference={importImage && controller ? openAddReference : undefined}
       symmetry={controller ? symmetry : undefined}
       renderActive={viewMode === 'render'}
-      light={controller ? light : undefined}
-      lightViewActive={viewMode === 'light'}
-      onEnterLightView={() => (viewMode = 'light')}
     />
     <div class="stage">
       {#if viewMode !== 'cartoon' && viewMode !== 'light'}
@@ -972,6 +966,9 @@
       {/if}
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
+      {/if}
+      {#if viewMode === 'light' && controller}
+        <LightControls {light} />
       {/if}
       {#if controller?.readOnly}
         <div class="readonly-banner" role="status">

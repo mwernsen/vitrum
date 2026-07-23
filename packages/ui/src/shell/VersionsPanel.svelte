@@ -10,6 +10,7 @@
   import Dialog from '../components/Dialog.svelte'
   import IconButton from '../components/IconButton.svelte'
   import Input from '../components/Input.svelte'
+  import Tooltip from '../components/Tooltip.svelte'
   import type { VersionController } from '../versions/controller.svelte'
 
   interface Props {
@@ -153,27 +154,47 @@
             {/if}
           </div>
           <div class="row-actions">
-            <IconButton
-              size="sm"
-              label="Restore this version"
-              disabled={readOnly}
-              onclick={() => versions.restore(snapshot.id)}
-            >
-              <RotateCcw size={15} strokeWidth={1.7} />
-            </IconButton>
-            <IconButton
-              size="sm"
-              label="Open a copy"
-              onclick={() => versions.openCopy(snapshot.id)}
-            >
-              <Copy size={15} strokeWidth={1.7} />
-            </IconButton>
-            <IconButton size="sm" label="Rename version" onclick={() => openRename(snapshot)}>
-              <Pencil size={15} strokeWidth={1.7} />
-            </IconButton>
-            <IconButton size="sm" label="Delete version" onclick={() => openDelete(snapshot.id)}>
-              <Trash2 size={15} strokeWidth={1.7} />
-            </IconButton>
+            <Tooltip label="Restore this version" side="top">
+              <IconButton
+                size="sm"
+                label="Restore this version"
+                title={undefined}
+                disabled={readOnly}
+                onclick={() => versions.restore(snapshot.id)}
+              >
+                <RotateCcw size={15} strokeWidth={1.7} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip label="Open a copy" side="top">
+              <IconButton
+                size="sm"
+                label="Open a copy"
+                title={undefined}
+                onclick={() => versions.openCopy(snapshot.id)}
+              >
+                <Copy size={15} strokeWidth={1.7} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip label="Rename version" side="top">
+              <IconButton
+                size="sm"
+                label="Rename version"
+                title={undefined}
+                onclick={() => openRename(snapshot)}
+              >
+                <Pencil size={15} strokeWidth={1.7} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip label="Delete version" side="top">
+              <IconButton
+                size="sm"
+                label="Delete version"
+                title={undefined}
+                onclick={() => openDelete(snapshot.id)}
+              >
+                <Trash2 size={15} strokeWidth={1.7} />
+              </IconButton>
+            </Tooltip>
           </div>
         </li>
       {/each}

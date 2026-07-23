@@ -28,9 +28,9 @@ test.afterEach(async () => {
 
 // F-054: drives the sunlight simulation through the packaged file:// build (the only place the
 // WebGL / FBO god-ray class of problem shows up — the F-030 lesson). Draws + paints a panel,
-// switches to the Light view (asserting the volumetric WebGL layer goes live and its dock section
-// opens), scrubs the moment via a season preset (365-days mode), and captures a PNG photo of the lit
-// stage to disk (F-054 FR-6), asserting a real image lands.
+// switches to the Light view (asserting the volumetric WebGL layer goes live and the floating light
+// controls card appears), scrubs the moment via a season preset (365-days mode), and captures a PNG
+// photo of the lit stage to disk (F-054 FR-6), asserting a real image lands.
 test('light view: switch live, scrub a season, capture a photo', async () => {
   const window = await app.firstWindow()
   const canvas = window.getByRole('main', { name: 'Design canvas' })
@@ -47,10 +47,12 @@ test('light view: switch live, scrub a season, capture a photo', async () => {
   await paletteRegion.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Switch to the Light view: the volumetric WebGL layer goes live and the Light dock opens.
+  // Switch to the Light view: the volumetric WebGL layer goes live and the floating light controls
+  // card appears (F-054 controls float over the canvas in the light view, not in the dock).
   await window.getByRole('tab', { name: 'Light', exact: true }).click()
   const lightLayer = window.locator('canvas.light-render')
   await expect(lightLayer).toBeVisible()
+  await expect(window.getByRole('complementary', { name: 'Light controls' })).toBeVisible()
   await expect(window.getByRole('tab', { name: '365 days' })).toBeVisible()
 
   // Scrub the moment via a season preset (365-days / astronomical mode).
