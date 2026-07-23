@@ -234,3 +234,14 @@ gallery pass. The GL path runs only in the E2E (the F-030 file:// lesson); jsdom
 - Elevation-tinted sky gradient in the sun dome (design enhancement).
 - Horizon-obstruction slider (neighbouring-building shadowing approximation, from the non-goals).
 - A proper IANA timezone for the astronomical instant (currently longitude/15 integer estimate).
+
+### Post-merge polish (2026-07-23)
+
+- **Light controls moved out of the dock into a floating card** (`shell/LightControls.svelte`) shown
+  over the canvas stage only in the light view (Mathieu, 2026-07-23) — closer to Diafane's on-canvas
+  card and keeps light UI scoped to the light page. The dock "Light" section and its activity-rail
+  item are removed; `dock.ts`, `ActivityRail.svelte` and `DockPanel.svelte` no longer know about
+  light. The card reuses the existing `LightPanel` content unchanged. Net-new surface to back-port:
+  the floating light-controls card (paper card, tokens only, `.stage`-anchored like the Toolbar).
+- `light.spec.ts` updated: asserts the floating `Light controls` card appears on entering the light
+  view (was: the dock section opens).

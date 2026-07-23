@@ -224,3 +224,13 @@ whitespace, unrelated to F-055 — drop from the PR if preferred.
   since removed shows the missing-image placeholder.
 - Pruned auto snapshots leave their cached thumbnail files on disk (orphaned); a cleanup sweep is a
   minor future nicety.
+
+### Post-merge polish (2026-07-23)
+
+- **Version thumbnails were blank/broken in the desktop app**: the renderer CSP had no `img-src`, so
+  it fell back to `default-src 'self'` and blocked the `data:image/png` thumbnail URLs (the
+  file://-class bug tests can't catch — F-030/F-053 lesson). Fixed by adding `img-src 'self' data:
+blob:` to the CSP in `apps/desktop/src/renderer/index.html`.
+- **Version-row action buttons now use the design-system `Tooltip`** (Restore this version / Open a
+  copy / Rename version / Delete version), replacing the reliance on the native `title` attribute
+  (which is suppressed via `title={undefined}` on the wrapped `IconButton`s so tooltips don't double).

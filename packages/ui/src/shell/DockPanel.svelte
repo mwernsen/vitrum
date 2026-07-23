@@ -3,13 +3,11 @@
   import type { Snippet } from 'svelte'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
-  import type { LightController } from '../light/controller.svelte'
   import type { ReferenceController } from '../reference/controller.svelte'
   import type { SymmetryController } from '../tools/symmetry.svelte'
 
   import { DOCK_SECTIONS, type DockSection } from './dock'
   import LayersPanel from './LayersPanel.svelte'
-  import LightPanel from './LightPanel.svelte'
 
   interface Props {
     /** The open section, chosen from the activity rail (the sole switcher — no tabs here). */
@@ -38,12 +36,6 @@
     symmetry?: SymmetryController
     /** Whether the realistic render view (F-053) is active — reveals the backlight controls. */
     renderActive?: boolean
-    /** The sunlight-simulation controller (F-054), for the Light section. */
-    light?: LightController
-    /** Whether the light view is active, so the Light panel can invite the switch. */
-    lightViewActive?: boolean
-    /** Switch the app to the light view from the Light panel. */
-    onEnterLightView?: () => void
   }
 
   let {
@@ -60,9 +52,6 @@
     onAddReference,
     symmetry,
     renderActive = false,
-    light,
-    lightViewActive = false,
-    onEnterLightView,
   }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
@@ -96,8 +85,6 @@
       {@render rules?.()}
     {:else if section === 'make'}
       {@render make?.()}
-    {:else if section === 'light'}
-      <LightPanel {light} {lightViewActive} {onEnterLightView} />
     {:else if section === 'cost'}
       {@render cost?.()}
     {:else if section === 'versions'}
