@@ -51,6 +51,7 @@
   import { PrintController } from '../print/controller.svelte'
   import { buildPrintScene } from '../print/scene'
   import { ToolController } from '../tools/controller.svelte'
+  import type { VersionController } from '../versions/controller.svelte'
   import { EditController } from '../tools/edit.svelte'
   import { PaintController } from '../tools/paint.svelte'
   import { ReinforcementController } from '../tools/reinforcement.svelte'
@@ -72,6 +73,7 @@
   import ReadinessStrip from './ReadinessStrip.svelte'
   import RulesPanel from './RulesPanel.svelte'
   import StatusBar from './StatusBar.svelte'
+  import VersionsPanel from './VersionsPanel.svelte'
   import Toolbar from './Toolbar.svelte'
   import TopBar from './TopBar.svelte'
   import { type ViewMode } from './viewmode'
@@ -82,6 +84,8 @@
     controller?: DocumentController
     /** The global glass library controller (F-022). Optional so the shell renders in isolation. */
     glassLibrary?: GlassLibraryController
+    /** The version-history controller (F-055). Optional so the shell renders in isolation. */
+    versions?: VersionController
     /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
     exportPdf?: SavePdf
     /** Writes a generated text document (CSV / SVG / DXF) to the host (F-042/F-043). */
@@ -98,6 +102,7 @@
     panel,
     controller,
     glassLibrary,
+    versions,
     exportPdf,
     exportText,
     exportPng,
@@ -602,6 +607,28 @@
       }
   })
 
+  // Version history (F-055). Point the controller at the open document's history (keyed by path,
+  // Decision §1), and feed it every document change so it can take automatic snapshots (FR-1).
+  $effect(() => {
+    if (versions && controller) void versions.useDocument(controller.currentPath)
+  })
+  $effect(() => {
+    if (!versions || !controller) return
+    // Read `doc` so this re-runs on every command (each produces a new document identity), and
+    // `isDirty` so a clean load/save resets the snapshot baseline rather than counting as an edit.
+    void controller.doc
+    versions.onChange(controller.isDirty)
+  })
+
+  /** Export a self-contained shared copy (FR-7); the working document is untouched. */
+  function shareCopy(note: string): void {
+    void controller?.exportForSharing(note || undefined)
+  }
+  /** Detach a read-only shared document into an editable copy (FR-8). */
+  function editSharedCopy(): void {
+    void controller?.editCopy()
+  }
+
   const hoveredPieceId = $derived.by(() => {
     const world = viewport.cursorWorld
     // Hover feedback for the piece dev overlay (F-020) and paint/select modes (F-023).
@@ -676,6 +703,17 @@
   />
 {/snippet}
 
+{#snippet versionsPanel()}
+  {#if versions}
+    <VersionsPanel
+      {versions}
+      readOnly={controller?.readOnly ?? false}
+      onShare={controller ? shareCopy : undefined}
+      onEditCopy={editSharedCopy}
+    />
+  {/if}
+{/snippet}
+
 {#snippet makePanel()}
   <NumberingPanel
     scheme={numbering.scheme}
@@ -734,6 +772,7 @@
       glass={glassLibrary ? glassPanel : undefined}
       rules={rulesPanel}
       make={makePanel}
+      versions={versions ? versionsPanel : undefined}
       {reference}
       onAddReference={importImage && controller ? openAddReference : undefined}
       symmetry={controller ? symmetry : undefined}
@@ -792,6 +831,12 @@
       {/if}
       {#if viewMode === 'cartoon'}
         <CartoonLegend entries={legend} scheme={numbering.scheme} />
+      {/if}
+      {#if controller?.readOnly}
+        <div class="readonly-banner" role="status">
+          <span>Read-only shared file</span>
+          <button type="button" onclick={editSharedCopy}>Edit a copy</button>
+        </div>
       {/if}
       <div class="dims" aria-label="Panel dimensions">
         <span>{dimText}</span>
@@ -893,5 +938,33 @@
 
   .dims .zoom {
     color: var(--ink-500);
+  }
+
+  /* Read-only shared file banner (F-055 FR-8), pinned to the top of the canvas stage. */
+  .readonly-banner {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 5px 6px 5px 14px;
+    border-radius: var(--radius-full);
+    background: var(--ink-950);
+    color: var(--paper-0);
+    font: 600 12px/1 var(--font-sans);
+    box-shadow: var(--shadow-modal);
+    z-index: 6;
+  }
+
+  .readonly-banner button {
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    color: var(--ink-950);
+    font: 600 12px/1 var(--font-sans);
+    padding: 5px 11px;
+    cursor: pointer;
   }
 </style>

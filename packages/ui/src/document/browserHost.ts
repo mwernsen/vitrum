@@ -1,4 +1,4 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort } from '@vitrum/model'
+import type { GlassLibraryPort, OpenedFile, StoragePort, VersionPort } from '@vitrum/model'
 
 import type { AppHost, ExportPort, ImportPort, OpenedImage } from './host'
 
@@ -10,6 +10,12 @@ import type { AppHost, ExportPort, ImportPort, OpenedImage } from './host'
  */
 const AUTOSAVE_KEY = 'vitrum:autosave'
 const GLASS_LIBRARY_KEY = 'vitrum:glass-library'
+const VERSIONS_PREFIX = 'vitrum:versions:'
+
+/** A localStorage-safe key fragment for a document path (F-055). */
+function safeKey(key: string): string {
+  return key.replace(/[^a-zA-Z0-9._-]/g, '_')
+}
 
 export function createBrowserHost(): AppHost {
   let dirty = false
@@ -78,11 +84,36 @@ export function createBrowserHost(): AppHost {
     openImage: () => pickImage(),
   }
 
+  // Version history (F-055). localStorage holds strings only, so binary archives/thumbnails are
+  // base64-encoded here (this is a dev stub; the desktop host writes real bytes to disk).
+  const versions: VersionPort = {
+    loadArchive: async (key) => {
+      const stored = safeLocalStorage()?.getItem(`${VERSIONS_PREFIX}${safeKey(key)}:archive`)
+      return stored ? base64ToBytes(stored) : null
+    },
+    saveArchive: async (key, bytes) => {
+      safeLocalStorage()?.setItem(`${VERSIONS_PREFIX}${safeKey(key)}:archive`, bytesToBase64(bytes))
+    },
+    loadThumbnail: async (key, id) => {
+      const stored = safeLocalStorage()?.getItem(
+        `${VERSIONS_PREFIX}${safeKey(key)}:thumb:${safeKey(id)}`,
+      )
+      return stored ? base64ToBytes(stored) : null
+    },
+    saveThumbnail: async (key, id, bytes) => {
+      safeLocalStorage()?.setItem(
+        `${VERSIONS_PREFIX}${safeKey(key)}:thumb:${safeKey(id)}`,
+        bytesToBase64(bytes),
+      )
+    },
+  }
+
   return {
     storage,
     glassLibrary,
     export: exportPort,
     import: importPort,
+    versionStore: versions,
     reportDirty: (value) => {
       dirty = value
     },

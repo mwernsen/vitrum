@@ -2,9 +2,9 @@
 
 Scope: F-052 (smoke run validating the user-test skill itself). Mode: full.
 
-| Feature | Verdict | S1 | S2 | S3 | S4 | env-limited | manual |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| F-052 live symmetry | pass-with-issues | 0 | 1 | 3 | 0 | 2 | 0 |
+| Feature             | Verdict          | S1  | S2  | S3  | S4  | env-limited | manual |
+| ------------------- | ---------------- | --- | --- | --- | --- | ----------- | ------ |
+| F-052 live symmetry | pass-with-issues | 0   | 1   | 3   | 0   | 2           | 0      |
 
 ## Top issues
 

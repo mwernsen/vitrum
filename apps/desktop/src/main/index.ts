@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import {
@@ -53,6 +53,16 @@ function glassLibraryPath(): string {
   return (
     process.env['VITRUM_GLASS_LIBRARY_PATH'] ?? join(app.getPath('userData'), 'glass-library.json')
   )
+}
+
+/** Base directory for version history (F-055), overridable so E2E runs stay isolated. */
+function versionsBaseDir(): string {
+  return process.env['VITRUM_VERSIONS_PATH'] ?? join(app.getPath('userData'), 'versions')
+}
+
+/** A filesystem-safe folder name for a per-document version key (its file path). */
+function versionKeyDir(key: string): string {
+  return join(versionsBaseDir(), key.replace(/[^a-zA-Z0-9._-]/g, '_') || 'scratch')
 }
 
 // Unsaved-changes state, reported by the renderer, used to guard window close (F-002).
@@ -350,6 +360,41 @@ function registerIpc(): void {
   ipcMain.on('doc:dirty', (_event, dirty: boolean) => {
     documentDirty = Boolean(dirty)
   })
+
+  // Version history (F-055). Archives and thumbnails live under a per-document folder in the
+  // app-data directory (`VITRUM_VERSIONS_PATH` isolates E2E runs). Binary bytes, not text.
+  ipcMain.handle('versions:loadArchive', async (_event, key: string) => {
+    try {
+      return new Uint8Array(await readFile(join(versionKeyDir(key), 'archive.zip')))
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('versions:saveArchive', async (_event, key: string, bytes: Uint8Array) => {
+    const dir = versionKeyDir(key)
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'archive.zip'), Buffer.from(bytes))
+  })
+
+  ipcMain.handle('versions:loadThumbnail', async (_event, key: string, id: string) => {
+    const safeId = id.replace(/[^a-zA-Z0-9._-]/g, '_')
+    try {
+      return new Uint8Array(await readFile(join(versionKeyDir(key), 'thumbs', `${safeId}.png`)))
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle(
+    'versions:saveThumbnail',
+    async (_event, key: string, id: string, bytes: Uint8Array) => {
+      const safeId = id.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const dir = join(versionKeyDir(key), 'thumbs')
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, `${safeId}.png`), Buffer.from(bytes))
+    },
+  )
 }
 
 function createTray(): Tray {

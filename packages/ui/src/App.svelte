@@ -8,6 +8,7 @@
   import type { AppHost } from './document/host'
   import { GlassLibraryController } from './glass/library.svelte'
   import AppShell from './shell/AppShell.svelte'
+  import { VersionController } from './versions/controller.svelte'
 
   interface Props {
     /** Host environment. Defaults to the browser stub so `pnpm dev:ui` and tests run. */
@@ -24,6 +25,16 @@
   // The global glass library (F-022), persisted through the host's library port.
   // svelte-ignore state_referenced_locally
   const glassLibrary = new GlassLibraryController(host.glassLibrary)
+
+  // Version history (F-055): automatic + manual snapshots, persisted through the host's version
+  // port and keyed per document. Restore re-enters the document through a single undoable command.
+  // svelte-ignore state_referenced_locally
+  const versions = new VersionController({
+    getDoc: () => controller.doc,
+    restore: (project) => controller.restoreProject(project),
+    openCopy: (project) => controller.openCopyProject(project),
+    port: host.versionStore,
+  })
 
   // Placeholder panel providing the inspector's name and size only. Pieces are no longer
   // mocked here — the inspector lists the *real* pieces F-020 detects from the live network
@@ -86,6 +97,7 @@
   {panel}
   {controller}
   {glassLibrary}
+  {versions}
   exportPdf={host.export ? (name, bytes) => host.export!.savePdf(name, bytes) : undefined}
   exportText={host.export ? (name, text) => host.export!.saveText(name, text) : undefined}
   exportPng={host.export ? (name, bytes) => host.export!.savePng(name, bytes) : undefined}

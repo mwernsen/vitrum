@@ -138,4 +138,67 @@ describe('DocumentController', () => {
     expect(controller.doc.settings.name).toBe('Recovered')
     expect(controller.currentPath).toBeNull()
   })
+
+  it('restores a project as one undoable step (F-055 FR-2)', () => {
+    const { controller } = setup()
+    controller.addDebugSegment()
+    const captured = controller.doc
+    controller.addDebugSegment()
+    expect(controller.segmentCount).toBe(2)
+
+    controller.restoreProject(captured)
+    expect(controller.doc).toEqual(captured)
+    expect(controller.segmentCount).toBe(1)
+
+    // The restore is a single undo entry back to the pre-restore document.
+    controller.undo()
+    expect(controller.segmentCount).toBe(2)
+  })
+})
+
+describe('DocumentController sharing & read-only (F-055)', () => {
+  it('opens a shared file read-only and ignores edits (FR-8)', async () => {
+    const { host, controller } = setup()
+    const shared = {
+      ...createEmptyProject({ name: 'Shared' }),
+      settings: { units: 'mm' as const, name: 'Shared', sharedReadOnly: true },
+    }
+    host.nextOpen = { path: '/tmp/shared.vitrum', contents: pack(shared) }
+    await controller.open()
+
+    expect(controller.readOnly).toBe(true)
+    controller.execute(addSegment(createSegment(line(vec2(0, 0), vec2(1, 1)))))
+    controller.addDebugSegment()
+    expect(controller.segmentCount).toBe(0) // edits are inert
+  })
+
+  it('detaches a read-only file into an editable copy (FR-8)', async () => {
+    const { host, controller } = setup()
+    const shared = {
+      ...createEmptyProject({ name: 'Shared' }),
+      settings: { units: 'mm' as const, name: 'Shared', sharedReadOnly: true, shareNote: 'draft' },
+    }
+    host.nextOpen = { path: '/tmp/shared.vitrum', contents: pack(shared) }
+    await controller.open()
+
+    await controller.editCopy()
+    expect(controller.readOnly).toBe(false)
+    expect(controller.currentPath).toBeNull()
+    expect(controller.doc.settings.sharedReadOnly).toBeUndefined()
+    expect(controller.doc.settings.shareNote).toBeUndefined()
+
+    controller.addDebugSegment() // now editable
+    expect(controller.segmentCount).toBe(1)
+  })
+
+  it('exports a shared copy without touching the working document (FR-7)', async () => {
+    const { host, controller } = setup()
+    controller.addDebugSegment()
+    const path = await controller.exportForSharing('client draft')
+    expect(path).toBe('/tmp/design.vitrum')
+    // The working document stays editable and its path unchanged.
+    expect(controller.readOnly).toBe(false)
+    expect(controller.currentPath).toBeNull()
+    expect(host.files.get('/tmp/design.vitrum')).toBeTruthy()
+  })
 })

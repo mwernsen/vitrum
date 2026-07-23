@@ -63,6 +63,13 @@ export interface ProjectSettings {
   readonly name: string
   /** Optional panel extent in mm. */
   readonly panelSize?: { readonly width: number; readonly height: number }
+  /**
+   * Set by "export for sharing" (F-055): the file opens in a read-only view. "Edit a copy" clears
+   * it into a fresh editable document, so the hand-off original is never overwritten in place.
+   */
+  readonly sharedReadOnly?: boolean
+  /** Optional watermark note carried by a shared package (F-055), e.g. "client draft — do not cut". */
+  readonly shareNote?: string
 }
 
 /**

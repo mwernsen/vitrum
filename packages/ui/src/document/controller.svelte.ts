@@ -16,9 +16,13 @@ import {
   createEmptyProject,
   createSegment,
   DocumentStore,
+  editableCopy,
+  isReadOnly,
   outputSegments,
   packDocument,
   removeSegments,
+  replaceProject,
+  sharedProject,
   unpackDocument,
 } from '@vitrum/model'
 import type {
@@ -57,6 +61,11 @@ export class DocumentController {
   isDirty = $state(false)
   currentPath = $state<string | null>(null)
   paletteOpen = $state(false)
+  /**
+   * True when the open document came from a shared package (F-055 FR-8): edits are inert until the
+   * user chooses "edit a copy". Set on open/recover from the document's `sharedReadOnly` flag.
+   */
+  readOnly = $state(false)
 
   /**
    * Optional hook run immediately before a file save (F-023): the shell sets it to materialise
@@ -149,15 +158,67 @@ export class DocumentController {
   cutContours = (pieces: readonly Piece[]): CutContour[] =>
     this.#cutCache.update(pieces, this.outputNetwork(), this.doc.technique)
 
-  undo = (): void => this.#store.undo()
-  redo = (): void => this.#store.redo()
+  undo = (): void => {
+    if (this.readOnly) return
+    this.#store.undo()
+  }
+  redo = (): void => {
+    if (this.readOnly) return
+    this.#store.redo()
+  }
 
   /**
    * Apply one document command. The sanctioned mutation path for drawing tools (F-011):
    * each completed gesture calls this exactly once, so it is a single undo entry (FR-1).
+   * Inert while the document is read-only (F-055 FR-8) — a shared package cannot be edited in place.
    */
-  execute = (command: Command, options?: ExecuteOptions): void =>
+  execute = (command: Command, options?: ExecuteOptions): void => {
+    if (this.readOnly) return
     this.#store.execute(command, options)
+  }
+
+  /**
+   * Restore a version snapshot as a single undoable step (F-055 FR-2): the whole document is
+   * replaced through one `replaceProject` command, so Cmd-Z returns to the pre-restore state.
+   */
+  restoreProject = (project: Project): void => {
+    if (this.readOnly) return
+    this.#store.execute(replaceProject(project))
+  }
+
+  /** Load a version snapshot as a fresh untitled, editable copy (F-055 FR-2 "open copy"). */
+  openCopyProject = (project: Project): void => {
+    this.#detector.reset()
+    this.#cutCache.reset()
+    this.#store.load(project)
+    this.currentPath = null
+    this.readOnly = false
+  }
+
+  /**
+   * Detach a shared read-only document into a fresh, editable untitled copy (F-055 FR-8): the
+   * read-only flag and share note are dropped and the file path is cleared, so the hand-off original
+   * is never overwritten in place.
+   */
+  editCopy = async (): Promise<void> => {
+    this.#detector.reset()
+    this.#cutCache.reset()
+    this.#store.load(editableCopy(this.#store.document))
+    this.currentPath = null
+    this.readOnly = false
+    await this.#host.storage.clearAutosave()
+  }
+
+  /**
+   * Write a self-contained `.vitrum` copy for sharing (F-055 FR-7): a read-only-flagged package with
+   * an optional watermark note, carrying no history or autosave state (both live outside the file).
+   * The working document is unchanged. Resolves to the chosen path, or null if cancelled.
+   */
+  exportForSharing = async (note?: string): Promise<string | null> => {
+    this.onBeforeSave?.()
+    const bytes = packDocument(sharedProject(this.#store.document, note), this.collectAssets())
+    return this.#host.storage.saveFileAs(this.#suggestedName(), bytes)
+  }
   togglePalette = (): void => {
     this.paletteOpen = !this.paletteOpen
   }
@@ -168,13 +229,13 @@ export class DocumentController {
    */
   clearGuides = (): void => {
     const ids = constructionSegmentIds(this.#store.document)
-    if (ids.length > 0) this.#store.execute(removeSegments(ids))
+    if (ids.length > 0) this.execute(removeSegments(ids))
   }
 
   /** Debug-only: append a lead segment so the command/undo/save machinery is exercisable. */
   addDebugSegment = (): void => {
     const y = this.segmentCount * 10
-    this.#store.execute(addSegment(createSegment(line(vec2(0, y), vec2(100, y)))))
+    this.execute(addSegment(createSegment(line(vec2(0, y), vec2(100, y)))))
   }
 
   /** Debug-only: load a dense generated scene to stress-test canvas pan/zoom (F-003 FR-4). */
@@ -183,6 +244,7 @@ export class DocumentController {
     this.#cutCache.reset()
     this.#store.load(stressScene(count))
     this.currentPath = null
+    this.readOnly = false
   }
 
   newDocument = async (): Promise<void> => {
@@ -191,6 +253,7 @@ export class DocumentController {
     this.#cutCache.reset()
     this.#store.load(createEmptyProject())
     this.currentPath = null
+    this.readOnly = false
     await this.#host.storage.clearAutosave()
   }
 
@@ -204,6 +267,7 @@ export class DocumentController {
     this.loadAssets(assets)
     this.#store.load(project)
     this.currentPath = file.path
+    this.readOnly = isReadOnly(project)
     await this.#host.storage.clearAutosave()
   }
 
@@ -236,6 +300,7 @@ export class DocumentController {
     this.loadAssets(assets)
     this.#store.load(project)
     this.currentPath = null
+    this.readOnly = isReadOnly(project)
   }
 
   /** Pack the current document plus its reference-image assets into the `.vitrum` zip bytes. */

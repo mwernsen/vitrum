@@ -54,6 +54,16 @@ const api = {
     openSvg: (): Promise<OpenedFile | null> => ipcRenderer.invoke('import:openSvg'),
     openImage: (): Promise<OpenedImage | null> => ipcRenderer.invoke('import:openImage'),
   },
+  versionStore: {
+    loadArchive: (key: string): Promise<Uint8Array | null> =>
+      ipcRenderer.invoke('versions:loadArchive', key),
+    saveArchive: (key: string, bytes: Uint8Array): Promise<void> =>
+      ipcRenderer.invoke('versions:saveArchive', key, bytes),
+    loadThumbnail: (key: string, id: string): Promise<Uint8Array | null> =>
+      ipcRenderer.invoke('versions:loadThumbnail', key, id),
+    saveThumbnail: (key: string, id: string, bytes: Uint8Array): Promise<void> =>
+      ipcRenderer.invoke('versions:saveThumbnail', key, id, bytes),
+  },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)
     ipcRenderer.on('menu:action', listener)
