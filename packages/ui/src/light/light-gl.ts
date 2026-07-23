@@ -92,6 +92,10 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// sRGB → linear: the CPU passes the lit base in sRGB-ish space; decode so the emission buffer and
+// the scatter accumulation are in linear light (gamma-correct compositing).
+vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
+
 void main() {
   vec2 fq = vWorld * uFreq;
   float m = 1.0;
@@ -100,7 +104,7 @@ void main() {
   else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * vnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
   else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * vnoise(fq)); }
   else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (vnoise(fq) * 0.6 + vnoise(fq * 2.7) * 0.4) - 1.0); }
-  frag = vec4(uColor * m, 1.0);
+  frag = vec4(toLinear(uColor) * m, 1.0);
 }`
 
 // Full-screen light-scattering + composite pass.
@@ -130,15 +134,20 @@ float hash(vec2 p) {
   return fract(p.x * p.y);
 }
 
-const int SAMPLES = 48;
+// sRGB → linear, matching the emission pass — the halo/sun colour arrives in sRGB-ish space.
+vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
+
+const int SAMPLES = 64;
 void main() {
+  // The emission buffer is already in linear light (see the emission pass).
   vec3 base = texture(uEmission, vUv).rgb;
 
-  // March toward the sun, accumulating emission with distance decay → volumetric rays.
+  // March toward the sun, accumulating emission with distance decay → volumetric rays. Jitter the
+  // start per-fragment so the step aliasing reads as fine noise, not concentric rings.
   float density = mix(0.75, 1.05, uConcentration);
   float decay = mix(0.965, 0.905, uConcentration);
   vec2 delta = (uSun - vUv) / float(SAMPLES) * density;
-  vec2 uv = vUv;
+  vec2 uv = vUv + delta * hash(vUv * 1023.7);
   float illum = 1.0;
   vec3 scatter = vec3(0.0);
   for (int i = 0; i < SAMPLES; i++) {
@@ -148,18 +157,20 @@ void main() {
   }
   scatter /= float(SAMPLES);
 
-  // Solar halo: a soft disk at the sun, tinted by the sun colour, gated so night stays dark.
+  // Solar halo: a bright core plus a broad soft bloom, so it reads as glow rather than a hard ring.
   float d = distance(vUv, uSun);
-  float halo = exp(-d * d * mix(45.0, 190.0, uConcentration));
+  float tight = mix(26.0, 90.0, uConcentration);
+  float halo = exp(-d * d * tight) + 0.5 * exp(-d * d * tight * 0.14);
 
-  vec3 col = base + scatter * uRayStrength * 3.2 + uSunColor * halo * uHaloBoost;
+  vec3 col = base + scatter * uRayStrength * 3.4 + toLinear(uSunColor) * halo * uHaloBoost;
 
-  // Filmic-ish tone map so highlights stay luminous, not clipped.
-  col = vec3(1.0) - exp(-col * 1.25);
+  // Filmic-ish tone map in linear, then encode to sRGB for display (gamma-correct output).
+  col = vec3(1.0) - exp(-col * 1.35);
+  col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
 
   if (uGrain == 1) {
     float g = hash(vUv * 1024.0) - 0.5;
-    col += g * 0.05;
+    col += g * 0.045;
   }
   frag = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`
@@ -174,6 +185,11 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
   }) as WebGL2RenderingContext | null
   if (!context) return null
   const gl: WebGL2RenderingContext = context
+
+  // A half-float (RGBA16F) emission target lets the god-ray march accumulate in linear HDR — an
+  // 8-bit target quantises the accumulation into the concentric-ring banding. Fall back to 8-bit
+  // where the extension is unavailable (older GPUs / headless).
+  const floatColor = !!gl.getExtension('EXT_color_buffer_float')
 
   const emitProgram = buildProgram(gl, VERT, FRAG_EMIT)
   const rayProgram = buildProgram(gl, VERT_FS, FRAG_RAYS)
@@ -221,7 +237,11 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
     if (!depthStencil) depthStencil = gl.createRenderbuffer()
     if (!fbo || !emissionTex || !depthStencil) return false
     gl.bindTexture(gl.TEXTURE_2D, emissionTex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    if (floatColor) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -256,7 +276,7 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       const haveFbo = ensureFbo(backingW, backingH)
       gl.bindFramebuffer(gl.FRAMEBUFFER, haveFbo ? fbo : null)
       gl.viewport(0, 0, backingW, backingH)
-      gl.clearColor(0.015, 0.017, 0.022, 1) // near-black void
+      gl.clearColor(0.0009, 0.001, 0.0014, 1) // near-black void, in linear light
       gl.clearStencil(0)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
       gl.disable(gl.DEPTH_TEST)
