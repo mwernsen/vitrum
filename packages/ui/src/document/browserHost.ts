@@ -1,4 +1,10 @@
-import type { GlassLibraryPort, OpenedFile, StoragePort, VersionPort } from '@vitrum/model'
+import type {
+  GlassLibraryPort,
+  OpenedFile,
+  PriceBookPort,
+  StoragePort,
+  VersionPort,
+} from '@vitrum/model'
 
 import type { AppHost, ExportPort, ImportPort, OpenedImage } from './host'
 
@@ -10,6 +16,7 @@ import type { AppHost, ExportPort, ImportPort, OpenedImage } from './host'
  */
 const AUTOSAVE_KEY = 'vitrum:autosave'
 const GLASS_LIBRARY_KEY = 'vitrum:glass-library'
+const PRICE_BOOK_KEY = 'vitrum:price-book'
 const VERSIONS_PREFIX = 'vitrum:versions:'
 
 /** A localStorage-safe key fragment for a document path (F-055). */
@@ -64,6 +71,13 @@ export function createBrowserHost(): AppHost {
     importLibrary: () => pickFileText('.json,application/json'),
   }
 
+  const priceBook: PriceBookPort = {
+    load: async () => safeLocalStorage()?.getItem(PRICE_BOOK_KEY) ?? null,
+    save: async (contents) => {
+      safeLocalStorage()?.setItem(PRICE_BOOK_KEY, contents)
+    },
+  }
+
   const exportPort: ExportPort = {
     savePdf: async (suggestedName, bytes) => {
       downloadBytes(suggestedName, bytes)
@@ -111,6 +125,7 @@ export function createBrowserHost(): AppHost {
   return {
     storage,
     glassLibrary,
+    priceBook,
     export: exportPort,
     import: importPort,
     versionStore: versions,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     computeBom,
+    computeQuote,
     formatLength,
     leadFlangeMm,
     pieceKey,
@@ -9,27 +10,33 @@
     type NumberingScheme,
     type Panel,
     type Piece,
+    type QuotePieceMetric,
   } from '@vitrum/core'
   import { bboxOf, bboxUnion, pointInPolygon, polygon, vec2, type BBox } from '@vitrum/geometry'
   import {
     addSegments,
     createEmptyProject,
+    defaultQuoteSettings,
     identityTextureTransform,
     segmentsFromDrafts,
     setGlassAssignments,
     updateBomSettings,
     updateNumbering,
+    updateQuoteSettings,
     type BomSettings,
     type GlassId,
     type OpenedFile,
     type PieceId,
     type PieceTextureTransform,
+    type QuoteSettings,
   } from '@vitrum/model'
 
   import { panelWeight, type DrcInput } from '@vitrum/drc'
   import { onDestroy } from 'svelte'
 
   import { BomController } from '../bom/controller.svelte'
+  import { QuoteController } from '../quote/controller.svelte'
+  import type { PriceBookController } from '../quote/priceBook.svelte'
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
@@ -64,6 +71,7 @@
 
   import ActivityRail from './ActivityRail.svelte'
   import BomPanel from './BomPanel.svelte'
+  import QuotePanel from './QuotePanel.svelte'
   import Canvas from './Canvas.svelte'
   import CartoonLegend from './CartoonLegend.svelte'
   import { type DockSection } from './dock'
@@ -87,6 +95,8 @@
     glassLibrary?: GlassLibraryController
     /** The version-history controller (F-055). Optional so the shell renders in isolation. */
     versions?: VersionController
+    /** The global workshop price book controller (F-056). Optional so the shell renders in isolation. */
+    priceBook?: PriceBookController
     /** Writes a generated PDF to the host (F-041). Absent ⇒ printing is unavailable. */
     exportPdf?: SavePdf
     /** Writes a generated text document (CSV / SVG / DXF) to the host (F-042/F-043). */
@@ -104,6 +114,7 @@
     controller,
     glassLibrary,
     versions,
+    priceBook,
     exportPdf,
     exportText,
     exportPng,
@@ -208,6 +219,13 @@
     if (!b) return 500
     const diag = Math.hypot(b.max.x - b.min.x, b.max.y - b.min.y)
     return Math.max(diag, 100)
+  }
+
+  /** Read a PNG's pixel dimensions from its IHDR chunk (bytes 16–24), for the quote image aspect. */
+  function pngSize(bytes: Uint8Array): { w: number; h: number } {
+    if (bytes.length < 24) return { w: 1, h: 1 }
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    return { w: view.getUint32(16) || 1, h: view.getUint32(20) || 1 }
   }
 
   // Rebuild the snap spatial index whenever the visible network changes. Snapping stays over the
@@ -442,6 +460,32 @@
         else if (bomReport && exporter.bomFormat === 'csv' && exportText)
           path = await bom.exportCsv(bomReport, panel.name, viewport.unit, exportText)
         break
+      case 'quote': {
+        if (!quoteReport || !exportPdf) break
+        // Optionally embed the rendered panel snapshot (F-053 render view if active, flat otherwise).
+        let panelImage:
+          { data: Uint8Array; format: 'png'; widthPx: number; heightPx: number } | undefined
+        if (quote.includePanelImage) {
+          const bytes = (await takeSnapshot?.()) ?? null
+          if (bytes) {
+            const size = pngSize(bytes)
+            panelImage = { data: bytes, format: 'png', widthPx: size.w, heightPx: size.h }
+          }
+        }
+        path = await quote.exportPdf(
+          quoteReport,
+          {
+            projectName: panel.name,
+            unit: viewport.unit,
+            client: controller.doc.quote.client,
+            date: new Date().toISOString().slice(0, 10),
+            includeBreakdown: quote.includeBreakdown,
+            ...(panelImage ? { panelImage } : {}),
+          },
+          exportPdf,
+        )
+        break
+      }
       case 'png': {
         const bytes = (await takeSnapshot?.()) ?? null
         if (exportPng) path = await exporter.runPng(bytes, panel.name, exportPng)
@@ -547,6 +591,59 @@
   // The cutting list / BOM export is dispatched by `runOutput` (the single Export dialog), not from
   // the BOM panel; the panel keeps the live table, factor editing and row-hover highlight.
   const hasBom = $derived(bomReport !== null && pieces.length > 0)
+
+  // --- Cost estimation & quoting (F-056) -------------------------------------
+
+  const quote = new QuoteController()
+
+  // Per-piece metrics for the labor model + sensitivity view. Complexity comes from each piece's own
+  // geometry (perimeter vs bounding box), so it is independent of the cut contour.
+  const quotePieces = $derived<QuotePieceMetric[]>(
+    pieces.map((p) => ({
+      contentId: pieceKey(p),
+      pieceId: p.id,
+      label: numbering.labelFor(p) ?? '',
+      glassId: assignments.glassFor(p) ?? null,
+      areaMm2: p.area,
+      perimeterMm: p.perimeter,
+      bboxWidthMm: p.bbox.max.x - p.bbox.min.x,
+      bboxHeightMm: p.bbox.max.y - p.bbox.min.y,
+    })),
+  )
+
+  // The live quote, derived from the same BOM + the persisted quote intent, so it regenerates on any
+  // relevant edit (FR-2). The model's quote sub-objects are structurally the core's quote inputs.
+  const quoteReport = $derived.by(() => {
+    if (!controller || !bomReport) return null
+    const q = controller.doc.quote
+    return computeQuote(
+      {
+        bom: bomReport,
+        currency: q.currency,
+        priceBook: q.priceBook,
+        labor: q.labor,
+        overheadPct: q.overheadPct,
+        marginPct: q.marginPct,
+        manualLines: q.manualLines,
+        pieces: quotePieces,
+      },
+      viewport.unit,
+    )
+  })
+  const hasQuote = $derived(quoteReport !== null && pieces.length > 0)
+
+  function setQuote(patch: Partial<QuoteSettings>): void {
+    controller?.execute(updateQuoteSettings(patch))
+  }
+
+  /** Save the current project's price book as the global workshop default (F-056 FR-5). */
+  function saveWorkshopDefault(): void {
+    if (controller && priceBook) void priceBook.saveDefault(controller.doc.quote.priceBook)
+  }
+  /** Load the workshop default price book into the project (one undo entry). */
+  function loadWorkshopDefault(): void {
+    if (priceBook) setQuote({ priceBook: priceBook.defaultBook })
+  }
 
   // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
   const dimText = $derived(
@@ -755,6 +852,20 @@
   {/if}
 {/snippet}
 
+{#snippet costPanel()}
+  <QuotePanel
+    report={quoteReport}
+    settings={controller?.doc.quote ?? defaultQuoteSettings()}
+    onPatch={setQuote}
+    smallestN={quote.smallestN}
+    onSmallestN={(n) => (quote.smallestN = n)}
+    onHighlight={(pieceIds, segmentIds) => bom.highlight(pieceIds, segmentIds)}
+    onClearHighlight={() => bom.clearHighlight()}
+    onSaveWorkshopDefault={priceBook ? saveWorkshopDefault : undefined}
+    onLoadWorkshopDefault={priceBook ? loadWorkshopDefault : undefined}
+  />
+{/snippet}
+
 <div class="shell">
   <TopBar
     title={panel.name}
@@ -793,6 +904,7 @@
       glass={glassLibrary ? glassPanel : undefined}
       rules={rulesPanel}
       make={makePanel}
+      cost={costPanel}
       versions={versions ? versionsPanel : undefined}
       {reference}
       onAddReference={importImage && controller ? openAddReference : undefined}
@@ -907,9 +1019,11 @@
   controller={exporter}
   {print}
   {bom}
+  {quote}
   {bounds}
   pieceCount={pieces.length}
   {hasBom}
+  {hasQuote}
   drcErrorCount={drc.result.counts.error}
   checksRun={drc.hasRun}
   onExport={runOutput}

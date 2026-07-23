@@ -79,6 +79,17 @@ export type DrawOp =
       readonly font?: FontFamily
       readonly bold?: boolean
     }
+  /**
+   * A raster image placed in a page rectangle (top-left origin, y-down mm). Used by the F-056 quote
+   * PDF for the optional rendered panel snapshot. `data` is the encoded image bytes; the backend
+   * embeds them once and draws them fitted to `rect` (the caller sizes `rect` to the image aspect).
+   */
+  | {
+      readonly kind: 'image'
+      readonly rect: RectMm
+      readonly data: Uint8Array
+      readonly format: 'png' | 'jpg'
+    }
   /** A nested group; `clip` (if set) restricts its children to that rectangle. */
   | { readonly kind: 'group'; readonly ops: readonly DrawOp[]; readonly clip?: RectMm }
 
@@ -143,6 +154,10 @@ export class PageBuilder {
 
   circle(center: Vec2, radiusMm: number, opts: { fill?: Fill; stroke?: Stroke } = {}): this {
     return this.push({ kind: 'circle', center, radiusMm, fill: opts.fill, stroke: opts.stroke })
+  }
+
+  image(rect: RectMm, data: Uint8Array, format: 'png' | 'jpg' = 'png'): this {
+    return this.push({ kind: 'image', rect, data, format })
   }
 
   text(

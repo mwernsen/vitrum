@@ -32,9 +32,10 @@ export type SavePng = (suggestedName: string, bytes: Uint8Array) => Promise<stri
  * - `design-files` — SVG (linework / cut / render) or DXF interchange files (this controller).
  * - `tiled` — the F-041 1:1 tiled cutting template (driven by `PrintController`).
  * - `bom` — the F-042 cutting list / BOM as PDF or CSV (driven by `BomController`).
+ * - `quote` — the F-056 client quote PDF (driven by `QuoteController`).
  * - `png` — a raster snapshot of the canvas (this controller, via the shell's canvas getter).
  */
-export type OutputDocType = 'design-sheet' | 'design-files' | 'tiled' | 'bom' | 'png'
+export type OutputDocType = 'design-sheet' | 'design-files' | 'tiled' | 'bom' | 'quote' | 'png'
 
 /** Which interchange file the `design-files` type writes. */
 export type DesignFileFormat = 'svg' | 'dxf'

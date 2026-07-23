@@ -65,6 +65,11 @@ function versionKeyDir(key: string): string {
   return join(versionsBaseDir(), key.replace(/[^a-zA-Z0-9._-]/g, '_') || 'scratch')
 }
 
+/** Where the global workshop price book is persisted (overridable so E2E runs stay isolated). */
+function priceBookPath(): string {
+  return process.env['VITRUM_PRICE_BOOK_PATH'] ?? join(app.getPath('userData'), 'price-book.json')
+}
+
 // Unsaved-changes state, reported by the renderer, used to guard window close (F-002).
 let documentDirty = false
 let allowClose = false
@@ -284,6 +289,18 @@ function registerIpc(): void {
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
     return readFile(path, 'utf8')
+  })
+
+  ipcMain.handle('priceBook:load', async () => {
+    try {
+      return await readFile(priceBookPath(), 'utf8')
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('priceBook:save', async (_event, contents: string) => {
+    await writeFile(priceBookPath(), contents, 'utf8')
   })
 
   // Write a generated PDF (F-041). `VITRUM_EXPORT_PATH` bypasses the native dialog so E2E runs write

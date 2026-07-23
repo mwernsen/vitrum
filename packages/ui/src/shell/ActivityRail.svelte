@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CircleDollarSign from 'lucide-svelte/icons/circle-dollar-sign'
   import History from 'lucide-svelte/icons/history'
   import Layers from 'lucide-svelte/icons/layers'
   import List from 'lucide-svelte/icons/list'
@@ -38,6 +39,7 @@
     { label: 'Design rules', icon: ShieldCheck, section: 'rules' },
     { label: 'Manufacturing', icon: List, section: 'make' },
     { label: 'Light', icon: Sun, section: 'light' },
+    { label: 'Cost & quote', icon: CircleDollarSign, section: 'cost' },
     { label: 'Versions', icon: History, section: 'versions' },
   ]
 </script>

@@ -9,6 +9,7 @@
   import Select from '../components/Select.svelte'
   import type { BomController } from '../bom/controller.svelte'
   import type { PrintController } from '../print/controller.svelte'
+  import type { QuoteController } from '../quote/controller.svelte'
 
   import type {
     BomFileFormat,
@@ -24,11 +25,15 @@
     print: PrintController
     /** The F-042 BOM controller — drives the cutting-list document type. */
     bom: BomController
+    /** The F-056 quote controller — drives the client quote document type. */
+    quote: QuoteController
     /** Content bounds to tile over (panel ∪ geometry), for the tiled tile-count summary. */
     bounds: BBox | null
     pieceCount: number
     /** Whether a live BOM report exists (cutting list has content). */
     hasBom: boolean
+    /** Whether a live quote report exists (glass priced). */
+    hasQuote: boolean
     /** Outstanding DRC error count (F-030); shown as a warning but never blocks (policy: warn). */
     drcErrorCount: number
     /** Whether DRC has run at least once, so "0 errors" isn't shown before the first check. */
@@ -41,9 +46,11 @@
     controller,
     print,
     bom,
+    quote,
     bounds,
     pieceCount,
     hasBom,
+    hasQuote,
     drcErrorCount,
     checksRun,
     onExport,
@@ -54,6 +61,7 @@
     { value: 'design-files', label: 'Design files (SVG, DXF)' },
     { value: 'tiled', label: 'Cutting template — 1:1 tiled (PDF)' },
     { value: 'bom', label: 'Cutting list & BOM (PDF, CSV)' },
+    { value: 'quote', label: 'Client quote (PDF)' },
     { value: 'png', label: 'Image snapshot (PNG)' },
   ]
   const DESIGN_FILE_OPTIONS = [
@@ -114,14 +122,18 @@
       ? print.exporting
       : controller.docType === 'bom'
         ? bom.exporting
-        : controller.exporting,
+        : controller.docType === 'quote'
+          ? quote.exporting
+          : controller.exporting,
   )
   const errorMessage = $derived(
     controller.docType === 'tiled'
       ? print.errorMessage
       : controller.docType === 'bom'
         ? bom.errorMessage
-        : controller.errorMessage,
+        : controller.docType === 'quote'
+          ? quote.errorMessage
+          : controller.errorMessage,
   )
 
   const canExport = $derived(
@@ -131,7 +143,9 @@
         ? tiling !== null
         : controller.docType === 'bom'
           ? hasBom
-          : true),
+          : controller.docType === 'quote'
+            ? hasQuote
+            : true),
   )
 
   function num(value: string, fallback: number): number {
@@ -340,6 +354,28 @@
         in the Manufacturing panel; here it exports as a bench PDF or a spreadsheet CSV.
         {#if !hasBom}
           <span class="warn">Assign glass to pieces to build the list.</span>
+        {/if}
+      </p>
+    {:else if controller.docType === 'quote'}
+      <fieldset class="includes">
+        <legend>Include</legend>
+        <Checkbox
+          label="Rendered panel image"
+          checked={quote.includePanelImage}
+          onchange={(c) => (quote.includePanelImage = c)}
+        />
+        <Checkbox
+          label="Internal cost breakdown"
+          checked={quote.includeBreakdown}
+          onchange={(c) => (quote.includeBreakdown = c)}
+        />
+      </fieldset>
+      <p class="note">
+        A client-ready quote from the current design and prices. The full cost builder (labor model,
+        price book, margins) is in the Cost panel. By default the internal cost breakdown is hidden
+        — the client sees the panel work, any line items and the total.
+        {#if !hasQuote}
+          <span class="warn">Assign glass to pieces to build the quote.</span>
         {/if}
       </p>
     {:else}

@@ -7,6 +7,7 @@
   import DebugPalette from './document/DebugPalette.svelte'
   import type { AppHost } from './document/host'
   import { GlassLibraryController } from './glass/library.svelte'
+  import { PriceBookController } from './quote/priceBook.svelte'
   import AppShell from './shell/AppShell.svelte'
   import { VersionController } from './versions/controller.svelte'
 
@@ -35,6 +36,10 @@
     openCopy: (project) => controller.openCopyProject(project),
     port: host.versionStore,
   })
+
+  // The global workshop price book (F-056), persisted through the host's price-book port.
+  // svelte-ignore state_referenced_locally
+  const priceBook = new PriceBookController(host.priceBook)
 
   // Placeholder panel providing the inspector's name and size only. Pieces are no longer
   // mocked here — the inspector lists the *real* pieces F-020 detects from the live network
@@ -79,6 +84,7 @@
   onMount(() => {
     void offerRecovery()
     void glassLibrary.init()
+    void priceBook.init()
     return () => controller.dispose()
   })
 
@@ -98,6 +104,7 @@
   {controller}
   {glassLibrary}
   {versions}
+  {priceBook}
   exportPdf={host.export ? (name, bytes) => host.export!.savePdf(name, bytes) : undefined}
   exportText={host.export ? (name, text) => host.export!.saveText(name, text) : undefined}
   exportPng={host.export ? (name, bytes) => host.export!.savePng(name, bytes) : undefined}

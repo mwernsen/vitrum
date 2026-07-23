@@ -9,18 +9,25 @@
 export {
   createEmptyProject,
   defaultBomSettings,
+  defaultCurrency,
+  defaultLaborModel,
   defaultLightSettings,
   defaultNumbering,
+  defaultPriceBook,
+  defaultQuoteSettings,
   defaultRenderSettings,
   defaultSymmetry,
   identityTextureTransform,
   type AssetId,
   type BomSettings,
+  type ConsumableLine,
+  type Currency,
   type DrcExclusion,
   type DrcRuleOverride,
   type DrcState,
   type Glass,
   type GlassId,
+  type LaborModel,
   type LayerId,
   type LightMode,
   type LightSettings,
@@ -30,8 +37,12 @@ export {
   type NumberingState,
   type PieceId,
   type PieceTextureTransform,
+  type PriceBook,
   type Project,
   type ProjectSettings,
+  type QuoteClient,
+  type QuoteLineItem,
+  type QuoteSettings,
   type ReferenceAsset,
   type ReferenceLayer,
   type ReinforcementBar,
@@ -102,12 +113,24 @@ export {
   type TechniqueSettings,
 } from './technique'
 
+// Global price book (F-056)
+export {
+  deserializePriceBook,
+  normalizePriceBook,
+  PRICE_BOOK_VERSION,
+  PriceBookVersionError,
+  serializePriceBook,
+  type PriceBookPort,
+} from './priceBook'
+
 // Ids and factories
 export {
+  newConsumableId,
   newCameProfileId,
   newGlassId,
   newLayerId,
   newNodeId,
+  newQuoteLineId,
   newReinforcementId,
   newSegmentId,
 } from './ids'
@@ -163,6 +186,7 @@ export {
   updateLeadSettings,
   updateLightSettings,
   updateNumbering,
+  updateQuoteSettings,
   updateReferenceLayer,
   updateReinforcement,
   updateRenderSettings,

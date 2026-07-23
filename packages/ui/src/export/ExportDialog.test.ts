@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { BomController } from '../bom/controller.svelte'
 import { PrintController } from '../print/controller.svelte'
+import { QuoteController } from '../quote/controller.svelte'
 
 import { ExportController } from './controller.svelte'
 import ExportDialog from './ExportDialog.svelte'
@@ -17,9 +18,11 @@ function props(overrides: Partial<Parameters<typeof ExportDialog>[1]> = {}) {
     controller,
     print: new PrintController(),
     bom: new BomController(),
+    quote: new QuoteController(),
     bounds: BOUNDS,
     pieceCount: 3,
     hasBom: true,
+    hasQuote: true,
     drcErrorCount: 0,
     checksRun: true,
     onExport: vi.fn(),

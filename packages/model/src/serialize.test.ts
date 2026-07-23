@@ -76,6 +76,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 10, migrate: (file) => ({ schemaVersion: 11, project: file.project }) },
       { from: 11, migrate: (file) => ({ schemaVersion: 12, project: file.project }) },
       { from: 12, migrate: (file) => ({ schemaVersion: 13, project: file.project }) },
+      { from: 13, migrate: (file) => ({ schemaVersion: 14, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -385,7 +386,7 @@ describe('schema versioning (FR-4)', () => {
     expect(withRender.render.backlightWarmth).toBe(0) // defaulted
   })
 
-  it('v12 → v13 seeds the light default (F-054)', () => {
+  it('v12 → v13 seeds the light default (F-054), v13 → v14 the quote default (F-056)', () => {
     const legacyProject = {
       settings: { units: 'mm', name: 'legacy' },
       technique: { kind: 'lead' },
@@ -408,10 +409,18 @@ describe('schema versioning (FR-4)', () => {
       render: { backlightIntensity: 1, backlightWarmth: 0, textureTransforms: {} },
     }
     const project = deserialize(JSON.stringify({ schemaVersion: 12, project: legacyProject }))
+    // v12 → v13 (F-054) seeds the light default.
     expect(project.light.mode).toBe('astronomical')
     expect(project.light.facadeAzimuthDeg).toBe(180)
     expect(project.light.tiltDeg).toBe(90)
     expect(project.light.showTextures).toBe(true)
+    // v13 → v14 (F-056) seeds the quote default.
+    expect(project.quote.currency).toEqual({ code: 'EUR', symbol: '€' })
+    expect(project.quote.labor.hourlyRate).toBe(45)
+    expect(project.quote.overheadPct).toBe(0.15)
+    expect(project.quote.marginPct).toBe(0.3)
+    expect(project.quote.priceBook.consumables).toEqual([])
+    expect(project.quote.manualLines).toEqual([])
 
     // A pre-release v12 file that already carries a partial light block keeps its fields.
     const withLight = deserialize(
@@ -423,6 +432,16 @@ describe('schema versioning (FR-4)', () => {
     expect(withLight.light.mode).toBe('manual')
     expect(withLight.light.temperatureK).toBe(3000)
     expect(withLight.light.tiltDeg).toBe(90) // defaulted
+
+    // A pre-release v12 file that already carries a partial quote block keeps its sub-objects.
+    const withQuote = deserialize(
+      JSON.stringify({
+        schemaVersion: 12,
+        project: { ...legacyProject, quote: { marginPct: 0.5 } },
+      }),
+    )
+    expect(withQuote.quote.marginPct).toBe(0.5)
+    expect(withQuote.quote.labor.hourlyRate).toBe(45) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {

@@ -26,6 +26,8 @@
     rules?: Snippet
     /** Live manufacturing content (F-040 numbering), rendered when the make section is open. */
     make?: Snippet
+    /** Live cost / quote content (F-056), rendered when the cost section is open. */
+    cost?: Snippet
     /** Live version-history content (F-055), rendered when the versions section is open. */
     versions?: Snippet
     /** The reference-image underlay controller (F-051), for the Layers panel. */
@@ -52,6 +54,7 @@
     glass,
     rules,
     make,
+    cost,
     versions,
     reference,
     onAddReference,
@@ -95,6 +98,8 @@
       {@render make?.()}
     {:else if section === 'light'}
       <LightPanel {light} {lightViewActive} {onEnterLightView} />
+    {:else if section === 'cost'}
+      {@render cost?.()}
     {:else if section === 'versions'}
       {@render versions?.()}
     {:else if scaffold}

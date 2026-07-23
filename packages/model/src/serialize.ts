@@ -4,6 +4,7 @@ import {
   defaultBomSettings,
   defaultLightSettings,
   defaultNumbering,
+  defaultQuoteSettings,
   defaultRenderSettings,
   defaultSymmetry,
   type BomSettings,
@@ -12,6 +13,7 @@ import {
   type LightSettings,
   type NumberingState,
   type Project,
+  type QuoteSettings,
   type RenderSettings,
   type ReinforcementBar,
   type Segment,
@@ -28,7 +30,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 13
+export const CURRENT_SCHEMA_VERSION = 14
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -307,6 +309,33 @@ const migrateV12ToV13: Migration = {
   },
 }
 
+/**
+ * v13 → v14 (F-056): cost-estimation / quoting intent. v13 files have no `quote` block; add the
+ * shipped defaults (EUR, placeholder price book + labor model, 15% overhead, 30% margin, empty
+ * client fields and no manual lines) so a pre-F-056 project loads ready to quote. Any partial
+ * `quote` a pre-release v13 file might carry is preserved, with its sub-objects defaulted.
+ */
+const migrateV13ToV14: Migration = {
+  from: 13,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'quote'> & {
+      quote?: Partial<QuoteSettings>
+    }
+    const base = defaultQuoteSettings()
+    const prior = project.quote
+    const quote: QuoteSettings = {
+      currency: prior?.currency ?? base.currency,
+      priceBook: prior?.priceBook ?? base.priceBook,
+      labor: prior?.labor ?? base.labor,
+      overheadPct: prior?.overheadPct ?? base.overheadPct,
+      marginPct: prior?.marginPct ?? base.marginPct,
+      client: prior?.client ?? base.client,
+      manualLines: prior?.manualLines ?? base.manualLines,
+    }
+    return { schemaVersion: 14, project: { ...project, quote } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -320,6 +349,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV10ToV11,
   migrateV11ToV12,
   migrateV12ToV13,
+  migrateV13ToV14,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
