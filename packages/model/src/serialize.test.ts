@@ -77,6 +77,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 11, migrate: (file) => ({ schemaVersion: 12, project: file.project }) },
       { from: 12, migrate: (file) => ({ schemaVersion: 13, project: file.project }) },
       { from: 13, migrate: (file) => ({ schemaVersion: 14, project: file.project }) },
+      { from: 14, migrate: (file) => ({ schemaVersion: 15, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -442,6 +443,21 @@ describe('schema versioning (FR-4)', () => {
     )
     expect(withQuote.quote.marginPct).toBe(0.5)
     expect(withQuote.quote.labor.hourlyRate).toBe(45) // defaulted
+  })
+
+  it('v14 → v15 seeds the nesting default (F-057)', () => {
+    // A v14 file (post-F-056) has every block up to `quote` but no `nesting`.
+    const legacy = createEmptyProject() as unknown as Record<string, unknown>
+    delete legacy.nesting
+    const project = deserialize(JSON.stringify({ schemaVersion: 14, project: legacy }))
+    expect(project.nesting).toEqual({ spacingMm: 3, seed: 1, perGlass: {} })
+
+    // A pre-release v14 file that already carries a partial nesting block keeps its fields.
+    const partial = createEmptyProject() as unknown as Record<string, unknown>
+    partial.nesting = { spacingMm: 5 }
+    const withNesting = deserialize(JSON.stringify({ schemaVersion: 14, project: partial }))
+    expect(withNesting.nesting.spacingMm).toBe(5)
+    expect(withNesting.nesting.seed).toBe(1) // defaulted
   })
 
   it('throws when no migration path exists for an older version', () => {

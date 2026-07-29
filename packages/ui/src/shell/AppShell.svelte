@@ -49,6 +49,7 @@
   import GlassDock from '../glass/GlassDock.svelte'
   import type { GlassLibraryController } from '../glass/library.svelte'
   import { LightController } from '../light/controller.svelte'
+  import { NestController } from '../nest/controller.svelte'
   import { NumberingController } from '../numbering/controller.svelte'
   import { ExportController, type SavePdf } from '../export/controller.svelte'
   import ExportDialog from '../export/ExportDialog.svelte'
@@ -78,6 +79,8 @@
   import DockPanel from './DockPanel.svelte'
   import Inspector from './Inspector.svelte'
   import LightControls from './LightControls.svelte'
+  import NestControls from './NestControls.svelte'
+  import NestView from './NestView.svelte'
   import ReferenceOverlay from './ReferenceOverlay.svelte'
   import NumberingPanel, { type LegendEntry } from './NumberingPanel.svelte'
   import ReadinessStrip from './ReadinessStrip.svelte'
@@ -781,6 +784,25 @@
   })
   onDestroy(() => light.dispose())
 
+  // Sheet nesting (F-057): lays each glass's assigned pieces onto sheets. The nested layout is a
+  // derived output computed off the main thread from the live pieces + assignments + numbering; only
+  // the tunable intent (cut allowance, per-glass sheet/rotation, seed) is persisted on `nesting`.
+  const nest = new NestController({
+    getDoc: () => controller?.doc ?? createEmptyProject(),
+    execute: (command) => controller?.execute(command),
+    getPieces: () => pieces,
+    glassFor: (piece) => assignments.glassFor(piece),
+    labelFor: (piece) => numbering.labelFor(piece),
+  })
+  onDestroy(() => nest.dispose())
+
+  // Auto-nest the first time the nest view is opened with something to nest, so it never shows an
+  // empty stage when a layout could be computed. Later geometry/setting changes re-nest via the
+  // panel's explicit "Re-nest" / "Reshuffle" actions.
+  $effect(() => {
+    if (viewMode === 'nest' && !nest.hasRun && !nest.running && nest.canNest) void nest.run()
+  })
+
   /** Capture a PNG photo of the lit stage (F-054 FR-6): reuse the F-043 snapshot + export port. */
   async function capturePhoto(): Promise<void> {
     if (!exportPng) return
@@ -909,7 +931,7 @@
       renderActive={viewMode === 'render'}
     />
     <div class="stage">
-      {#if viewMode !== 'cartoon' && viewMode !== 'light'}
+      {#if viewMode !== 'cartoon' && viewMode !== 'light' && viewMode !== 'nest'}
         <Toolbar {tools} {paint} {reinforce} />
       {/if}
       <Canvas
@@ -961,7 +983,7 @@
         photoGrain={controller?.doc.light.photoGrain ?? false}
         onCapturePhoto={exportPng ? capturePhoto : undefined}
       />
-      {#if viewMode !== 'cartoon' && viewMode !== 'light'}
+      {#if viewMode !== 'cartoon' && viewMode !== 'light' && viewMode !== 'nest'}
         <ReferenceOverlay controller={reference} {viewport} />
       {/if}
       {#if viewMode === 'cartoon'}
@@ -969,6 +991,15 @@
       {/if}
       {#if viewMode === 'light' && controller}
         <LightControls {light} />
+      {/if}
+      {#if viewMode === 'nest'}
+        <NestView
+          result={nest.result}
+          glasses={projectGlasses}
+          unit={viewport.unit}
+          busy={nest.running}
+        />
+        <NestControls {nest} glasses={projectGlasses} unit={viewport.unit} />
       {/if}
       {#if controller?.readOnly}
         <div class="readonly-banner" role="status">

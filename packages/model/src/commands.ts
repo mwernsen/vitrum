@@ -33,6 +33,7 @@ import type {
   LayerId,
   LightSettings,
   Node,
+  NestingSettings,
   NodeId,
   NumberingScheme,
   PieceId,
@@ -1019,6 +1020,32 @@ export function updateQuoteSettings(patch: Partial<QuoteSettings>): Command {
         ;(prev as Record<string, unknown>)[key] = before.quote[key]
       }
       return updateQuoteSettings(prev)
+    },
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sheet-nesting settings (F-057)                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Update the sheet-nesting intent (F-057) in one undo step — a shallow patch over {@link
+ * NestingSettings} (spacing, seed, or the whole per-glass override map). The inverse restores exactly
+ * the fields the patch touched, so a spacing tweak, a reshuffle (seed bump) or a per-glass sheet
+ * choice each sit in the undo history like any other edit. The nested layout is a derived output, so
+ * changing a factor re-nests with nothing else to persist.
+ */
+export function updateNestingSettings(patch: Partial<NestingSettings>): Command {
+  return {
+    kind: 'updateNestingSettings',
+    apply: (doc) => ({ ...doc, nesting: { ...doc.nesting, ...patch } }),
+    invert: (before) => {
+      const prev: Partial<NestingSettings> = {}
+      for (const key of Object.keys(patch) as (keyof NestingSettings)[]) {
+        // Restore the prior value of each touched key (typed via an index assignment helper).
+        ;(prev as Record<string, unknown>)[key] = before.nesting[key]
+      }
+      return updateNestingSettings(prev)
     },
   }
 }

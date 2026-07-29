@@ -280,6 +280,45 @@ export interface BomSettings {
 }
 
 /**
+ * How a glass's pieces may be rotated when nested onto sheets (F-057). Streaky/directional glass is
+ * grain-constrained: `flip` locks rotation to 0/180° so the streak direction is preserved; `fixed`
+ * pins every piece upright (0°). `quadrant` allows 0/90/180/270° and `free` allows finer angles —
+ * both for isotropic glass where grain doesn't matter. When a glass carries no explicit policy the
+ * nester derives one from its texture (streaky ⇒ `flip`, else `quadrant`), so grain is respected by
+ * default without per-piece setup (FR-1).
+ */
+export type NestRotationPolicy = 'free' | 'quadrant' | 'flip' | 'fixed'
+
+/**
+ * Per-glass nesting choices (F-057): which commercial sheet to lay pieces on and how pieces of that
+ * glass may rotate. Both fields are optional intent — an omitted `sheet` resolves to the glass's
+ * largest catalog {@link SheetSize} (or a fallback), and an omitted `rotation` is derived from the
+ * glass texture. Only the user's explicit overrides are stored.
+ */
+export interface GlassNestConfig {
+  readonly sheet?: SheetSize
+  readonly rotation?: NestRotationPolicy
+}
+
+/**
+ * Sheet-nesting intent (F-057). Like the BOM factors, only the *tunable inputs* are persisted — the
+ * nested layout itself is a derived output, recomputed by `@vitrum/nest` and never stored. `spacingMm`
+ * is the cut allowance kept between pieces and from the sheet edge; `seed` makes the (stochastic)
+ * nester reproducible — the same seed always yields the same layout (FR-3), and "reshuffle" just
+ * bumps it. `perGlass` holds the optional per-glass sheet/rotation overrides, keyed by glass id.
+ */
+export interface NestingSettings {
+  readonly spacingMm: number
+  readonly seed: number
+  readonly perGlass: Readonly<Record<GlassId, GlassNestConfig>>
+}
+
+/** Fresh nesting intent: a 3 mm cut allowance, a fixed reproducible seed, no per-glass overrides. */
+export function defaultNestingSettings(): NestingSettings {
+  return { spacingMm: 3, seed: 1, perGlass: {} }
+}
+
+/**
  * The kind of live symmetry a project is set up with (F-052). `none` disables replication.
  * Structurally identical to `@vitrum/core`'s `SymmetryMode`; kept here so the model stays
  * core-free (the pure expansion transform lives in `@vitrum/core` and consumes this shape).
@@ -633,6 +672,11 @@ export interface Project {
    * `@vitrum/core`'s `computeQuote`, so the quote is never stale.
    */
   readonly quote: QuoteSettings
+  /**
+   * Sheet-nesting intent (F-057): cut allowance, reproducible seed and per-glass sheet/rotation
+   * overrides. Tunable inputs only — the nested layout is derived by `@vitrum/nest`, never stored.
+   */
+  readonly nesting: NestingSettings
 }
 
 const DEFAULT_SETTINGS: ProjectSettings = { units: 'mm', name: 'Untitled' }
@@ -665,5 +709,6 @@ export function createEmptyProject(settings: Partial<ProjectSettings> = {}): Pro
     render: defaultRenderSettings(),
     light: defaultLightSettings(),
     quote: defaultQuoteSettings(),
+    nesting: defaultNestingSettings(),
   }
 }

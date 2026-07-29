@@ -3,6 +3,7 @@ import { defaultTechnique, type TechniqueKind, type TechniqueSettings } from './
 import {
   defaultBomSettings,
   defaultLightSettings,
+  defaultNestingSettings,
   defaultNumbering,
   defaultQuoteSettings,
   defaultRenderSettings,
@@ -11,6 +12,7 @@ import {
   type DrcState,
   type Glass,
   type LightSettings,
+  type NestingSettings,
   type NumberingState,
   type Project,
   type QuoteSettings,
@@ -30,7 +32,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 14
+export const CURRENT_SCHEMA_VERSION = 15
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -336,6 +338,29 @@ const migrateV13ToV14: Migration = {
   },
 }
 
+/**
+ * v14 → v15 (F-057): sheet-nesting intent. v14 files have no `nesting` block; add the shipped
+ * defaults (3 mm cut allowance, seed 1, no per-glass overrides) so a pre-F-057 project loads ready to
+ * nest. Any partial `nesting` a pre-release v14 file might carry is preserved, with its fields
+ * defaulted.
+ */
+const migrateV14ToV15: Migration = {
+  from: 14,
+  migrate: (file) => {
+    const project = file.project as Omit<Project, 'nesting'> & {
+      nesting?: Partial<NestingSettings>
+    }
+    const base = defaultNestingSettings()
+    const prior = project.nesting
+    const nesting: NestingSettings = {
+      spacingMm: prior?.spacingMm ?? base.spacingMm,
+      seed: prior?.seed ?? base.seed,
+      perGlass: prior?.perGlass ?? base.perGlass,
+    }
+    return { schemaVersion: 15, project: { ...project, nesting } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -350,6 +375,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV11ToV12,
   migrateV12ToV13,
   migrateV13ToV14,
+  migrateV14ToV15,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
