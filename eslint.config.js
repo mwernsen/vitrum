@@ -88,6 +88,22 @@ export default ts.config(
     },
   },
   {
+    files: ['packages/nest/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@vitrum/ui', '@vitrum/desktop', 'svelte', 'svelte/*', 'electron'],
+              message: 'packages/nest is a pure geometry engine and must not depend on UI layers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['packages/ui/**'],
     rules: {
       'no-restricted-imports': [
