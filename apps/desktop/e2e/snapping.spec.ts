@@ -33,20 +33,18 @@ test('welds a second line to an existing endpoint via endpoint snap', async () =
   const click = (x: number, y: number) => window.mouse.click(...at(x, y))
   const dblclick = (x: number, y: number) => window.mouse.dblclick(...at(x, y))
 
-  // The tools and the snap chip are on the chrome.
-  await expect(window.getByRole('button', { name: 'Construction guide (G)' })).toBeVisible()
-  await expect(window.getByRole('button', { name: /Snapping/ })).toBeVisible()
+  // Cockpit v2: the tools and the snap controls both live in the Draw dock section.
+  const draw = window.getByRole('complementary', { name: 'Panel dock' })
+  await expect(window.getByRole('button', { name: 'Guide (G)' })).toBeVisible()
+  await expect(draw.getByRole('switch', { name: 'Snapping' })).toBeVisible()
 
   // Isolate endpoint snap from the zoom-adaptive grid: with grid snap on, the first line's
   // endpoints jump to grid nodes (spacing varies with zoom), which makes a fixed-pixel near-miss
   // brittle. Turn grid off so this test proves *endpoint* welding specifically.
-  await window.getByRole('button', { name: /Snapping/ }).click()
-  const snapSettings = window.getByRole('dialog', { name: 'Snap settings' })
-  const gridSwitch = snapSettings.getByLabel('Grid')
-  await expect(gridSwitch).toBeChecked()
-  await snapSettings.getByText('Grid').click()
-  await expect(gridSwitch).not.toBeChecked()
-  await window.keyboard.press('Escape')
+  const gridChip = draw.getByRole('button', { name: 'Grid', exact: true })
+  await expect(gridChip).toHaveAttribute('aria-pressed', 'true')
+  await gridChip.click()
+  await expect(gridChip).toHaveAttribute('aria-pressed', 'false')
 
   // First line: L, click, double-click → one span, endpoints at (200,200) and (300,200).
   await window.keyboard.press('l')
@@ -60,7 +58,7 @@ test('welds a second line to an existing endpoint via endpoint snap', async () =
   await click(304, 203)
   await dblclick(420, 260)
 
-  await expect(window.getByText('Unsaved')).toBeVisible()
+  await expect(window.getByLabel('Unsaved changes')).toBeVisible()
 
   await window.keyboard.press('Control+k')
   const palette = window.getByRole('dialog', { name: 'Debug commands' })

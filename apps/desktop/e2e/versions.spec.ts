@@ -42,7 +42,7 @@ test('saves a named version and restores the document to it', async () => {
   await expect(count).toHaveText('Segments: 1')
   await window.keyboard.press('Escape')
 
-  await window.getByRole('button', { name: 'Versions' }).click()
+  await window.getByRole('button', { name: 'History' }).click()
   await window.getByRole('button', { name: 'Save version…' }).click()
   const saveDialog = window.getByRole('dialog', { name: 'Save version' })
   await saveDialog.getByLabel('Name').fill('client draft 1')

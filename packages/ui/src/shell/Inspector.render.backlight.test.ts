@@ -1,11 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { ViewportController } from '../canvas/viewport.svelte'
 import { DocumentController } from '../document/controller.svelte'
 import { createFakeHost } from '../document/fakeHost'
 
-import LayersPanel from './LayersPanel.svelte'
+import Inspector from './Inspector.svelte'
 
 const toDispose: DocumentController[] = []
 afterEach(() => {
@@ -18,25 +17,27 @@ function makeDoc(): DocumentController {
   return ctrl
 }
 
-describe('LayersPanel — realistic-render backlight (F-053)', () => {
+// Cockpit v2 moved the backlight out of the old Layers dock into the inspector, beside the render
+// view it belongs to. The undo semantics are unchanged: one entry per slider release.
+describe('Inspector — realistic-render backlight (F-053)', () => {
   it('hides the backlight controls unless the render view is active', () => {
     const ctrl = makeDoc()
-    render(LayersPanel, {
-      viewport: new ViewportController(),
+    render(Inspector, {
+      unit: 'mm',
+      viewMode: 'design',
       doc: ctrl.doc,
       execute: (c) => ctrl.execute(c),
-      renderActive: false,
     })
     expect(screen.queryByLabelText('Backlight intensity')).not.toBeInTheDocument()
   })
 
   it('adjusts backlight intensity and warmth, each one undo entry (FR-1)', async () => {
     const ctrl = makeDoc()
-    render(LayersPanel, {
-      viewport: new ViewportController(),
+    render(Inspector, {
+      unit: 'mm',
+      viewMode: 'render',
       doc: ctrl.doc,
       execute: (c) => ctrl.execute(c),
-      renderActive: true,
     })
 
     const intensity = screen.getByLabelText('Backlight intensity') as HTMLInputElement
@@ -54,5 +55,36 @@ describe('LayersPanel — realistic-render backlight (F-053)', () => {
     expect(ctrl.doc.render.backlightIntensity).toBe(1.5)
     ctrl.undo()
     expect(ctrl.doc.render.backlightIntensity).toBe(1)
+  })
+})
+
+describe('Inspector — per-view context with nothing selected (Cockpit v2)', () => {
+  it('names what the active view is showing', () => {
+    const ctrl = makeDoc()
+    const view = render(Inspector, {
+      unit: 'mm',
+      viewMode: 'design',
+      doc: ctrl.doc,
+      panelStats: [{ label: 'Pieces', value: '4' }],
+    })
+    expect(screen.getByRole('complementary', { name: 'Inspector' })).toHaveTextContent('Panel')
+    expect(screen.getByText('Click a piece on the panel to inspect it.')).toBeInTheDocument()
+
+    void view.rerender({ unit: 'mm', viewMode: 'cartoon', doc: ctrl.doc })
+    expect(screen.getByRole('complementary', { name: 'Inspector' })).toHaveTextContent(
+      'Cartoon sheet',
+    )
+  })
+
+  it('shows the headline panel numbers as tiles', () => {
+    render(Inspector, {
+      unit: 'mm',
+      viewMode: 'design',
+      panelStats: [
+        { label: 'Pieces', value: '4' },
+        { label: 'Glass area', value: '0.140 m²' },
+      ],
+    })
+    expect(screen.getByText('0.140 m²')).toBeInTheDocument()
   })
 })

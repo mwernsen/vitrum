@@ -2,6 +2,7 @@
   import {
     computeBom,
     computeQuote,
+    formatAreaLarge,
     formatLength,
     leadFlangeMm,
     pieceKey,
@@ -16,6 +17,7 @@
   import {
     addSegments,
     createEmptyProject,
+    defaultBomSettings,
     defaultQuoteSettings,
     identityTextureTransform,
     segmentsFromDrafts,
@@ -71,25 +73,26 @@
   import type { PrintTileOverlay } from '../canvas/render'
 
   import ActivityRail from './ActivityRail.svelte'
-  import BomPanel from './BomPanel.svelte'
+  import BenchOutputs from './BenchOutputs.svelte'
   import QuotePanel from './QuotePanel.svelte'
   import Canvas from './Canvas.svelte'
-  import CartoonLegend from './CartoonLegend.svelte'
+  import type { PieceNote } from './CutListTable.svelte'
   import { type DockSection } from './dock'
   import DockPanel from './DockPanel.svelte'
-  import Inspector from './Inspector.svelte'
-  import LightControls from './LightControls.svelte'
-  import NestControls from './NestControls.svelte'
+  import Inspector, { type PanelStat } from './Inspector.svelte'
   import NestView from './NestView.svelte'
+  import OutputDrawer, { type DrawerTab } from './OutputDrawer.svelte'
+  import OverlaysChip from './OverlaysChip.svelte'
   import ReferenceOverlay from './ReferenceOverlay.svelte'
   import NumberingPanel, { type LegendEntry } from './NumberingPanel.svelte'
-  import ReadinessStrip from './ReadinessStrip.svelte'
   import RulesPanel from './RulesPanel.svelte'
   import StatusBar from './StatusBar.svelte'
+  import { activeTool } from './tools'
   import VersionsPanel from './VersionsPanel.svelte'
-  import Toolbar from './Toolbar.svelte'
   import TopBar from './TopBar.svelte'
-  import { type ViewMode } from './viewmode'
+  import ViewBanner from './ViewBanner.svelte'
+  import ViewportChip from './ViewportChip.svelte'
+  import { VIEW_MODES, type ViewMode } from './viewmode'
 
   interface Props {
     panel: Panel
@@ -592,6 +595,12 @@
     controller?.execute(updateBomSettings(patch))
   }
 
+  /** Write the live cutting list straight out as CSV from the drawer (F-042). */
+  function exportCutListCsv(): void {
+    if (bomReport && exportText)
+      void bom.exportCsv(bomReport, panel.name, viewport.unit, exportText)
+  }
+
   // The cutting list / BOM export is dispatched by `runOutput` (the single Export dialog), not from
   // the BOM panel; the panel keeps the live table, factor editing and row-hover highlight.
   const hasBom = $derived(bomReport !== null && pieces.length > 0)
@@ -649,11 +658,11 @@
     if (priceBook) setQuote({ priceBook: priceBook.defaultBook })
   }
 
-  // Canvas dimension label (Portal cockpit): panel size in the active unit + zoom.
-  const dimText = $derived(
-    `${formatLength(panel.widthMm, viewport.unit)} × ${formatLength(panel.heightMm, viewport.unit)}`,
+  // What the active tool's next click does. The Draw palette and the status bar read the same line,
+  // so the hint follows the pointer's attention rather than living in one place.
+  const toolHint = $derived(
+    activeTool({ toolId: tools.activeId, paintMode: paint.mode, barMode: reinforce.mode }).hint,
   )
-  const zoomText = $derived(`${Math.round(viewport.zoomFactor * 100)}%`)
 
   // Materialise inherited/reshaped assignments under each live piece's current content id right
   // before a save, so colours split or reshaped this session persist across reload (FR-5).
@@ -812,10 +821,133 @@
 
   let calibrationOpen = $state(false)
 
-  // Cockpit shell state (Portal "2b"). Only the "design" view and the "glass" dock section are
-  // backed by completed features today; the rest render as disabled placeholders.
+  // Cockpit v2 shell state. The dock opens on "draw" — a new panel starts as geometry, and the
+  // drawing tools are what the first click needs.
   let viewMode = $state<ViewMode>('design')
-  let dockSection = $state<DockSection>('glass')
+  let dockSection = $state<DockSection>('draw')
+  // The bench-outputs drawer under the stage (cutting list / BOM / quote). Closed until asked for,
+  // because it costs the canvas 266px.
+  let drawerOpen = $state(false)
+  let drawerTab = $state<DrawerTab>('cut')
+
+  function openDrawer(tab: DrawerTab): void {
+    drawerTab = tab
+    drawerOpen = true
+  }
+
+  /**
+   * Switch the reading on the stage. The selection is dropped with it: the derived views are
+   * read-only, so a piece picked in the design view would otherwise hold the inspector on controls
+   * that cannot act on what is being shown.
+   */
+  function setViewMode(mode: ViewMode): void {
+    if (mode === viewMode) return
+    viewMode = mode
+    paint.clearSelection()
+    selection.clear()
+    reinforce.selectedId = null
+  }
+
+  /** The 1:1 tiled template, reached from the cartoon inspector and the Make section. */
+  function openTemplate(): void {
+    if (!exportAvailable) return
+    exporter.docType = 'tiled'
+    exporter.open = true
+  }
+
+  // The per-piece note the cutting list shows: the most severe DRC violation touching that piece,
+  // so a cutter reading the bench list sees what would go wrong before cutting it.
+  const pieceNotes = $derived.by<Record<string, PieceNote>>(() => {
+    const notes: Record<string, PieceNote> = {}
+    for (const v of drc.result.violations) {
+      for (const pieceId of v.pieceIds) {
+        const blocking = v.severity === 'error'
+        // Violations arrive most-severe first, so the first note for a piece is the one to show.
+        if (!notes[pieceId] || (blocking && !notes[pieceId]!.blocking)) {
+          notes[pieceId] = { text: v.title, blocking }
+        }
+      }
+    }
+    return notes
+  })
+
+  // Headline panel numbers for the inspector when nothing is selected: what this panel *is*.
+  const panelStats = $derived<PanelStat[]>([
+    { label: 'Pieces', value: String(pieces.length) },
+    {
+      label: 'Glass area',
+      value: bomReport
+        ? formatAreaLarge(
+            bomReport.cutting.reduce((sum, g) => sum + g.netAreaMm2, 0),
+            viewport.unit,
+          )
+        : '—',
+    },
+    {
+      label: technique?.kind === 'foil' ? 'Foil seam' : 'Lead came',
+      value: bomReport
+        ? formatLength(
+            technique?.kind === 'foil'
+              ? (bomReport.foil?.netSeamLengthMm ?? 0)
+              : bomReport.came.reduce((sum, c) => sum + c.netLengthMm, 0),
+            viewport.unit,
+          )
+        : '—',
+    },
+    {
+      label: 'Weight',
+      value:
+        bomWeight.grams >= 1000
+          ? `${(bomWeight.grams / 1000).toFixed(2)} kg`
+          : `${Math.round(bomWeight.grams)} g`,
+    },
+  ])
+
+  /** What the Make section's cutting-list link summarises. */
+  const cutSummary = $derived(
+    bomReport
+      ? `${pieces.length} piece${pieces.length === 1 ? '' : 's'} · ${formatAreaLarge(
+          bomReport.cutting.reduce((sum, g) => sum + g.netAreaMm2, 0),
+          viewport.unit,
+        )} glass`
+      : 'nothing to cut yet',
+  )
+
+  /** The mono one-liner in the dock header: the count that section is about. */
+  const dockMeta = $derived.by(() => {
+    switch (dockSection) {
+      case 'draw':
+        return `${segments.length} line${segments.length === 1 ? '' : 's'}`
+      case 'glass':
+        return `${Object.keys(projectGlasses).length} in project`
+      case 'check': {
+        const total = drc.result.counts.error + drc.result.counts.warning + drc.result.counts.info
+        if (!drc.hasRun) return 'not run'
+        return total === 0 ? 'clear' : `${total} issue${total === 1 ? '' : 's'}`
+      }
+      case 'make':
+        return `${pieces.length} piece${pieces.length === 1 ? '' : 's'}`
+      case 'cost':
+        return controller?.doc.quote.currency.code ?? ''
+      case 'history':
+        return versions ? `${versions.snapshots.length} versions` : ''
+    }
+  })
+
+  const viewMeta = $derived(VIEW_MODES.find((v) => v.id === viewMode))
+  // What qualifies the derived reading currently on the stage.
+  const bannerMeta = $derived.by(() => {
+    if (viewMode === 'light') {
+      const m = Math.round(light.effectiveMinutes)
+      const clock = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+      return `${clock} · az ${Math.round(light.sun.azimuthDeg)}°`
+    }
+    if (viewMode === 'nest') {
+      const sheets = nest.result?.glasses.reduce((n, g) => n + g.sheets.length, 0) ?? 0
+      return sheets > 0 ? `${sheets} sheet${sheets === 1 ? '' : 's'}` : 'not nested yet'
+    }
+    return 'read-only'
+  })
 </script>
 
 {#snippet glassPanel()}
@@ -830,7 +962,7 @@
   {/if}
 {/snippet}
 
-{#snippet rulesPanel()}
+{#snippet checkPanel()}
   <RulesPanel
     {drc}
     doc={controller?.doc}
@@ -840,7 +972,7 @@
   />
 {/snippet}
 
-{#snippet versionsPanel()}
+{#snippet historyPanel()}
   {#if versions}
     <VersionsPanel
       {versions}
@@ -861,18 +993,14 @@
     unnumbered={unnumberedCount}
     {legend}
   />
-  {#if bomReport}
-    <BomPanel
-      report={bomReport}
-      unit={viewport.unit}
-      sort={bom.sort}
-      onSort={(s) => (bom.sort = s)}
-      factors={controller?.doc.bom ?? bomReport.factors}
-      onSetFactor={setBomFactor}
-      onHighlight={(pieceIds, segmentIds) => bom.highlight(pieceIds, segmentIds)}
-      onClearHighlight={() => bom.clearHighlight()}
-    />
-  {/if}
+  <BenchOutputs
+    {cutSummary}
+    onOpenCutList={() => openDrawer('cut')}
+    onPrintTemplate={exportAvailable && exportPdf ? openTemplate : undefined}
+    templateSummary={print.tilingFor(bounds)
+      ? `${print.tilingFor(bounds)!.tiles.length} tiles`
+      : 'nothing to tile yet'}
+  />
 {/snippet}
 
 {#snippet costPanel()}
@@ -887,20 +1015,25 @@
     onSaveWorkshopDefault={priceBook ? saveWorkshopDefault : undefined}
     onLoadWorkshopDefault={priceBook ? loadWorkshopDefault : undefined}
   />
+  {#if hasQuote}
+    <button class="breakdown" onclick={() => openDrawer('quote')}>
+      Full breakdown &amp; line items
+    </button>
+  {/if}
 {/snippet}
 
 <div class="shell">
   <TopBar
     title={panel.name}
     {controller}
+    doc={controller?.doc}
+    execute={controller ? (command) => controller.execute(command) : undefined}
     {viewMode}
-    onViewMode={(mode) => (viewMode = mode)}
-    onZoomFit={() => viewport.zoomToFit(bounds)}
+    onViewMode={setViewMode}
     onExport={exportText || exportPdf ? openExport : undefined}
     exportEnabled={exportAvailable && pieces.length > 0}
     onImport={importSvg && controller ? openImport : undefined}
-  />
-  <ReadinessStrip
+    onGoTo={(section) => (dockSection = section)}
     pieceCount={pieces.length}
     {unassignedCount}
     {unnumberedCount}
@@ -917,103 +1050,130 @@
     />
     <DockPanel
       section={dockSection}
+      meta={dockMeta}
       {viewport}
-      doc={controller?.doc}
-      execute={controller ? (command) => controller.execute(command) : undefined}
-      glass={glassLibrary ? glassPanel : undefined}
-      rules={rulesPanel}
-      make={makePanel}
-      cost={costPanel}
-      versions={versions ? versionsPanel : undefined}
+      {tools}
+      {paint}
+      {reinforce}
+      {snap}
+      onClearGuides={controller ? () => controller.clearGuides() : undefined}
+      symmetry={controller ? symmetry : undefined}
       {reference}
       onAddReference={importImage && controller ? openAddReference : undefined}
-      symmetry={controller ? symmetry : undefined}
-      renderActive={viewMode === 'render'}
+      editable={viewMode === 'design' || viewMode === 'render'}
+      onEnterDesign={() => setViewMode('design')}
+      glass={glassLibrary ? glassPanel : undefined}
+      check={checkPanel}
+      make={makePanel}
+      cost={costPanel}
+      history={versions ? historyPanel : undefined}
     />
     <div class="stage">
-      {#if viewMode !== 'cartoon' && viewMode !== 'light' && viewMode !== 'nest'}
-        <Toolbar {tools} {paint} {reinforce} />
-      {/if}
-      <Canvas
-        {viewport}
-        referenceLayers={reference.renderLayers}
-        resolveReferenceSource={reference.resolveSource}
-        referenceVersion={reference.sourcesVersion}
-        segments={shownSegments}
-        {replicaSegments}
-        symmetryAxes={viewMode === 'cartoon' ? [] : symmetryAxes}
-        symmetryCenter={symmetry.active ? symmetry.center : null}
-        symmetryDomain={viewMode === 'cartoon' ? null : symmetryDomain}
-        previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
-        {bounds}
-        {tools}
-        {snap}
-        {edit}
-        {selection}
-        {paint}
-        {pieces}
-        {diagnostics}
-        showGlass={viewport.glassVisible}
-        glassAssignments={assignments.effective}
-        glasses={projectGlasses}
-        selectedPieces={paint.selectedPieces}
-        showPieces={viewport.piecesVisible}
-        {hoveredPieceId}
-        technique={techniqueRender}
-        {cutContours}
-        showCuts={viewport.cutsVisible}
-        violations={drc.markers}
-        selectedViolationKey={drc.selectedKey}
-        {reinforcements}
-        {reinforce}
-        cartoon={viewMode === 'cartoon'}
-        showNumbers={viewport.numbersVisible}
-        numberLabels={numbering.labels}
-        numberPlacements={numbering.placements}
-        {printTiles}
-        bomHighlightPieces={bom.highlightPieces}
-        bomHighlightSegments={bom.highlightSegments}
-        snapshotRegister={(fn) => (takeSnapshot = fn)}
-        renderMode={viewMode === 'render'}
-        {backlight}
-        {textureTransformFor}
-        lightMode={viewMode === 'light'}
-        sun={light.sun}
-        lightTextures={controller?.doc.light.showTextures ?? true}
-        photoGrain={controller?.doc.light.photoGrain ?? false}
-        onCapturePhoto={exportPng ? capturePhoto : undefined}
-      />
-      {#if viewMode !== 'cartoon' && viewMode !== 'light' && viewMode !== 'nest'}
-        <ReferenceOverlay controller={reference} {viewport} />
-      {/if}
-      {#if viewMode === 'cartoon'}
-        <CartoonLegend entries={legend} scheme={numbering.scheme} />
-      {/if}
-      {#if viewMode === 'light' && controller}
-        <LightControls {light} />
-      {/if}
-      {#if viewMode === 'nest'}
-        <NestView
-          result={nest.result}
+      <div class="viewport">
+        <Canvas
+          {viewport}
+          referenceLayers={reference.renderLayers}
+          resolveReferenceSource={reference.resolveSource}
+          referenceVersion={reference.sourcesVersion}
+          segments={shownSegments}
+          {replicaSegments}
+          symmetryAxes={viewMode === 'cartoon' ? [] : symmetryAxes}
+          symmetryCenter={symmetry.active ? symmetry.center : null}
+          symmetryDomain={viewMode === 'cartoon' ? null : symmetryDomain}
+          previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
+          {bounds}
+          {tools}
+          {snap}
+          {edit}
+          {selection}
+          {paint}
+          {pieces}
+          {diagnostics}
+          showGlass={viewport.glassVisible}
+          glassAssignments={assignments.effective}
           glasses={projectGlasses}
-          unit={viewport.unit}
-          busy={nest.running}
+          selectedPieces={paint.selectedPieces}
+          showPieces={viewport.piecesVisible}
+          {hoveredPieceId}
+          technique={techniqueRender}
+          {cutContours}
+          showCuts={viewport.cutsVisible}
+          violations={drc.markers}
+          selectedViolationKey={drc.selectedKey}
+          {reinforcements}
+          {reinforce}
+          cartoon={viewMode === 'cartoon'}
+          showNumbers={viewport.numbersVisible}
+          numberLabels={numbering.labels}
+          numberPlacements={numbering.placements}
+          {printTiles}
+          bomHighlightPieces={bom.highlightPieces}
+          bomHighlightSegments={bom.highlightSegments}
+          snapshotRegister={(fn) => (takeSnapshot = fn)}
+          renderMode={viewMode === 'render'}
+          {backlight}
+          {textureTransformFor}
+          lightMode={viewMode === 'light'}
+          sun={light.sun}
+          lightTextures={controller?.doc.light.showTextures ?? true}
+          photoGrain={controller?.doc.light.photoGrain ?? false}
+          onCapturePhoto={exportPng ? capturePhoto : undefined}
         />
-        <NestControls {nest} glasses={projectGlasses} unit={viewport.unit} />
-      {/if}
-      {#if controller?.readOnly}
-        <div class="readonly-banner" role="status">
-          <span>Read-only shared file</span>
-          <button type="button" onclick={editSharedCopy}>Edit a copy</button>
-        </div>
-      {/if}
-      <div class="dims" aria-label="Panel dimensions">
-        <span>{dimText}</span>
-        <span class="zoom">{zoomText}</span>
+        {#if viewMode !== 'cartoon' && viewMode !== 'light' && viewMode !== 'nest'}
+          <ReferenceOverlay controller={reference} {viewport} />
+        {/if}
+        {#if viewMode === 'nest'}
+          <NestView
+            result={nest.result}
+            glasses={projectGlasses}
+            unit={viewport.unit}
+            busy={nest.running}
+          />
+        {/if}
+        {#if controller?.readOnly}
+          <div class="readonly-banner" role="status">
+            <span>Read-only shared file</span>
+            <button type="button" onclick={editSharedCopy}>Edit a copy</button>
+          </div>
+        {:else if viewMeta?.banner}
+          <ViewBanner title={viewMeta.banner} meta={bannerMeta} />
+        {/if}
+
+        <!-- Overlay visibility and viewport controls sit on the canvas they act on (Cockpit v2). -->
+        {#if viewMode === 'design' || viewMode === 'render'}
+          <OverlaysChip {viewport} />
+        {/if}
+        {#if viewMode !== 'nest'}
+          <ViewportChip
+            {viewport}
+            onFit={() => viewport.zoomToFit(bounds)}
+            onCalibrate={() => (calibrationOpen = true)}
+          />
+        {/if}
       </div>
+
+      <!-- Bench outputs get real width, under the stage rather than squeezed into the dock. -->
+      {#if drawerOpen}
+        <OutputDrawer
+          tab={drawerTab}
+          onTab={(t) => (drawerTab = t)}
+          onClose={() => (drawerOpen = false)}
+          report={bomReport}
+          quote={quoteReport}
+          unit={viewport.unit}
+          sort={bom.sort}
+          onSort={(s) => (bom.sort = s)}
+          factors={controller?.doc.bom ?? defaultBomSettings()}
+          onSetFactor={setBomFactor}
+          {bom}
+          notes={pieceNotes}
+          onExportCsv={bomReport && exportText ? exportCutListCsv : undefined}
+        />
+      {/if}
     </div>
     <Inspector
       unit={viewport.unit}
+      {viewMode}
       {edit}
       {selection}
       {paint}
@@ -1025,15 +1185,24 @@
       doc={controller?.doc}
       {pieces}
       execute={controller ? (command) => controller.execute(command) : undefined}
-      renderActive={viewMode === 'render'}
+      {panelStats}
+      {legend}
+      scheme={numbering.scheme}
+      violations={drc.result.violations}
+      onQuickFix={(v) => drc.applyQuickFix(v)}
+      light={controller ? light : undefined}
+      nest={viewMode === 'nest' ? nest : undefined}
+      glasses={projectGlasses}
+      onPrintTemplate={exportAvailable && exportPdf ? openTemplate : undefined}
     />
   </div>
   <StatusBar
     {viewport}
-    {snap}
-    onfit={() => viewport.zoomToFit(bounds)}
-    oncalibrate={() => (calibrationOpen = true)}
-    onClearGuides={controller ? () => controller.clearGuides() : undefined}
+    widthMm={panel.widthMm}
+    heightMm={panel.heightMm}
+    hint={toolHint}
+    onToggleDrawer={() => (drawerOpen = !drawerOpen)}
+    {drawerOpen}
   />
 </div>
 
@@ -1060,12 +1229,16 @@
 <ImportDialog controller={importer} onImport={runImport} />
 
 <style>
+  /* Cockpit v2: the 44px readiness strip is gone — readiness is one meter in the top bar — so the
+     shell is three rows and the canvas gets the space back. */
   .shell {
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto 1fr auto;
+    /* `minmax(0, 1fr)`, not the implicit `auto`: an auto column sizes to the widest row's
+       max-content, so the top bar's chips would stretch the whole shell past the window. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'menu'
-      'readiness'
       'body'
       'status';
     height: 100vh;
@@ -1076,39 +1249,45 @@
   .body {
     grid-area: body;
     display: flex;
+    min-width: 0;
     min-height: 0;
   }
 
-  /* Canvas stage: the positioned ancestor for the floating tool palette. */
+  /* The stage stacks the canvas over the bench-outputs drawer. */
   .stage {
     flex: 1;
     min-width: 0;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* The positioned ancestor for the canvas chips, banner and overlays. */
+  .viewport {
     position: relative;
+    flex: 1;
+    min-height: 0;
     display: flex;
+    overflow: hidden;
   }
 
-  /* Panel dimensions + zoom, centered at the base of the canvas (Portal cockpit). */
-  .dims {
-    position: absolute;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: var(--space-2);
-    padding: 3px 10px;
-    border-radius: var(--radius-full);
-    background: var(--paper-0);
+  /* Cost → the wide quote breakdown in the drawer. */
+  .breakdown {
+    margin-top: var(--space-3);
+    padding: 10px 11px;
+    width: 100%;
     border: 1px solid var(--border-subtle);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--ink-600);
-    pointer-events: none;
-    z-index: 5;
+    border-radius: var(--radius-sm);
+    background: var(--paper-0);
+    color: var(--ink-900);
+    font: 600 12.5px/1.2 var(--font-sans);
+    text-align: left;
+    cursor: pointer;
   }
 
-  .dims .zoom {
-    color: var(--ink-500);
+  .breakdown:hover {
+    border-color: var(--border-strong);
   }
 
   /* Read-only shared file banner (F-055 FR-8), pinned to the top of the canvas stage. */

@@ -36,15 +36,24 @@ test('renders the cockpit shell regions', async () => {
   await expect(window.getByRole('main', { name: 'Design canvas' })).toBeVisible()
   await expect(window.getByRole('complementary', { name: 'Panel dock' })).toBeVisible()
   await expect(window.getByRole('region', { name: 'Status bar' })).toBeVisible()
-  // The inspector is present but collapses with no selection (turn-3 IA), so assert it exists.
-  await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeAttached()
+  await expect(window.getByRole('navigation', { name: 'Workspace sections' })).toBeVisible()
+  // Cockpit v2: the inspector no longer collapses — with nothing selected it carries the active
+  // view's context, so the right column is never dead space.
+  await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeVisible()
 })
 
 test('opens the sample panel on an empty document', async () => {
   const window = await app.firstWindow()
-  // Panel name in the top bar; the readiness strip reflects real F-020 detection (no geometry yet).
-  await expect(window.getByText('Sample panel')).toBeVisible()
-  await expect(window.getByText('in progress')).toBeVisible()
+  // Panel name in the top-bar document chip; the readiness meter reflects real F-020 detection, so
+  // an empty document has not cleared the geometry step.
+  await expect(window.getByTestId('document-chip')).toContainText('Sample panel')
+  await expect(window.getByTestId('readiness-meter')).toContainText('/ 4')
+  await window.getByTestId('readiness-meter').click()
+  await expect(
+    window.getByRole('dialog', { name: 'Ready to cut' }).getByRole('button', {
+      name: /Geometry closes/,
+    }),
+  ).toContainText('no closed pieces yet')
 })
 
 test('toggles the measurement unit from the status bar', async () => {

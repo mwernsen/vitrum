@@ -44,7 +44,7 @@ test('exports a 1:1 tiled PDF via the Export dialog', async () => {
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
 
-  await window.getByRole('button', { name: 'Manufacturing' }).click()
+  await window.getByRole('button', { name: 'Make' }).click()
   await window.getByRole('button', { name: 'Renumber' }).click()
 
   // Open the Export dialog and pick the 1:1 tiled cutting template.

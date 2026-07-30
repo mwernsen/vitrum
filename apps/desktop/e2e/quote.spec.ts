@@ -55,22 +55,31 @@ test('builds a cost estimate and exports the client quote PDF', async () => {
   const box = (await canvas.boundingBox())!
   const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
 
-  const palette = window.getByRole('region', { name: 'Glass palette' })
-  await expect(palette).toBeVisible()
-
   // Closed rectangular border → one piece.
   await window.getByRole('button', { name: 'Panel border' }).click()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
 
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
+  const palette = window.getByRole('region', { name: 'Glass palette' })
+  await expect(palette).toBeVisible()
+
   // Pick a glass and paint the piece so it is priced.
   await palette.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Open the Cost & quote dock; the live total is shown.
-  await window.getByRole('button', { name: 'Cost & quote' }).click()
-  await expect(window.getByText('Total', { exact: true })).toBeVisible()
+  // Open the Cost dock; the live total is shown.
+  await window.getByRole('button', { name: 'Cost' }).click()
+  const dock = window.getByRole('complementary', { name: 'Panel dock' })
+  await expect(dock.getByText('Total', { exact: true })).toBeVisible()
+
+  // Cockpit v2: the full breakdown opens as a wide table in the bench-outputs drawer.
+  await dock.getByRole('button', { name: /Full breakdown/ }).click()
+  const drawer = window.getByRole('region', { name: 'Bench outputs' })
+  await expect(drawer.getByRole('table', { name: 'Quote line items' })).toBeVisible()
+  await drawer.getByRole('button', { name: 'Close bench outputs' }).click()
 
   // Export the client quote PDF via the single Export dialog.
   const dialog = window.getByRole('dialog', { name: 'Export' })

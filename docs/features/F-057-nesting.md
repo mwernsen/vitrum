@@ -114,3 +114,6 @@ data-model home were delegated to the implementer._
 `NestView` sheet layout + floating `NestControls` card. Built from `components/core` primitives
 (Button/Input/Select), tokens only; sheet fills are data-driven (glass colour), exempt like other
 rendered document content.
+
+_Cockpit v2 (2026-07-30):_ the floating `NestControls` card moved into the inspector's nest-view context. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

@@ -137,3 +137,6 @@ bytes and that the WebGL canvas mounts, but does not pixel-diff the GPU output).
 
 **Follow-up discovered:** opt-in PDF inclusion (see above) — deferred, needs raster embedding
 in `@vitrum/paper`.
+
+_Cockpit v2 (2026-07-30):_ the reference-layer list moved from the Layers panel into the **Draw** dock section's Tracing block. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

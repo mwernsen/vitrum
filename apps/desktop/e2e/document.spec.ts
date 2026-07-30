@@ -51,10 +51,10 @@ test('creates segments and undoes/redoes them via the debug palette', async () =
 
 test('marks the document unsaved once it is edited', async () => {
   const window = await app.firstWindow()
-  await expect(window.getByText('Saved')).toBeVisible()
+  await expect(window.getByLabel('Saved', { exact: true })).toBeVisible()
 
   await window.keyboard.press('Control+k')
   await window.getByRole('button', { name: 'Add segment' }).click()
 
-  await expect(window.getByText('Unsaved')).toBeVisible()
+  await expect(window.getByLabel('Unsaved changes')).toBeVisible()
 })

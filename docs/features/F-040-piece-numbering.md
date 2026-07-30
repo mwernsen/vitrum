@@ -163,3 +163,6 @@ renders in the cartoon view as a proper monochrome cartoon — pieces labelled `
   snapshot after a mid-session reshape could lose that reshape's number on recover; explicit save is
   robust.
 - Downstream consumers (cutting list F-042, 1:1 print F-041, export F-043) read `numbering` next.
+
+_Cockpit v2 (2026-07-30):_ the `CartoonLegend` canvas overlay moved into the inspector's cartoon-view context. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

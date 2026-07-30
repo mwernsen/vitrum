@@ -28,12 +28,30 @@
     /** Highlight the contributing pieces (+ optional segments) of a line item on the canvas. */
     onHighlight: (pieceIds: readonly string[], segmentIds?: readonly string[]) => void
     onClearHighlight: () => void
+    /**
+     * Which parts to render. Cockpit v2 gives the per-piece cutting list its own wide table in the
+     * bottom drawer, so the drawer's materials tab asks for `'materials'` and drops the narrow
+     * duplicate. `'all'` keeps the original full panel.
+     */
+    sections?: 'all' | 'cutting' | 'materials'
   }
 
-  let { report, unit, sort, onSort, factors, onSetFactor, onHighlight, onClearHighlight }: Props =
-    $props()
+  let {
+    report,
+    unit,
+    sort,
+    onSort,
+    factors,
+    onSetFactor,
+    onHighlight,
+    onClearHighlight,
+    sections = 'all',
+  }: Props = $props()
 
   let settingsOpen = $state(false)
+
+  const showCutting = $derived(sections === 'all' || sections === 'cutting')
+  const showMaterials = $derived(sections === 'all' || sections === 'materials')
 
   const hasPieces = $derived(report.pieceCount > 0)
 
@@ -63,78 +81,80 @@
 
 <div class="bom">
   <!-- Cutting list -->
-  <section>
-    <div class="section-head">
-      <span class="eyebrow">Cutting list</span>
-      {#if hasPieces}
-        <div class="sort" role="group" aria-label="Sort cutting list">
-          <button class:active={sort === 'number'} onclick={() => onSort('number')}>No.</button>
-          <button class:active={sort === 'size'} onclick={() => onSort('size')}>Size</button>
-        </div>
-      {/if}
-    </div>
+  {#if showCutting}
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Cutting list</span>
+        {#if hasPieces}
+          <div class="sort" role="group" aria-label="Sort cutting list">
+            <button class:active={sort === 'number'} onclick={() => onSort('number')}>No.</button>
+            <button class:active={sort === 'size'} onclick={() => onSort('size')}>Size</button>
+          </div>
+        {/if}
+      </div>
 
-    {#if !hasPieces}
-      <p class="note">Draw a design and assign glass to build the cutting list.</p>
-    {:else}
-      {#each report.cutting as group (group.glassId ?? '?')}
-        <div
-          class="glass-group"
-          role="group"
-          onmouseenter={() => onHighlight(group.pieceIds)}
-          onmouseleave={onClearHighlight}
-        >
-          <div class="glass-head">
-            <span
-              class="swatch"
-              style:background={group.color ?? 'transparent'}
-              class:empty={!group.color}
-            ></span>
-            <span class="code">{group.code}</span>
-            <span class="gname" title={group.name}>{group.name}</span>
-            <span class="gcount">{group.count}</span>
-          </div>
-          <div class="rows" role="table">
-            <div class="row head" role="row">
-              <span role="columnheader">No.</span>
-              <span class="num" role="columnheader">W × H</span>
-              <span class="num" role="columnheader">Area</span>
+      {#if !hasPieces}
+        <p class="note">Draw a design and assign glass to build the cutting list.</p>
+      {:else}
+        {#each report.cutting as group (group.glassId ?? '?')}
+          <div
+            class="glass-group"
+            role="group"
+            onmouseenter={() => onHighlight(group.pieceIds)}
+            onmouseleave={onClearHighlight}
+          >
+            <div class="glass-head">
+              <span
+                class="swatch"
+                style:background={group.color ?? 'transparent'}
+                class:empty={!group.color}
+              ></span>
+              <span class="code">{group.code}</span>
+              <span class="gname" title={group.name}>{group.name}</span>
+              <span class="gcount">{group.count}</span>
             </div>
-            {#each sortedRows(group) as row (row.contentId)}
-              <div
-                class="row"
-                role="row"
-                tabindex="0"
-                onmouseenter={() => onHighlight([row.pieceId])}
-                onfocus={() => onHighlight([row.pieceId])}
-              >
-                <span class="label" role="cell">{row.label || '—'}</span>
-                <span class="num" role="cell">
-                  {formatLength(row.widthMm, unit)} × {formatLength(row.heightMm, unit)}
-                </span>
-                <span class="num" role="cell" class:degenerate={row.degenerate}>
-                  {formatArea(row.areaMm2, unit)}
-                </span>
+            <div class="rows" role="table">
+              <div class="row head" role="row">
+                <span role="columnheader">No.</span>
+                <span class="num" role="columnheader">W × H</span>
+                <span class="num" role="columnheader">Area</span>
               </div>
-            {/each}
+              {#each sortedRows(group) as row (row.contentId)}
+                <div
+                  class="row"
+                  role="row"
+                  tabindex="0"
+                  onmouseenter={() => onHighlight([row.pieceId])}
+                  onfocus={() => onHighlight([row.pieceId])}
+                >
+                  <span class="label" role="cell">{row.label || '—'}</span>
+                  <span class="num" role="cell">
+                    {formatLength(row.widthMm, unit)} × {formatLength(row.heightMm, unit)}
+                  </span>
+                  <span class="num" role="cell" class:degenerate={row.degenerate}>
+                    {formatArea(row.areaMm2, unit)}
+                  </span>
+                </div>
+              {/each}
+            </div>
+            <dl class="subtotal">
+              <div>
+                <dt>Subtotal</dt>
+                <dd>{formatArea(group.netAreaMm2, unit)}</dd>
+              </div>
+              <div>
+                <dt>Buy (+{pct(factors.glassWaste)}%)</dt>
+                <dd>{formatAreaLarge(group.buyAreaMm2, unit)}</dd>
+              </div>
+            </dl>
           </div>
-          <dl class="subtotal">
-            <div>
-              <dt>Subtotal</dt>
-              <dd>{formatArea(group.netAreaMm2, unit)}</dd>
-            </div>
-            <div>
-              <dt>Buy (+{pct(factors.glassWaste)}%)</dt>
-              <dd>{formatAreaLarge(group.buyAreaMm2, unit)}</dd>
-            </div>
-          </dl>
-        </div>
-      {/each}
-    {/if}
-  </section>
+        {/each}
+      {/if}
+    </section>
+  {/if}
 
   <!-- Bill of materials -->
-  {#if hasPieces}
+  {#if showMaterials && hasPieces}
     <section>
       <span class="eyebrow">Bill of materials</span>
 

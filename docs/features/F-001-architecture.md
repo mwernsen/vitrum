@@ -116,3 +116,48 @@ done. The KiCad-style four-region chrome now hosts later features without rework
 _Follow-up:_ the shell shipped with placeholder styling, before the Vitrum Design
 System existed. F-004 vendors the design system and restyles this shell to the
 `ui_kits/studio` Chrome (56px top bar, 220px sidebar, warm-paper neutrals).
+
+### Cockpit v2 rework (2026-07-30)
+
+Implements the `Vitrum Cockpit v2.dc.html` design from the **Vitrum Editor Usability
+Rework** design project (`26edf29b-099e-46cc-96df-2179b895feb2`). No functional
+requirements changed — this moves existing features to the surface that fits them, so
+each feature's own spec keeps its FRs and this section is the record of where its UI now
+lives. The shell is three grid rows (`menu` / `body` / `status`), not four.
+
+**What moved, and why**
+
+| Feature                                                                 | Was                                         | Now                                                                                                                   |
+| ----------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| F-011/013/023/032 tools                                                 | floating `Toolbar` over the canvas          | `DrawPanel` tool grid in the **Draw** dock section, with the shortcut each tool really has and a one-line hint        |
+| F-012 snapping                                                          | `SnapSettings` popover on a status-bar chip | **Draw** section: master switch, six kind chips, grid-spacing readout, guide visibility                               |
+| F-052 symmetry, F-051 tracing                                           | `LayersPanel` ("Layers" dock section)       | **Draw** section — they are geometry aids, not layers                                                                 |
+| overlay visibility                                                      | `LayersPanel` rows                          | `OverlaysChip` on the canvas bottom-left, reporting "n/5"                                                             |
+| F-021 technique                                                         | bottom of `LayersPanel`                     | `TechniqueChip` in the top bar — a document-level decision, so it reads out beside the document name                  |
+| F-030/031 checks                                                        | `RulesPanel` list                           | same panel restructured as a queue: a "Fix next" card, then severity filter chips                                     |
+| readiness                                                               | 44px `ReadinessStrip` under the top bar     | `ReadinessMeter` — one segmented meter in the top bar, with the four steps and their jump-to actions in a popover     |
+| F-042 cutting list / BOM, F-056 quote breakdown                         | narrow panels in the dock                   | `OutputDrawer` under the stage (`CutListTable`, `BomPanel sections="materials"`, `QuoteTable`), where the columns fit |
+| F-040 cartoon legend, F-053 backlight, F-054 light, F-057 nest controls | floating cards / `LayersPanel`              | the inspector, beside the view each belongs to                                                                        |
+| zoom · fit · 1:1 · calibrate                                            | status-bar chips                            | `ViewportChip` on the canvas corner they act on                                                                       |
+
+The old `Toolbar`, `SnapSettings`, `LayersPanel`, `CartoonLegend`, `LightControls` and
+`ReadinessStrip` components are gone; their tests moved to `DrawPanel.test.ts`,
+`DrawPanel.reference.test.ts`, `Inspector.render.backlight.test.ts` and
+`ReadinessMeter.test.ts`. Dock sections are renamed after the task, not the feature:
+`layers → draw`, `rules → check`, `versions → history` (`shell/dock.ts`). The inspector
+no longer collapses — with nothing selected it carries the active view's context, so the
+right column is never dead space.
+
+**Two things the design implies that the code does not fake.** The design's document chip
+has a chevron suggesting a document menu; there is no panel-library feature yet, so the
+chip is a static name + save-state dot. The design's "Grid spacing 10 mm" reads like a
+setting; the canvas grid is derived from zoom (`gridStep`), so it renders as a readout of
+the spacing actually in force rather than an input that would not bind to anything.
+
+**Two fixes the rework surfaced.** `ViewportController` latched its initial zoom-to-fit on
+the first measurement, which the new stage layout could deliver before the flex box had
+settled — it now re-frames on every measurement until the user first pans or zooms
+(`#userMoved`), so the opening view is right and a window resize keeps the panel framed.
+And `.shell`'s implicit `auto` grid column sized to the top bar's max-content width,
+pushing the inspector off-screen; it is now `minmax(0, 1fr)`, with the view switcher
+falling back to icon-only pills below 1400px.

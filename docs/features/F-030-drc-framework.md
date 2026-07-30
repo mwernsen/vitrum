@@ -158,3 +158,6 @@ Delivered on branch `f-030-drc-framework` (2026-07-19).
   `components/`/`ui_kits` asset).
 - The canvas violation markers are a manual/gallery check (pixels aren't asserted in E2E).
 - Quick-fix currently has one variant (weld); F-031/F-032 will add more via the same seam.
+
+_Cockpit v2 (2026-07-30):_ the `rules` section is now **Check**, restructured as a queue (a "Fix next" card plus severity filter chips), and the readiness strip became the top-bar `ReadinessMeter`. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

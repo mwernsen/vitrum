@@ -35,6 +35,8 @@ function launch(): Promise<ElectronApplication> {
 // (userData) across an app relaunch — the copy-on-write + self-contained-persistence mechanism.
 test('glass catalog: starter loads, search filters, new glass persists across relaunch', async () => {
   let window = await app.firstWindow()
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const palette = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette).toBeVisible()
 
@@ -63,6 +65,7 @@ test('glass catalog: starter loads, search filters, new glass persists across re
   await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
   app = await launch()
   window = await app.firstWindow()
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const palette2 = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette2.getByText('My studio blue')).toBeVisible()
   await expect(palette2.getByTestId('glass-count')).toHaveText('61 of 61')

@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { closeReadiness, readinessRow } from './readiness'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath: string
@@ -38,7 +40,7 @@ test.afterEach(async () => {
 
 // Drives F-023 end to end: draw a closed border (one piece), pick a glass from the palette dock
 // (auto-imported into the project by value), paint the piece, then save and reopen the file — the
-// colour survives the round-trip (FR-5), read from the readiness strip's glass indicator.
+// colour survives the round-trip (FR-5), read from the readiness meter's glass step.
 test('paint a piece, then reload the file with the colour intact', async () => {
   const window = await app.firstWindow()
   const canvas = window.getByRole('main', { name: 'Design canvas' })
@@ -46,27 +48,33 @@ test('paint a piece, then reload the file with the colour intact', async () => {
   const box = (await canvas.boundingBox())!
   const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
 
-  const glassReadiness = window.getByTestId('glass-readiness')
-  const palette = window.getByRole('region', { name: 'Glass palette' })
-  await expect(palette).toBeVisible()
-
   // Closed rectangular border → one (unassigned) piece.
   await window.getByRole('button', { name: 'Panel border' }).click()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
-  await expect(glassReadiness).toContainText('1 left')
+
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
+  const palette = window.getByRole('region', { name: 'Glass palette' })
+  await expect(palette).toBeVisible()
+  await expect(await readinessRow(window, 'Every piece has glass')).toContainText('0 of 1 painted')
+  await closeReadiness(window)
 
   // Pick a glass: selecting a library swatch imports a project copy and enters paint mode.
   await palette.locator('button.glass').first().click()
 
   // Paint the piece: click inside the border.
   await window.mouse.click(...at(240, 210))
-  await expect(glassReadiness).toContainText('100%')
+  const painted = async () =>
+    expect(await readinessRow(window, 'Every piece has glass')).toContainText('1 of 1 painted')
+  await painted()
+  await closeReadiness(window)
 
   // Save to a file, then reopen it: the assignment survives the serialize/deserialize round-trip.
   await window.keyboard.press('Control+s')
-  await expect(glassReadiness).toContainText('100%')
+  await painted()
+  await closeReadiness(window)
   await window.keyboard.press('Control+o')
-  await expect(glassReadiness).toContainText('100%')
+  await painted()
 })

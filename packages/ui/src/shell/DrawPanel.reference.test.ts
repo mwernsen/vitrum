@@ -6,7 +6,7 @@ import { ViewportController } from '../canvas/viewport.svelte'
 import type { OpenedImage } from '../document/host'
 import { ReferenceController } from '../reference/controller.svelte'
 
-import LayersPanel from './LayersPanel.svelte'
+import DrawPanel from './DrawPanel.svelte'
 
 /** Build a reference controller (real store, stubbed image pipeline) with `count` layers. */
 async function withLayers(count: number) {
@@ -28,17 +28,17 @@ async function withLayers(count: number) {
   return controller
 }
 
-describe('LayersPanel — reference images (F-051)', () => {
+describe('DrawPanel — tracing underlay (F-051)', () => {
   it('lists reference layers and fires the add-image action', async () => {
     const controller = await withLayers(2)
     const onAddReference = vi.fn()
-    render(LayersPanel, {
+    render(DrawPanel, {
       viewport: new ViewportController(),
       reference: controller,
       onAddReference,
     })
 
-    expect(screen.getByText('Reference images')).toBeInTheDocument()
+    expect(screen.getByText('Tracing')).toBeInTheDocument()
     expect(screen.getByText('photo-0')).toBeInTheDocument()
     expect(screen.getByText('photo-1')).toBeInTheDocument()
 
@@ -48,16 +48,26 @@ describe('LayersPanel — reference images (F-051)', () => {
 
   it('toggles a layer visibility through the eye button', async () => {
     const controller = await withLayers(1)
-    render(LayersPanel, { viewport: new ViewportController(), reference: controller })
+    render(DrawPanel, { viewport: new ViewportController(), reference: controller })
 
     expect(controller.layers[0]!.visible).toBe(true)
     await fireEvent.click(screen.getByRole('button', { name: /hide layer/i }))
     expect(controller.layers[0]!.visible).toBe(false)
   })
 
-  it('shows the placeholder when no reference controller is provided', () => {
-    render(LayersPanel, { viewport: new ViewportController() })
-    expect(screen.getByText('Reference photo')).toBeInTheDocument()
-    expect(screen.queryByText('Reference images')).not.toBeInTheDocument()
+  it('drives the opacity of the topmost layer with no explicit selection', async () => {
+    const controller = await withLayers(1)
+    render(DrawPanel, { viewport: new ViewportController(), reference: controller })
+
+    const slider = screen.getByLabelText('Reference opacity') as HTMLInputElement
+    await fireEvent.input(slider, { target: { value: '40' } })
+    expect(controller.layers[0]!.opacity).toBeCloseTo(0.4, 5)
+  })
+
+  it('says so when there is nothing to trace yet', async () => {
+    const controller = await withLayers(0)
+    render(DrawPanel, { viewport: new ViewportController(), reference: controller })
+    expect(screen.getByText(/No reference images/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Reference opacity')).not.toBeInTheDocument()
   })
 })

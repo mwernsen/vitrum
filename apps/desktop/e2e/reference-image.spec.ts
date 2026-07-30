@@ -48,8 +48,8 @@ test('adds a reference image underlay and embeds it in the zip container', async
   const window = await app.firstWindow()
   await expect(window.getByRole('main', { name: 'Design canvas' })).toBeVisible()
 
-  // Open the Layers dock section from the activity rail (the sole panel switcher).
-  await window.getByRole('button', { name: 'Layers' }).click()
+  // Open the Draw dock section from the activity rail — tracing is a drawing aid (Cockpit v2).
+  await window.getByRole('button', { name: 'Draw' }).click()
 
   // Add the reference image; the layer row appears once decode/downscale/embed completes.
   await window.getByRole('button', { name: /add image/i }).click()

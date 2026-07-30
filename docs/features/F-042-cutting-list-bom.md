@@ -167,3 +167,6 @@ is unchanged; the dialog composes `BomController`. See F-043 Implementation note
   builds on this BOM (F-056).
 - The autosave path does not run the save-time normalisers (shared F-023/F-040 caveat); the BOM reads
   live derived data so it is always current on screen regardless.
+
+_Cockpit v2 (2026-07-30):_ the cutting list and BOM moved out of the dock into the `OutputDrawer` under the stage, where the table columns fit (`CutListTable`; `BomPanel` now takes a `sections` prop). See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

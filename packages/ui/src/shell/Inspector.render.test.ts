@@ -55,7 +55,7 @@ describe('Inspector — per-piece texture placement (F-053)', () => {
       pieces,
       doc: ctrl.doc,
       execute: (c) => ctrl.execute(c),
-      renderActive: false,
+      viewMode: 'design' as const,
     })
     expect(screen.queryByLabelText('Rotation (deg)')).not.toBeInTheDocument()
   })
@@ -70,7 +70,7 @@ describe('Inspector — per-piece texture placement (F-053)', () => {
       pieces,
       doc: ctrl.doc,
       execute: (c: Command) => ctrl.execute(c),
-      renderActive: true,
+      viewMode: 'render' as const,
     })
     const view = render(Inspector, props())
     const key = pieceKey(left)

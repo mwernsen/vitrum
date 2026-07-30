@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { closeReadiness, readinessRow } from './readiness'
+
 let app: ElectronApplication
 let runId = 0
 
@@ -19,7 +21,7 @@ test.afterEach(async () => {
 })
 
 // Drives F-030 end to end: draw a panel that breaks two rules (an unassigned piece and a dangling
-// spur), open the Rules dock, run the checks, see the violations and the readiness pill, then waive
+// spur), open the Check dock, run the checks, see the violations and the readiness step, then waive
 // one with a note and watch the counts update live.
 test('runs checks, lists violations, and waives one with a note', async () => {
   const window = await app.firstWindow()
@@ -46,19 +48,22 @@ test('runs checks, lists violations, and waives one with a note', async () => {
   await click(360, 300)
   await dblclick(440, 380)
 
-  // Open the Rules dock and run the checks.
-  await window.getByRole('button', { name: 'Design rules' }).click()
+  // Open the Check dock and run the checks.
+  await window.getByRole('button', { name: 'Check' }).click()
   await window.getByRole('button', { name: 'Run checks' }).click()
 
-  // Both rules fire; the readiness pill counts them.
-  await expect(window.getByText('Dangling line')).toBeVisible()
-  await expect(window.getByText('Unassigned glass').first()).toBeVisible()
-  await expect(window.getByTestId('checks-readiness')).toContainText('issues')
+  // Both rules fire; the readiness meter's checks step counts them.
+  const queue = window.getByLabel('Violations')
+  await expect(queue.getByText('Dangling line')).toBeVisible()
+  // Two rows carry the phrase (the title and a message), so count rather than match one.
+  await expect(queue.getByText('Unassigned glass').first()).toBeVisible()
+  await expect(await readinessRow(window, 'Checks are clear')).toContainText('errors')
+  await closeReadiness(window)
 
-  // Waive the dangling line with a note; it leaves the active list for the excluded tab.
-  await window.getByText('Dangling line').click()
+  // Waive the dangling line with a note; it leaves the queue for the excluded tab.
+  await queue.getByText('Dangling line').click()
   await window.getByPlaceholder('Why waive? (optional)').fill('spur is intentional')
-  await window.getByRole('button', { name: 'Waive' }).click()
+  await queue.getByRole('button', { name: 'Waive' }).click()
 
   await expect(window.getByText('1 waived')).toBeVisible()
   await window.getByRole('button', { name: 'View excluded' }).click()

@@ -48,7 +48,13 @@ export class ViewportController {
   /** Cursor position in drawing-area CSS px, or `null` when the pointer is away. */
   cursorScreen = $state<Vec2 | null>(null)
 
-  #framed = false
+  /**
+   * False until the user first takes control of the view (pan, zoom, fit, 1:1, centre-on). Until
+   * then every measurement re-frames the default panel region, so the opening view is correct even
+   * when the canvas mounts before its flex/grid box has settled — and a window resize keeps the
+   * panel framed rather than stranding it off-screen.
+   */
+  #userMoved = false
 
   cursorWorld = $derived(
     this.cursorScreen ? screenToWorld(this.transform, this.cursorScreen) : null,
@@ -69,13 +75,12 @@ export class ViewportController {
     return { width: this.width, height: this.height }
   }
 
-  /** Record the measured drawing-area size; frames the default view on first measure. */
+  /** Record the measured drawing-area size, framing the default view until the user takes over. */
   resize(width: number, height: number, dpr: number): void {
     this.width = width
     this.height = height
     this.devicePixelRatio = dpr
-    if (!this.#framed && width > 0 && height > 0) {
-      this.#framed = true
+    if (!this.#userMoved && width > 0 && height > 0) {
       this.transform = fitBounds(DEFAULT_BOUNDS, this.size)
     }
   }
@@ -85,11 +90,13 @@ export class ViewportController {
   }
 
   pan(deltaX: number, deltaY: number): void {
+    this.#userMoved = true
     this.transform = panByScreen(this.transform, deltaX, deltaY)
   }
 
   /** Zoom by `factor` anchored at a screen point (defaults to the view centre). */
   zoomAt(factor: number, anchor: Vec2 = this.#center()): void {
+    this.#userMoved = true
     this.transform = zoomBy(this.transform, factor, anchor)
   }
 
@@ -103,6 +110,7 @@ export class ViewportController {
 
   /** Snap to exact 1:1 physical size, anchored at the view centre. */
   zoomToActualSize(): void {
+    this.#userMoved = true
     this.transform = scaleAround(this.transform, this.pxPerMm, this.#center())
   }
 
@@ -110,6 +118,7 @@ export class ViewportController {
    * violation (F-030 FR-2). A no-op before the canvas has a size. */
   centerOn(world: Vec2): void {
     if (this.width <= 0 || this.height <= 0) return
+    this.#userMoved = true
     const screen = worldToScreen(this.transform, world)
     const c = this.#center()
     this.transform = panByScreen(this.transform, c.x - screen.x, c.y - screen.y)
@@ -118,6 +127,7 @@ export class ViewportController {
   /** Frame `bounds` (or the default panel region when empty) with a 5% margin (FR-5). */
   zoomToFit(bounds: BBox | null): void {
     if (this.width <= 0 || this.height <= 0) return
+    this.#userMoved = true
     this.transform = fitBounds(bounds ?? DEFAULT_BOUNDS, this.size)
   }
 

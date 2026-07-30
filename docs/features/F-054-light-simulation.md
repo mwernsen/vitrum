@@ -245,3 +245,6 @@ gallery pass. The GL path runs only in the E2E (the F-030 file:// lesson); jsdom
   the floating light-controls card (paper card, tokens only, `.stage`-anchored like the Toolbar).
 - `light.spec.ts` updated: asserts the floating `Light controls` card appears on entering the light
   view (was: the dock section opens).
+
+_Cockpit v2 (2026-07-30):_ the floating `LightControls` card was folded into the inspector's light-view context. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

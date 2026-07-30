@@ -234,3 +234,6 @@ blob:` to the CSP in `apps/desktop/src/renderer/index.html`.
 - **Version-row action buttons now use the design-system `Tooltip`** (Restore this version / Open a
   copy / Rename version / Delete version), replacing the reliance on the native `title` attribute
   (which is suppressed via `title={undefined}` on the wrapped `IconButton`s so tooltips don't double).
+
+_Cockpit v2 (2026-07-30):_ the `versions` dock section is now named **History**. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.
