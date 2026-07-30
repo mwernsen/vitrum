@@ -38,8 +38,11 @@
     transition: opacity var(--dur-fast) var(--ease-out);
   }
 
+  /* Keyboard focus reveals the tip, but a *click* must not pin it: `:focus-within` kept the tip up
+     after clicking an activity-rail button, since the button stays focused. `:focus-visible` is set
+     for keyboard focus only, so tabbing still shows the tip and clicking leaves it to `:hover`. */
   .tooltip:hover .tip,
-  .tooltip:focus-within .tip {
+  .tooltip:has(:focus-visible) .tip {
     opacity: 1;
     visibility: visible;
   }

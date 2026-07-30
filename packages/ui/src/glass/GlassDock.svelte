@@ -96,7 +96,10 @@
   )
 </script>
 
-<aside class="dock" aria-label="Glass">
+<!-- A plain container, not a landmark: the enclosing DockPanel is the `complementary "Panel dock"`
+     region and its header carries the section name, so a nested aside labelled "Glass" only
+     duplicated it. -->
+<div class="dock">
   {#if selectedGlass}
     <div class="selected" aria-label="Selected glass">
       <span class="swatch" style={`background-color: ${selectedGlass.color};`} aria-hidden="true"
@@ -133,7 +136,7 @@
       onSelect(glass, glassLibrary.glasses.includes(glass) ? 'library' : 'project')}
     selectedId={assignments.selectedGlassId}
   />
-</aside>
+</div>
 
 <style>
   /* Content-only: the enclosing DockPanel (Portal cockpit "2b") owns the column chrome

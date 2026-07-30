@@ -306,8 +306,10 @@
     out.height = contentCanvas.height
     const ctx = out.getContext('2d')
     if (!ctx || typeof out.toBlob !== 'function') return null
-    // The light view is a dark stage, so the snapshot grounds on black; other views on white.
-    ctx.fillStyle = lightMode ? '#000000' : '#ffffff'
+    // The light view is a dark stage, so the snapshot grounds on the dark stage token; other views
+    // on paper. Snapshot chrome, hence token-sourced (CLAUDE.md canvas boundary rule).
+    const ground = palette ?? readCanvasPalette(stackEl)
+    ctx.fillStyle = lightMode ? ground.snapshotGroundDark : ground.snapshotGround
     ctx.fillRect(0, 0, out.width, out.height)
     if (lightMode) {
       const gl = stackEl?.querySelector('canvas.light-render') as HTMLCanvasElement | null
