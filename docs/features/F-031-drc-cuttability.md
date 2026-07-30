@@ -157,3 +157,6 @@ Delivered on branch `f-031-drc-cuttability` (2026-07-19).
 - `concave-notch` "split piece here" quick-fix deferred to its own ticket (open question 2).
 - Enclosed-hole (internal-cut) cuttability and a ring-saw/waterjet "cutting capability" profile that
   relaxes the rules remain backlog, as scoped.
+
+_Cockpit v2 (2026-07-30):_ the rule-settings sheet now opens from the **Check** section's gear. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

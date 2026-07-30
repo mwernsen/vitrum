@@ -43,6 +43,9 @@ test('render view: switch live, edit in render mode, export a PNG snapshot', asy
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
+
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const paletteRegion = window.getByRole('region', { name: 'Glass palette' })
   await paletteRegion.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
@@ -69,8 +72,10 @@ test('render view: switch live, edit in render mode, export a PNG snapshot', asy
   const glass = window.locator('canvas.glass-render')
   await expect(glass).toBeVisible()
 
-  // FR-3: edit the geometry while in render mode — a division line adds one segment live. Use the
-  // Line toolbar button (which also exits the paint mode left active from painting above).
+  // FR-3: edit the geometry while in render mode — a division line adds one segment live. The tools
+  // live in the Draw section (Cockpit v2), which stays available in the render view because render
+  // is editable; picking Line also exits the paint mode left active from painting above.
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
   await window.getByRole('button', { name: 'Line (L)', exact: true }).click()
   await window.mouse.click(...at(240, 140))
   await window.mouse.dblclick(...at(240, 280))

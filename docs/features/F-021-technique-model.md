@@ -176,3 +176,6 @@ shift with technique and with a heavy perimeter-came override (border-adjacent p
 model; DRC consuming these thresholds (F-031/F-032); reinforcement bars (F-032); numeric inputs
 in `TechniquePanel`/inspector commit per keystroke (extra undo entries) — could debounce/commit
 on blur.
+
+_Cockpit v2 (2026-07-30):_ the technique control moved from the bottom of the old Layers panel into the top-bar `TechniqueChip`. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

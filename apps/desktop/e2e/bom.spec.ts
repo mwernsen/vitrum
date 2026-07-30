@@ -55,26 +55,36 @@ test('exports the cutting list & BOM as PDF and CSV via the Export dialog', asyn
   const box = (await canvas.boundingBox())!
   const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
 
-  const palette = window.getByRole('region', { name: 'Glass palette' })
-  await expect(palette).toBeVisible()
-
   // Closed rectangular border → one piece.
   await window.getByRole('button', { name: 'Panel border' }).click()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
 
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
+  const palette = window.getByRole('region', { name: 'Glass palette' })
+  await expect(palette).toBeVisible()
+
   // Pick a glass and paint the piece.
   await palette.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Open the Manufacturing dock and number the pieces.
-  await window.getByRole('button', { name: 'Manufacturing' }).click()
+  // Open the Make dock and number the pieces.
+  await window.getByRole('button', { name: 'Make' }).click()
   await window.getByRole('button', { name: 'Renumber' }).click()
 
-  // The cutting list is live in the panel (a working view — no export buttons here any more).
-  await expect(window.getByText('Cutting list')).toBeVisible()
+  // Cockpit v2: the cutting list opens in the bench-outputs drawer under the stage, where the table
+  // columns fit. Still a working view — the export buttons live in the Export dialog.
+  await window.getByRole('button', { name: 'Cutting list & BOM' }).click()
+  const drawer = window.getByRole('region', { name: 'Bench outputs' })
+  await expect(drawer.getByRole('table', { name: 'Cutting list' })).toBeVisible()
   await expect(window.getByRole('button', { name: 'PDF…' })).toHaveCount(0)
+
+  // The materials tab carries the BOM the drawer's cutting list does not.
+  await drawer.getByRole('tab', { name: 'Bill of materials' }).click()
+  await expect(drawer.getByText('Panel weight')).toBeVisible()
+  await drawer.getByRole('button', { name: 'Close bench outputs' }).click()
 
   // Export routes through the single Export dialog opened from the top bar.
   const openExport = window.getByRole('button', { name: 'Export' })

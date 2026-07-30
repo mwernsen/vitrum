@@ -56,7 +56,7 @@ test('draws a panel of border, lines, an arc and a bézier', async () => {
   await click(280, 140)
   await dblclick(340, 180)
 
-  await expect(window.getByText('Unsaved')).toBeVisible()
+  await expect(window.getByLabel('Unsaved changes')).toBeVisible()
 
   // The document now holds 4 (border) + 2 (line) + 1 (arc) + 1 (bézier) = 8 segments.
   await window.keyboard.press('Control+k')

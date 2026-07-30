@@ -182,3 +182,6 @@ seam decisions (A–F below) were approved by Mathieu before coding.
   (F-041/F-042); curve-aware hinge tracing beyond near-straight segments.
 - Net-new UI to back-port to the design projects: the **reinforcement toolbar tool**, its **canvas
   bar rendering**, and the **Inspector bar panel** (added to the F-030/F-023 back-port list).
+
+_Cockpit v2 (2026-07-30):_ the reinforcement tool moved from the floating `Toolbar` into the **Draw** dock section's tool grid. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

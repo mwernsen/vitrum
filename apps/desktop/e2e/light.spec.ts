@@ -43,17 +43,21 @@ test('light view: switch live, scrub a season, capture a photo', async () => {
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
+
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const paletteRegion = window.getByRole('region', { name: 'Glass palette' })
   await paletteRegion.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Switch to the Light view: the volumetric WebGL layer goes live and the floating light controls
-  // card appears (F-054 controls float over the canvas in the light view, not in the dock).
+  // Switch to the Light view: the volumetric WebGL layer goes live and the sun controls appear in
+  // the inspector (Cockpit v2 folded the floating card into the column beside the view).
   await window.getByRole('tab', { name: 'Light', exact: true }).click()
   const lightLayer = window.locator('canvas.light-render')
   await expect(lightLayer).toBeVisible()
-  await expect(window.getByRole('complementary', { name: 'Light controls' })).toBeVisible()
-  await expect(window.getByRole('tab', { name: '365 days' })).toBeVisible()
+  const inspector = window.getByRole('complementary', { name: 'Inspector' })
+  await expect(inspector).toContainText('Sunlight')
+  await expect(inspector.getByRole('tab', { name: '365 days' })).toBeVisible()
 
   // Scrub the moment via a season preset (365-days / astronomical mode).
   await window.getByRole('button', { name: 'Winter solstice' }).click()

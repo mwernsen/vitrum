@@ -157,3 +157,6 @@ a hands-on rosette check whenever desired.
   "snap to hidden guides" option could come with F-013 if requested.
 - Intersection snapping is computed over local candidates each move; if profiling later shows it
   hot on dense curved scenes, intersections could be precomputed into the index.
+
+_Cockpit v2 (2026-07-30):_ the snap controls moved from the status-bar `SnapSettings` popover into the **Draw** dock section as a master switch plus six kind chips, with a grid-spacing readout. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

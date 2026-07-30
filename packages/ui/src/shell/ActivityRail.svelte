@@ -1,8 +1,8 @@
 <script lang="ts">
   import CircleDollarSign from 'lucide-svelte/icons/circle-dollar-sign'
   import History from 'lucide-svelte/icons/history'
-  import Layers from 'lucide-svelte/icons/layers'
-  import List from 'lucide-svelte/icons/list'
+  import PenTool from 'lucide-svelte/icons/pen-tool'
+  import Scissors from 'lucide-svelte/icons/scissors'
   import Settings from 'lucide-svelte/icons/settings'
   import ShieldCheck from 'lucide-svelte/icons/shield-check'
   import SquareStack from 'lucide-svelte/icons/square-stack'
@@ -16,59 +16,53 @@
     active: DockSection
     /** Select a dock section. */
     onSelect: (section: DockSection) => void
-    /** Count of pieces with no glass (F-023) — surfaced as the "rules" attention badge for now. */
+    /** Open design-rule violations (F-030) — the count badged on "Check". */
     attentionCount?: number
   }
 
   let { active, onSelect, attentionCount = 0 }: Props = $props()
 
-  // Rail items. `section` links to a live dock section; placeholder items (versions/settings)
-  // have no section and are disabled until their feature lands.
-  type RailItem = {
-    label: string
-    icon: typeof Layers
-    section?: DockSection
-    /** Roadmap feature that will enable a placeholder item. */
-    feature?: string
-  }
-
-  const items: RailItem[] = [
-    { label: 'Layers', icon: Layers, section: 'layers' },
-    { label: 'Glass', icon: SquareStack, section: 'glass' },
-    { label: 'Design rules', icon: ShieldCheck, section: 'rules' },
-    { label: 'Manufacturing', icon: List, section: 'make' },
-    { label: 'Cost & quote', icon: CircleDollarSign, section: 'cost' },
-    { label: 'Versions', icon: History, section: 'versions' },
+  // Rail items carry the *task* name, not the feature name, and repeat it under the icon: at 66px
+  // there is room for the word, and a labelled rail needs no tooltip-hunting to learn.
+  const items: { id: DockSection; label: string; icon: typeof PenTool }[] = [
+    { id: 'draw', label: 'Draw', icon: PenTool },
+    { id: 'glass', label: 'Glass', icon: SquareStack },
+    { id: 'check', label: 'Check', icon: ShieldCheck },
+    { id: 'make', label: 'Make', icon: Scissors },
+    { id: 'cost', label: 'Cost', icon: CircleDollarSign },
+    { id: 'history', label: 'History', icon: History },
   ]
+
+  // Two digits is the honest ceiling for a rail badge; past that the count stops being scannable.
+  const badge = $derived(attentionCount > 99 ? '99+' : String(attentionCount))
 </script>
 
 <nav class="rail" aria-label="Workspace sections">
-  {#each items as item (item.label)}
+  {#each items as item (item.id)}
     {@const Icon = item.icon}
-    {@const disabled = !item.section}
-    <Tooltip
-      label={disabled ? `${item.label} (coming with ${item.feature})` : item.label}
-      side="right"
+    <button
+      class="rail-btn"
+      class:active={item.id === active}
+      aria-pressed={item.id === active}
+      aria-label={item.label}
+      onclick={() => onSelect(item.id)}
     >
-      <button
-        class="rail-btn"
-        class:active={item.section === active}
-        aria-pressed={item.section === active}
-        aria-label={item.label}
-        {disabled}
-        onclick={() => item.section && onSelect(item.section)}
-      >
-        <Icon size={19} strokeWidth={1.6} />
-        {#if item.section === 'rules' && attentionCount > 0}
-          <span class="badge" aria-hidden="true"></span>
+      <span class="ic">
+        <Icon size={18} strokeWidth={1.6} />
+        {#if item.id === 'check' && attentionCount > 0}
+          <span class="badge" data-testid="check-badge">{badge}</span>
         {/if}
-      </button>
-    </Tooltip>
+      </span>
+      <span class="label">{item.label}</span>
+    </button>
   {/each}
 
+  <span class="spacer"></span>
+
   <Tooltip label="Settings (coming soon)" side="right">
-    <button class="rail-btn foot" disabled aria-label="Settings">
-      <Settings size={19} strokeWidth={1.6} />
+    <button class="rail-btn" disabled aria-label="Settings">
+      <span class="ic"><Settings size={18} strokeWidth={1.6} /></span>
+      <span class="label">Settings</span>
     </button>
   </Tooltip>
 </nav>
@@ -76,34 +70,36 @@
 <style>
   .rail {
     grid-area: rail;
-    width: 52px;
+    /* 66px is the whole rail, gutters and border included — the shell has no global border-box. */
+    box-sizing: border-box;
+    width: 66px;
     flex: none;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 10px 0;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 6px 8px;
     background: var(--paper-100);
     border-right: 1px solid var(--border-subtle);
   }
 
   .rail-btn {
-    position: relative;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 8px 0 7px;
     border: none;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--ink-600);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     cursor: pointer;
   }
 
-  .rail-btn:hover:not(:disabled) {
+  .rail-btn:hover:not(:disabled):not(.active) {
     background: var(--paper-200);
-    color: var(--ink-800);
+    color: var(--ink-900);
   }
 
   .rail-btn.active {
@@ -112,26 +108,35 @@
   }
 
   .rail-btn:disabled {
-    opacity: 0.4;
+    color: var(--ink-500);
     cursor: not-allowed;
   }
 
-  .foot {
-    margin-top: auto;
+  .ic {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .label {
+    font: 600 10px/1 var(--font-sans);
+    letter-spacing: 0.01em;
   }
 
   .badge {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 7px;
-    height: 7px;
+    top: -5px;
+    right: -9px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
     border-radius: var(--radius-full);
     background: var(--ruby-600);
-    border: 1.5px solid var(--paper-100);
+    color: var(--paper-0);
+    font: 700 9.5px/15px var(--font-mono);
+    text-align: center;
   }
 
-  .rail-btn.active .badge {
-    border-color: var(--ink-950);
+  .spacer {
+    flex: 1;
   }
 </style>

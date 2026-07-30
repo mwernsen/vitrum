@@ -1,24 +1,30 @@
 <script lang="ts">
-  import { formatLength } from '@vitrum/core'
+  import { formatLength, type LengthUnit } from '@vitrum/core'
+  import Table from 'lucide-svelte/icons/table'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
-  import type { SnapController } from '../tools/snap.svelte'
-
-  import SnapSettings from './SnapSettings.svelte'
 
   interface Props {
     viewport: ViewportController
-    /** The snapping controller (F-012). Absent ⇒ no snap chip. */
-    snap?: SnapController
-    /** Zoom-to-fit needs document bounds, which the shell owns; wired through here. */
-    onfit?: () => void
-    /** Open the 1:1 calibration dialog. */
-    oncalibrate?: () => void
-    /** Reversible "clear all guides" command (F-012). */
-    onClearGuides?: () => void
+    /** Panel size in mm, shown in the active unit. */
+    widthMm?: number
+    heightMm?: number
+    /** What the active tool's next click does — the same line the Draw palette shows. */
+    hint?: string
+    /** Toggle the bench-outputs drawer (F-042). Absent ⇒ the button hides. */
+    onToggleDrawer?: () => void
+    /** Whether the drawer is open, so the button reads as a toggle. */
+    drawerOpen?: boolean
   }
 
-  let { viewport, snap, onfit, oncalibrate, onClearGuides }: Props = $props()
+  let {
+    viewport,
+    widthMm,
+    heightMm,
+    hint = '',
+    onToggleDrawer,
+    drawerOpen = false,
+  }: Props = $props()
 
   const coords = $derived.by(() => {
     const world = viewport.cursorWorld
@@ -27,50 +33,47 @@
     return `X ${formatLength(world.x, viewport.unit, opts)}   Y ${formatLength(world.y, viewport.unit, opts)}`
   })
 
-  const zoom = $derived(`${Math.round(viewport.zoomFactor * 100)}%`)
+  /** Panel size as one measurement with a single unit suffix, the way a maker writes it down. */
+  function size(w: number, h: number, unit: LengthUnit): string {
+    const strip = (text: string) => text.replace(/\s*(mm|in)$/, '')
+    return `${strip(formatLength(w, unit))} × ${formatLength(h, unit)}`
+  }
 </script>
 
+<!--
+  Cockpit v2 trims the status bar to a readout: coordinates and what the tool is about to do on the
+  left, the panel's size and its two global switches on the right. Grid and snapping moved to the
+  Draw section, zoom and fit to the viewport chip on the canvas they act on.
+-->
 <section class="statusbar" aria-label="Status bar">
   <div class="group">
     <span class="coords" aria-label="Cursor position">{coords}</span>
+    {#if hint}<span class="hint">{hint}</span>{/if}
   </div>
 
   <div class="group">
-    <button
-      type="button"
-      class="chip"
-      aria-pressed={viewport.gridVisible}
-      aria-label={`Grid ${viewport.gridVisible ? 'on' : 'off'}. Click to toggle.`}
-      onclick={() => viewport.toggleGrid()}
-    >
-      Grid
-    </button>
-    {#if snap}
-      <SnapSettings {snap} {viewport} {onClearGuides} />
+    {#if widthMm !== undefined && heightMm !== undefined}
+      <span class="dims" aria-label="Panel dimensions">
+        {size(widthMm, heightMm, viewport.unit)}
+      </span>
+      <span class="rule" aria-hidden="true"></span>
     {/if}
-    <button type="button" class="chip" aria-label="Zoom to fit" onclick={() => onfit?.()}>
-      Fit
-    </button>
+    {#if onToggleDrawer}
+      <button
+        type="button"
+        class="text-btn"
+        aria-pressed={drawerOpen}
+        aria-label="Cutting list"
+        onclick={() => onToggleDrawer?.()}
+      >
+        <Table size={13} />
+        Cutting list
+      </button>
+      <span class="rule" aria-hidden="true"></span>
+    {/if}
     <button
       type="button"
-      class="chip"
-      aria-label="Zoom to actual size"
-      onclick={() => viewport.zoomToActualSize()}
-    >
-      1:1
-    </button>
-    <span class="zoom" aria-label="Zoom level">{zoom}</span>
-    <button
-      type="button"
-      class="chip"
-      aria-label="Calibrate physical size"
-      onclick={() => oncalibrate?.()}
-    >
-      Calibrate
-    </button>
-    <button
-      type="button"
-      class="chip unit"
+      class="text-btn unit"
       aria-label={`Measurement unit: ${viewport.unit}. Click to switch.`}
       onclick={() => viewport.toggleUnit()}
     >
@@ -85,8 +88,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 28px;
-    padding: 0 var(--space-3);
+    height: 26px;
+    flex: none;
+    padding: 0 12px;
     background: var(--paper-50);
     border-top: 1px solid var(--border-subtle);
     font: var(--text-caption);
@@ -96,39 +100,55 @@
   .group {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-3);
+    min-width: 0;
   }
 
-  .coords,
-  .zoom {
+  .coords {
     font-family: var(--font-mono);
-    color: var(--text-body);
+    color: var(--ink-800);
+    white-space: pre;
   }
 
-  .zoom {
-    min-width: 44px;
-    text-align: right;
+  .hint {
+    font-family: var(--font-mono);
+    color: var(--ink-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .chip {
-    background: var(--paper-0);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    color: var(--text-body);
+  .dims {
+    font-family: var(--font-mono);
+    color: var(--ink-500);
+    white-space: nowrap;
+  }
+
+  .rule {
+    width: 1px;
+    height: 13px;
+    background: var(--border-subtle);
+  }
+
+  .text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    padding: 0;
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 1px 8px;
+    color: var(--ink-700);
     cursor: pointer;
   }
 
-  .chip:hover {
-    border-color: var(--border-strong);
+  .text-btn:hover {
+    color: var(--ink-950);
   }
 
-  .chip[aria-pressed='true'] {
-    background: var(--ink-950);
-    border-color: var(--ink-950);
-    color: var(--text-inverse);
+  .text-btn[aria-pressed='true'] {
+    color: var(--ink-950);
   }
 
   .unit {

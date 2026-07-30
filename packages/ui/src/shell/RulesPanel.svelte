@@ -13,7 +13,7 @@
     drc: DrcController
     /** The document, for per-rule override state (FR-4). */
     doc?: Project
-    /** Run a full check now ("Run checks"). Wired by the shell, which owns the input. */
+    /** Run a full check now. Wired by the shell, which owns the input. */
     onRun?: () => void
   }
 
@@ -22,17 +22,30 @@
   let settingsOpen = $state(false)
   // The note being typed for the selected violation's waiver.
   let waiveNote = $state('')
+  // Which severities the queue is showing. Cockpit v2: a maker fixing errors does not want the
+  // advisory notes in the way, so the filter is a first-class control rather than a rule override.
+  let shown = $state<Record<Severity, boolean>>({ error: true, warning: true, info: true })
 
   const result = $derived(drc.result)
   const counts = $derived(result.counts)
-  const total = $derived(counts.error + counts.warning + counts.info)
   const excludedCount = $derived(result.excluded.length)
+
+  const visible = $derived(result.violations.filter((v) => shown[v.severity]))
+  // The one thing to fix next: the most severe visible violation. The engine already orders
+  // violations by severity, so the head of the filtered list is it.
+  const top = $derived<Violation | null>(visible[0] ?? null)
 
   const SEVERITY_OPTIONS = [
     { label: 'Error', value: 'error' },
     { label: 'Warning', value: 'warning' },
     { label: 'Info', value: 'info' },
   ]
+
+  const filters = $derived<{ id: Severity; label: string }[]>([
+    { id: 'error', label: `${counts.error} ${counts.error === 1 ? 'error' : 'errors'}` },
+    { id: 'warning', label: `${counts.warning} ${counts.warning === 1 ? 'warning' : 'warnings'}` },
+    { id: 'info', label: `${counts.info} ${counts.info === 1 ? 'note' : 'notes'}` },
+  ])
 
   function severityVar(severity: Severity): string {
     return severity === 'error'
@@ -78,10 +91,44 @@
 </script>
 
 <div class="rules">
-  <div class="actions">
-    <button class="run" onclick={() => onRun?.()} disabled={drc.running}>
-      {drc.running ? 'Checking…' : 'Run checks'}
-    </button>
+  <!-- ── Fix next: one violation, explained, with its fix on the same card ── -->
+  {#if drc.hasRun && top && !settingsOpen && !drc.showExcluded}
+    <div class="fix-next" data-testid="fix-next" style={`--sev:${severityVar(top.severity)}`}>
+      <span class="eyebrow sev">Fix next</span>
+      <span class="fx-title">{top.title}</span>
+      <span class="fx-explain">{top.explain}</span>
+      <div class="fx-actions">
+        {#if top.quickFix}
+          <button class="primary" onclick={() => drc.applyQuickFix(top)}
+            >{top.quickFix.label}</button
+          >
+        {/if}
+        <button class="secondary" onclick={() => drc.select(top)}>Show me</button>
+        <button class="tertiary" onclick={() => drc.waive(top, '')}>Waive</button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ── Severity filters + run + rule settings ── -->
+  <div class="controls">
+    <div class="chips">
+      {#if drc.hasRun && !settingsOpen}
+        {#each filters as f (f.id)}
+          <button
+            class="chip"
+            class:off={!shown[f.id]}
+            aria-pressed={shown[f.id]}
+            onclick={() => (shown = { ...shown, [f.id]: !shown[f.id] })}
+          >
+            <span class="dot" style={`background:${severityVar(f.id)}`}></span>{f.label}
+          </button>
+        {/each}
+      {:else}
+        <button class="run" onclick={() => onRun?.()} disabled={drc.running}>
+          {drc.running ? 'Checking…' : 'Run checks'}
+        </button>
+      {/if}
+    </div>
     <button
       class="settings"
       class:on={settingsOpen}
@@ -90,24 +137,9 @@
       title="Rule settings"
       onclick={() => (settingsOpen = !settingsOpen)}
     >
-      <Settings2 size={16} strokeWidth={1.7} />
+      <Settings2 size={14} strokeWidth={1.7} />
     </button>
   </div>
-
-  {#if drc.hasRun}
-    <div class="summary" aria-label="Violation counts">
-      <span class="count" style="color:var(--ruby-600)">
-        <span class="dot" style="background:var(--ruby-600)"></span>{counts.error}
-      </span>
-      <span class="count" style="color:var(--amber-600)">
-        <span class="dot" style="background:var(--amber-600)"></span>{counts.warning}
-      </span>
-      <span class="count" style="color:var(--cobalt-600)">
-        <span class="dot" style="background:var(--cobalt-600)"></span>{counts.info}
-      </span>
-      <span class="total">{total} total</span>
-    </div>
-  {/if}
 
   {#if settingsOpen}
     <div class="settings-list">
@@ -175,7 +207,7 @@
       {:else}
         {#each result.excluded as v (v.key)}
           <div class="row excluded">
-            <span class="dot" style="background:{severityVar(v.severity)}"></span>
+            <span class="dot" style={`background:${severityVar(v.severity)}`}></span>
             <div class="body">
               <span class="title">{v.title}</span>
               {#if v.note}<span class="note">“{v.note}”</span>{/if}
@@ -190,17 +222,20 @@
       <span class="ok"><Check size={16} strokeWidth={2.4} /></span>
       <p>No issues found.</p>
     </div>
+  {:else if visible.length === 0}
+    <div class="empty"><p class="muted">Every issue is filtered out.</p></div>
   {:else}
     <div class="list" aria-label="Violations">
-      {#each result.violations as v (v.key)}
+      {#each visible as v (v.key)}
         {@const selected = drc.selectedKey === v.key}
         <div class="row" class:selected>
           <button class="head" onclick={() => selectRow(v)}>
-            <span class="dot" style="background:{severityVar(v.severity)}"></span>
+            <span class="dot" style={`background:${severityVar(v.severity)}`}></span>
             <span class="body">
               <span class="title">{v.title}</span>
               <span class="msg">{v.message}</span>
             </span>
+            <span class="where">{v.pieceIds.length > 0 ? v.pieceIds.length : '—'}</span>
           </button>
           {#if selected}
             <div class="detail">
@@ -232,6 +267,11 @@
       <button class="link" onclick={() => (drc.showExcluded = !drc.showExcluded)}>
         {drc.showExcluded ? 'Back to issues' : 'View excluded'}
       </button>
+      <span class="spacer"></span>
+      <!-- Checks run live; this forces a full pass when you want to be sure. -->
+      <button class="link" onclick={() => onRun?.()} disabled={drc.running}>
+        {drc.running ? 'Checking…' : 'Re-run'}
+      </button>
     </div>
   {/if}
 </div>
@@ -244,11 +284,118 @@
     height: 100%;
   }
 
-  .actions {
+  /* Fix next: the panel opens with one thing to do, not a wall of rows. */
+  .fix-next {
     display: flex;
-    align-items: center;
-    gap: var(--space-2);
+    flex-direction: column;
+    gap: 9px;
+    margin: 14px 14px 0;
+    padding: 13px;
+    border: 1px solid color-mix(in srgb, var(--sev) 26%, transparent);
+    background: color-mix(in srgb, var(--sev) 5%, var(--paper-0));
+    border-radius: var(--radius-md);
+  }
+
+  .eyebrow {
+    font: var(--text-eyebrow);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-eyebrow);
+    color: var(--text-muted);
+  }
+
+  .eyebrow.sev {
+    color: var(--sev);
+  }
+
+  .fx-title {
+    font: 600 13.5px/1.35 var(--font-sans);
+    color: var(--ink-950);
+  }
+
+  .fx-explain {
+    font: var(--text-small);
+    color: var(--ink-600);
+  }
+
+  .fx-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .primary {
+    padding: 6px 12px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--ink-950);
+    color: var(--paper-0);
+    font: 600 11.5px/1 var(--font-sans);
+    cursor: pointer;
+  }
+
+  .secondary {
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    color: var(--ink-800);
+    font: 600 11.5px/1 var(--font-sans);
+    cursor: pointer;
+  }
+
+  .tertiary {
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--ink-500);
+    font: 600 11.5px/1 var(--font-sans);
+    cursor: pointer;
+  }
+
+  .tertiary:hover {
+    color: var(--ink-800);
+  }
+
+  /* The filters wrap inside their own box, so the settings gear keeps its place on the first line. */
+  .controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
     padding: 12px 14px 10px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: var(--paper-0);
+    color: var(--ink-900);
+    font: 600 11.5px/1 var(--font-sans);
+    cursor: pointer;
+  }
+
+  .chip.off {
+    border-color: var(--border-subtle);
+    background: var(--paper-50);
+    color: var(--paper-400);
+  }
+
+  .spacer {
+    flex: 1;
   }
 
   .run {
@@ -257,6 +404,7 @@
     border: none;
     border-radius: var(--radius-full);
     padding: 6px 11px;
+    white-space: nowrap;
     font: 600 11.5px/1 var(--font-sans);
     cursor: pointer;
   }
@@ -267,9 +415,9 @@
   }
 
   .settings {
-    margin-left: auto;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
+    flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -284,25 +432,6 @@
     background: var(--ink-950);
     color: var(--paper-0);
     border-color: var(--ink-950);
-  }
-
-  .summary {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0 14px 10px;
-    font: 500 11.5px/1 var(--font-mono);
-  }
-
-  .count {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .total {
-    margin-left: auto;
-    color: var(--ink-500);
   }
 
   .dot {
@@ -340,6 +469,10 @@
     cursor: pointer;
   }
 
+  .head:hover {
+    background: var(--paper-50);
+  }
+
   .head .dot {
     margin-top: 5px;
   }
@@ -348,6 +481,15 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .where {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-500);
   }
 
   .title {
@@ -536,7 +678,7 @@
   .footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--space-3);
     padding: 10px 14px;
     border-top: 1px solid var(--border-subtle);
     font: var(--text-caption);
@@ -549,6 +691,12 @@
     padding: 0;
     color: var(--link);
     font: var(--text-caption);
+    white-space: nowrap;
     cursor: pointer;
+  }
+
+  .link:disabled {
+    color: var(--ink-500);
+    cursor: default;
   }
 </style>

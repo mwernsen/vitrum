@@ -34,25 +34,33 @@ test('flags an oversized panel and clears it with a reinforcement bar', async ()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   for (let i = 0; i < 12; i++) await window.keyboard.press('-')
 
-  // A big rectangular border → one large piece.
+  // A big rectangular border → one large piece. The x extents stay inside the Cockpit v2 canvas,
+  // which is narrower than before (the inspector no longer collapses); 12 zoom-outs still make this
+  // a metre-plus panel.
   await window.getByRole('button', { name: 'Panel border' }).click()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await click(120, 120)
-  await click(700, 520)
+  await click(560, 500)
 
   // Run the checks and see the reinforcement violation.
-  await window.getByRole('button', { name: 'Design rules' }).click()
+  await window.getByRole('button', { name: 'Check' }).click()
   await window.getByRole('button', { name: 'Run checks' }).click()
-  await expect(window.getByText('Needs reinforcement')).toBeVisible()
+  // Scope to the queue: Cockpit v2 also promotes the top violation into a "Fix next" card, so the
+  // title appears twice.
+  const queue = window.getByLabel('Violations')
+  await expect(queue.getByText('Needs reinforcement')).toBeVisible()
 
-  // Place a reinforcement bar spanning the panel's long (horizontal) dimension. Exact match so this
-  // targets the toolbar tool, not the violation row whose message mentions a "reinforcement bar".
-  await window.getByRole('button', { name: 'Reinforcement bar', exact: true }).click()
+  // Place a reinforcement bar spanning the panel's long (horizontal) dimension. Cockpit v2 keeps the
+  // tools in the Draw section, so come back to it first. Exact match so this targets the tool, not
+  // the violation row whose message mentions a "reinforcement bar".
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
+  await window.getByRole('button', { name: 'Reinforcement', exact: true }).click()
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-  await click(160, 320)
-  await click(660, 320)
+  await click(150, 320)
+  await click(540, 320)
 
   // Re-run: the bar braces the span, so the violation clears.
-  await window.getByRole('button', { name: 'Run checks' }).click()
+  await window.getByRole('button', { name: 'Check' }).click()
+  await window.getByRole('button', { name: 'Re-run' }).click()
   await expect(window.getByText('Needs reinforcement')).toHaveCount(0)
 })

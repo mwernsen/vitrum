@@ -205,3 +205,6 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
 - **Bake weld tolerance.** Bake welds by exact coincidence + F-020 clustering; a
   tolerance-based weld pass at bake would tidy the ≤1 ulp gaps that non-axis-aligned
   reflections can leave between sectors before F-020 clustering absorbs them.
+
+_Cockpit v2 (2026-07-30):_ the symmetry controls moved from the Layers panel into the **Draw** dock section. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

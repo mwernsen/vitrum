@@ -72,11 +72,14 @@ test('exports every document type from the single Export dialog', async () => {
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
 
-  // Paint a glass so the BOM has content, then number the pieces.
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const palette = window.getByRole('region', { name: 'Glass palette' })
+
+  // Paint a glass so the BOM has content, then number the pieces.
   await palette.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
-  await window.getByRole('button', { name: 'Manufacturing' }).click()
+  await window.getByRole('button', { name: 'Make' }).click()
   await window.getByRole('button', { name: 'Renumber' }).click()
 
   // The sidebar export buttons are gone — everything routes through the dialog.

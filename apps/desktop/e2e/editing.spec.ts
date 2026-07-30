@@ -60,7 +60,7 @@ test('reworks a drawn network without tearing a welded junction', async () => {
   // Select everything, then mirror it through the inspector — the shared junction moves as one
   // node, so the weld holds (still three distinct nodes, not four).
   await window.keyboard.press('Control+a')
-  await expect(window.getByText('2 selected')).toBeVisible()
+  await expect(window.getByLabel('Inspector').getByText('2 lines')).toBeVisible()
   await window.getByRole('button', { name: 'Mirror horizontal' }).click()
 
   palette = await openPalette()

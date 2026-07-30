@@ -217,3 +217,6 @@ was unavailable in this environment; the E2E is the stronger automated evidence.
   per-came-profile came pricing; remembering the export breakdown/image toggles across sessions.
 - Labor coefficient calibration (above), and a "confidence range" (±%) on the estimate once real hours
   exist.
+
+_Cockpit v2 (2026-07-30):_ the full quote breakdown opens as a wide `QuoteTable` in the `OutputDrawer`; the **Cost** section keeps the editing controls. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

@@ -11,10 +11,9 @@ afterEach(() => {
 })
 
 describe('StatusBar', () => {
-  it('shows placeholder coordinates and 1:1 zoom by default', () => {
+  it('shows placeholder coordinates before the pointer enters the canvas', () => {
     render(StatusBar, { viewport: new ViewportController() })
     expect(screen.getByLabelText('Cursor position')).toHaveTextContent('X — Y —')
-    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
   })
 
   it('reports the cursor position in the active unit', () => {
@@ -27,34 +26,43 @@ describe('StatusBar', () => {
     expect(screen.getByLabelText('Cursor position')).toHaveTextContent('mm')
   })
 
-  it('toggles unit and grid, and fires fit/calibrate callbacks', async () => {
+  it('shows the panel size in the active unit and switches unit', async () => {
     const user = userEvent.setup()
     const viewport = new ViewportController()
-    const onfit = vi.fn()
-    const oncalibrate = vi.fn()
-    render(StatusBar, { viewport, onfit, oncalibrate })
+    render(StatusBar, { viewport, widthMm: 300, heightMm: 400 })
+
+    expect(screen.getByLabelText('Panel dimensions')).toHaveTextContent('300.0 × 400.0 mm')
 
     await user.click(screen.getByRole('button', { name: /Measurement unit/ }))
     expect(viewport.unit).toBe('in')
-
-    await user.click(screen.getByRole('button', { name: /Grid/ }))
-    expect(viewport.gridVisible).toBe(false)
-
-    await user.click(screen.getByRole('button', { name: 'Zoom to fit' }))
-    expect(onfit).toHaveBeenCalledOnce()
-
-    await user.click(screen.getByRole('button', { name: 'Calibrate physical size' }))
-    expect(oncalibrate).toHaveBeenCalledOnce()
+    expect(screen.getByLabelText('Panel dimensions')).toHaveTextContent('11.81 × 15.75 in')
   })
 
-  it('no longer owns the overlay toggles — those moved to the Layers panel (turn-3 IA)', () => {
+  it('shows the active tool hint and toggles the bench-outputs drawer', async () => {
+    const user = userEvent.setup()
+    const onToggleDrawer = vi.fn()
+    render(StatusBar, {
+      viewport: new ViewportController(),
+      hint: 'Click two points. Hold shift for 15° increments.',
+      onToggleDrawer,
+    })
+
+    expect(screen.getByText(/Hold shift for 15°/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cutting list' }))
+    expect(onToggleDrawer).toHaveBeenCalledOnce()
+  })
+
+  it('no longer owns grid, snapping or zoom — those moved to Draw and the viewport chip', () => {
     render(StatusBar, { viewport: new ViewportController() })
-    // Glass / Pieces / Cuts visibility and the unassigned counter live in the Layers dock and
-    // the readiness strip now; the status bar keeps only cursor · grid/snap · zoom · units.
-    expect(screen.queryByRole('button', { name: /Glass/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Piece overlay/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Cut-contour/ })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('unassigned-count')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Grid/ })).toBeInTheDocument()
+    // Cockpit v2: the status bar is a readout plus the two global switches. Grid and snapping live
+    // in the Draw dock section; zoom, fit, 1:1 and calibrate on the canvas viewport chip.
+    expect(screen.queryByRole('button', { name: /^Grid/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Snapping/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zoom to fit' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Zoom level')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Calibrate physical size' }),
+    ).not.toBeInTheDocument()
   })
 })

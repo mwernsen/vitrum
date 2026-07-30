@@ -1,7 +1,7 @@
 import type { RunResult, Violation } from '@vitrum/drc'
 import { vec2 } from '@vitrum/geometry'
 import { createEmptyProject, type Command } from '@vitrum/model'
-import { fireEvent, render, screen } from '@testing-library/svelte'
+import { fireEvent, render, screen, within } from '@testing-library/svelte'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DrcController } from '../drc/controller.svelte'
@@ -50,18 +50,28 @@ const RESULT: RunResult = {
   counts: { error: 1, warning: 1, info: 0 },
 }
 
+/** The violation queue, so assertions do not collide with the "Fix next" card above it. */
+const queue = () => within(screen.getByLabelText('Violations'))
+
 describe('RulesPanel (F-030)', () => {
-  it('lists violations with severity counts and a run button', () => {
+  it('lists every violation in the queue', () => {
     const drc = makeController(RESULT)
     render(RulesPanel, { drc, doc: createEmptyProject() })
-    expect(screen.getByRole('button', { name: 'Run checks' })).toBeInTheDocument()
-    expect(screen.getByText('Near-miss joint')).toBeInTheDocument()
-    expect(screen.getByText('Unassigned glass')).toBeInTheDocument()
-    expect(screen.getByText('2 total')).toBeInTheDocument()
+    expect(queue().getByText('Near-miss joint')).toBeInTheDocument()
+    expect(queue().getByText('Unassigned glass')).toBeInTheDocument()
   })
 
-  it('runs checks when "Run checks" is clicked', async () => {
+  it('re-runs checks from the queue header', async () => {
     const drc = makeController(RESULT)
+    const onRun = vi.fn()
+    render(RulesPanel, { drc, doc: createEmptyProject(), onRun })
+    await fireEvent.click(screen.getByRole('button', { name: 'Re-run' }))
+    expect(onRun).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers "Run checks" before the first run', async () => {
+    const drc = makeController(RESULT)
+    drc.hasRun = false
     const onRun = vi.fn()
     render(RulesPanel, { drc, doc: createEmptyProject(), onRun })
     await fireEvent.click(screen.getByRole('button', { name: 'Run checks' }))
@@ -73,10 +83,10 @@ describe('RulesPanel (F-030)', () => {
     const drc = makeController(RESULT, (c) => commands.push(c))
     render(RulesPanel, { drc, doc: createEmptyProject() })
 
-    await fireEvent.click(screen.getByText('Near-miss joint'))
+    await fireEvent.click(queue().getByText('Near-miss joint'))
     // The explain text and quick-fix appear on selection.
-    expect(screen.getByText(/a hair apart/)).toBeInTheDocument()
-    await fireEvent.click(screen.getByRole('button', { name: 'Weld it' }))
+    expect(queue().getByText(/a hair apart/)).toBeInTheDocument()
+    await fireEvent.click(queue().getByRole('button', { name: 'Weld it' }))
     expect(commands.map((c) => c.kind)).toEqual(['mergeNodes'])
   })
 
@@ -85,11 +95,11 @@ describe('RulesPanel (F-030)', () => {
     const drc = makeController(RESULT, (c) => commands.push(c))
     render(RulesPanel, { drc, doc: createEmptyProject() })
 
-    await fireEvent.click(screen.getByText('Unassigned glass'))
+    await fireEvent.click(queue().getByText('Unassigned glass'))
     await fireEvent.input(screen.getByPlaceholderText('Why waive? (optional)'), {
       target: { value: 'stopper glass' },
     })
-    await fireEvent.click(screen.getByRole('button', { name: 'Waive' }))
+    await fireEvent.click(queue().getByRole('button', { name: 'Waive' }))
 
     expect(commands).toHaveLength(1)
     const doc = commands[0]!.apply(createEmptyProject())
@@ -156,5 +166,72 @@ describe('RulesPanel (F-030)', () => {
     const drc = makeController(clean)
     render(RulesPanel, { drc, doc: createEmptyProject() })
     expect(screen.getByText('No issues found.')).toBeInTheDocument()
+  })
+})
+
+// Cockpit v2 opens the panel with one thing to fix rather than a wall of rows, and lets a maker
+// clearing errors hide the advisory notes.
+describe('RulesPanel — fix next (Cockpit v2)', () => {
+  it('promotes the most severe violation, with its fix and explanation', () => {
+    const drc = makeController(RESULT)
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+
+    const card = within(screen.getByTestId('fix-next'))
+    expect(card.getByText('Near-miss joint')).toBeInTheDocument()
+    expect(card.getByText(/a hair apart/)).toBeInTheDocument()
+    expect(card.getByRole('button', { name: 'Weld it' })).toBeInTheDocument()
+  })
+
+  it('applies the promoted quick fix straight from the card', async () => {
+    const commands: Command[] = []
+    const drc = makeController(RESULT, (c) => commands.push(c))
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+
+    const card = within(screen.getByTestId('fix-next'))
+    await fireEvent.click(card.getByRole('button', { name: 'Weld it' }))
+    expect(commands.map((c) => c.kind)).toEqual(['mergeNodes'])
+  })
+
+  it('"Show me" selects the violation, which zooms the canvas to it', async () => {
+    const drc = makeController(RESULT)
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+
+    await fireEvent.click(within(screen.getByTestId('fix-next')).getByText('Show me'))
+    expect(drc.selectedKey).toBe('near-miss-joint#s1|s2')
+  })
+
+  it('hides the card once nothing is left to fix', () => {
+    const clean: RunResult = {
+      violations: [],
+      excluded: [],
+      counts: { error: 0, warning: 0, info: 0 },
+    }
+    render(RulesPanel, { drc: makeController(clean), doc: createEmptyProject() })
+    expect(screen.queryByTestId('fix-next')).not.toBeInTheDocument()
+  })
+
+  it('filters the queue by severity, and re-promotes what is left', async () => {
+    const drc = makeController(RESULT)
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+
+    // Counts read off the chips, so the filter doubles as the severity summary.
+    expect(screen.getByRole('button', { name: /1 error/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1 warning/ })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: /1 error/ }))
+    expect(queue().queryByText('Near-miss joint')).not.toBeInTheDocument()
+    expect(queue().getByText('Unassigned glass')).toBeInTheDocument()
+    // The warning is now the thing to fix next.
+    expect(within(screen.getByTestId('fix-next')).getByText('Unassigned glass')).toBeInTheDocument()
+  })
+
+  it('says so when every issue is filtered out', async () => {
+    const drc = makeController(RESULT)
+    render(RulesPanel, { drc, doc: createEmptyProject() })
+
+    await fireEvent.click(screen.getByRole('button', { name: /1 error/ }))
+    await fireEvent.click(screen.getByRole('button', { name: /1 warning/ }))
+    expect(screen.getByText('Every issue is filtered out.')).toBeInTheDocument()
+    expect(screen.queryByTestId('fix-next')).not.toBeInTheDocument()
   })
 })

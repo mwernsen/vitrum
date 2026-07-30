@@ -42,9 +42,10 @@ test('6-fold radial: draw one line → 6 replicas, undo removes all, then bake',
     await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   }
 
-  // Open the Layers dock section and turn on 6-fold radial symmetry.
-  await window.getByRole('button', { name: 'Layers', exact: true }).click()
-  await window.getByLabel('Mode', { exact: true }).selectOption('radial')
+  // Open the Draw dock section and turn on 6-fold radial symmetry. Cockpit v2 replaced the mode
+  // select with four mode buttons, so the current mode is visible without opening anything.
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
+  await window.getByRole('button', { name: 'Radial (N-fold)' }).click()
   await window.getByLabel('Radial fold count').fill('6')
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
 
@@ -58,7 +59,7 @@ test('6-fold radial: draw one line → 6 replicas, undo removes all, then bake',
   await closePalette()
 
   // Bake the live symmetry: the 5 derived replicas materialise → 6 stored segments, one undo step.
-  await window.getByRole('button', { name: 'Layers', exact: true }).click()
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
   await window.getByRole('button', { name: 'Bake symmetry' }).click()
 
   await openPalette()

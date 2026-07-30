@@ -183,3 +183,6 @@ F-030 lesson; jsdom component tests correctly no-op the renderer.
 - Per-piece texture transform inherits nothing across splits/merges (it resolves directly by content
   id, which is reload-safe); lineage inheritance like glass assignments is a possible refinement.
 - F-054 will replace the uniform backlight with the directional sun on this same pipeline.
+
+_Cockpit v2 (2026-07-30):_ the backlight sliders moved from the Layers panel into the inspector's render-view context. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

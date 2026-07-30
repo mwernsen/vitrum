@@ -50,9 +50,8 @@ test('pans, zooms and switches units through the canvas viewport', async () => {
   await canvas.hover()
   await expect(coords).toContainText('"')
 
-  // Zoom-to-fit reframes the default region without error. Scope to the status bar,
-  // since the top bar also exposes a "Zoom to fit" control.
-  const statusBar = window.getByRole('region', { name: 'Status bar' })
-  await statusBar.getByRole('button', { name: 'Zoom to fit' }).click()
+  // Zoom-to-fit reframes the default region without error. Cockpit v2 moved it onto the canvas
+  // viewport chip, next to the zoom read-out it changes.
+  await window.getByRole('button', { name: 'Zoom to fit' }).click()
   await expect(zoom).toHaveText(/%$/)
 })

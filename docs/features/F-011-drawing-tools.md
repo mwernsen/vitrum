@@ -174,3 +174,6 @@ the design-system rules; note for back-port.
   makes the document/preview content colour (`--paper-50`, tuned for the old dark surface)
   invisible on the light surface; `drawContent`/`drawToolPreview`'s `content` palette entry
   needs an ink tone. Left to the appearance change's owner to avoid clobbering their region.
+
+_Cockpit v2 (2026-07-30):_ the tool palette moved from a floating `Toolbar` into the **Draw** dock section (`DrawPanel`), which shows each tool's real shortcut and a one-line hint. See the "Cockpit v2 rework" section of
+[F-001](F-001-architecture.md) for the full shell IA.

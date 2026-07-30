@@ -1,118 +1,115 @@
 <script lang="ts">
-  import type { Command, Project } from '@vitrum/model'
   import type { Snippet } from 'svelte'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { ReferenceController } from '../reference/controller.svelte'
+  import type { ToolController } from '../tools/controller.svelte'
+  import type { PaintController } from '../tools/paint.svelte'
+  import type { ReinforcementController } from '../tools/reinforcement.svelte'
+  import type { SnapController } from '../tools/snap.svelte'
   import type { SymmetryController } from '../tools/symmetry.svelte'
 
   import { DOCK_SECTIONS, type DockSection } from './dock'
-  import LayersPanel from './LayersPanel.svelte'
+  import DrawPanel from './DrawPanel.svelte'
 
   interface Props {
     /** The open section, chosen from the activity rail (the sole switcher — no tabs here). */
     section: DockSection
-    /** Viewport, for the Layers panel's overlay toggles. */
+    /** A mono one-liner for the section header: the count that section is about. */
+    meta?: string
     viewport: ViewportController
-    /** Document, for the Layers panel's global technique control (F-021). */
-    doc?: Project
-    /** Command sink for technique edits. */
-    execute?: (command: Command) => void
-    /** Live glass content (F-022/F-023), rendered when the glass section is open. */
-    glass?: Snippet
-    /** Live rules content (F-030), rendered when the rules section is open. */
-    rules?: Snippet
-    /** Live manufacturing content (F-040 numbering), rendered when the make section is open. */
-    make?: Snippet
-    /** Live cost / quote content (F-056), rendered when the cost section is open. */
-    cost?: Snippet
-    /** Live version-history content (F-055), rendered when the versions section is open. */
-    versions?: Snippet
-    /** The reference-image underlay controller (F-051), for the Layers panel. */
+    /** Drawing tools (F-011), for the Draw section's palette. */
+    tools?: ToolController
+    /** Paint / piece-select (F-023). */
+    paint?: PaintController
+    /** Reinforcement bars (F-032). */
+    reinforce?: ReinforcementController
+    /** Snapping (F-012). */
+    snap?: SnapController
+    /** Reversible "clear all guides" command (F-012). */
+    onClearGuides?: () => void
+    /** Live symmetry (F-052). */
+    symmetry?: SymmetryController
+    /** The reference-image underlay (F-051). */
     reference?: ReferenceController
     /** Trigger the host's image picker to add a reference layer (F-051). */
     onAddReference?: () => void
-    /** The live-symmetry controller (F-052), for the Layers panel. */
-    symmetry?: SymmetryController
-    /** Whether the realistic render view (F-053) is active — reveals the backlight controls. */
-    renderActive?: boolean
+    /** False in the read-only views — the Draw section hides its editing aids. */
+    editable?: boolean
+    /** Return to the design view from a read-only one. */
+    onEnterDesign?: () => void
+    /** Live glass content (F-022/F-023). */
+    glass?: Snippet
+    /** Live design-rule content (F-030/F-031). */
+    check?: Snippet
+    /** Live manufacturing content (F-040 numbering + bench-output links). */
+    make?: Snippet
+    /** Live cost / quote content (F-056). */
+    cost?: Snippet
+    /** Live version-history content (F-055). */
+    history?: Snippet
   }
 
   let {
     section,
+    meta = '',
     viewport,
-    doc,
-    execute,
-    glass,
-    rules,
-    make,
-    cost,
-    versions,
+    tools,
+    paint,
+    reinforce,
+    snap,
+    onClearGuides,
+    symmetry,
     reference,
     onAddReference,
-    symmetry,
-    renderActive = false,
+    editable = true,
+    onEnterDesign,
+    glass,
+    check,
+    make,
+    cost,
+    history,
   }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
 
-  // Placeholder section scaffolds — the as-designed structure of an unbuilt panel (turn 3
-  // 3d/3e), shown disabled so the shell reads complete without faking data. All sections are
-  // live today; kept for any future placeholder section.
-  const scaffolds: Record<string, { note: string; sections?: string[]; actions?: string[] }> = {}
-  const scaffold = $derived(scaffolds[section])
+  // Draw sets its own 14px gutters and Check owns a sticky footer plus an inner scroller, so the
+  // dock hands both of them the bare box. Everything else gets the standard dock padding.
+  const bleed = $derived(section === 'draw' || section === 'check')
 </script>
 
 <aside class="dock" aria-label="Panel dock">
   <div class="header">
     <span class="title">{current.label}</span>
+    <span class="spacer"></span>
+    {#if meta}<span class="meta">{meta}</span>{/if}
   </div>
 
-  <div class="body" class:flush={section === 'rules'}>
-    {#if section === 'layers'}
-      <LayersPanel
+  <div class="body" class:bleed class:own-scroll={section === 'check'}>
+    {#if section === 'draw'}
+      <DrawPanel
         {viewport}
-        {doc}
-        {execute}
+        {tools}
+        {paint}
+        {reinforce}
+        {snap}
+        {onClearGuides}
+        {symmetry}
         {reference}
         {onAddReference}
-        {symmetry}
-        {renderActive}
+        {editable}
+        {onEnterDesign}
       />
     {:else if section === 'glass'}
       {@render glass?.()}
-    {:else if section === 'rules'}
-      {@render rules?.()}
+    {:else if section === 'check'}
+      {@render check?.()}
     {:else if section === 'make'}
       {@render make?.()}
     {:else if section === 'cost'}
       {@render cost?.()}
-    {:else if section === 'versions'}
-      {@render versions?.()}
-    {:else if scaffold}
-      <div class="placeholder">
-        {#if scaffold.actions}
-          <div class="actions">
-            {#each scaffold.actions as action (action)}
-              <button class="ghost" disabled>{action}</button>
-            {/each}
-          </div>
-        {/if}
-        {#if scaffold.sections}
-          <div class="scaffold-sections">
-            {#each scaffold.sections as label (label)}
-              <div class="scaffold-row">
-                <span class="eyebrow">{label}</span>
-                <span class="dash">—</span>
-              </div>
-            {/each}
-          </div>
-        {/if}
-        <p class="ph-note">{scaffold.note}</p>
-        {#if current.feature}
-          <span class="ph-feature">Coming with {current.feature}</span>
-        {/if}
-      </div>
+    {:else if section === 'history'}
+      {@render history?.()}
     {/if}
   </div>
 </aside>
@@ -120,7 +117,7 @@
 <style>
   .dock {
     grid-area: dock;
-    width: 270px;
+    width: 296px;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -132,14 +129,26 @@
   .header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 13px 14px 10px;
+    gap: var(--space-2);
+    flex: none;
+    padding: 12px 14px 10px;
     border-bottom: 1px solid var(--border-subtle);
   }
 
   .title {
     font: var(--text-h4);
     color: var(--text-strong);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  /* The count this section is about, right-aligned so the eye finds it in the same place. */
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-500);
   }
 
   .body {
@@ -149,78 +158,14 @@
     padding: var(--space-4);
   }
 
-  /* The rules panel manages its own full-bleed rows and sticky footer. */
-  .body.flush {
+  .body.bleed {
     padding: 0;
+  }
+
+  /* Check owns an inner scroller and a pinned footer, so the dock must not scroll around it. */
+  .body.own-scroll {
     overflow-y: hidden;
     display: flex;
     flex-direction: column;
-  }
-
-  .placeholder {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    align-items: flex-start;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-
-  .ghost {
-    padding: 6px 12px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-full);
-    background: var(--paper-0);
-    color: var(--ink-700);
-    font: 600 12px/1 var(--font-sans);
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
-  .scaffold-sections {
-    align-self: stretch;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .scaffold-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid var(--paper-100);
-  }
-
-  .eyebrow {
-    font: var(--text-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: var(--text-muted);
-  }
-
-  .dash {
-    font-family: var(--font-mono);
-    color: var(--paper-400);
-  }
-
-  .ph-note {
-    margin: 0;
-    font: var(--text-small);
-    color: var(--text-muted);
-  }
-
-  .ph-feature {
-    font: var(--text-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: var(--ink-500);
-    padding: 4px 9px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-full);
   }
 </style>

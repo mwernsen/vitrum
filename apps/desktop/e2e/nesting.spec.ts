@@ -38,15 +38,18 @@ test('nest view: assign a piece, nest it onto a sheet, reshuffle', async () => {
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await window.mouse.click(...at(120, 120))
   await window.mouse.click(...at(360, 300))
+
+  // Cockpit v2 opens the dock on Draw, so open the Glass section to reach the palette.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const paletteRegion = window.getByRole('region', { name: 'Glass palette' })
   await paletteRegion.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Switch to the Nest view: the floating nesting-controls card appears (F-057 controls float over
-  // the canvas in the nest view, mirroring the light view).
+  // Switch to the Nest view: the nesting controls appear in the inspector (Cockpit v2 folded the
+  // floating card into the column beside the view, mirroring the light view).
   await window.getByRole('tab', { name: 'Nest', exact: true }).click()
-  const controls = window.getByRole('complementary', { name: 'Nesting controls' })
-  await expect(controls).toBeVisible()
+  const controls = window.getByRole('complementary', { name: 'Inspector' })
+  await expect(controls).toContainText('Sheets')
 
   // Auto-nest runs on entry: a computed sheet with a utilisation caption appears where the empty
   // state was. The sheet is labelled with its 1-based index and percentage used.
