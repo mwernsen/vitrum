@@ -66,6 +66,9 @@ export interface CanvasPalette {
   readonly severityInfo: string
   /** Reinforcement bar colour (F-032) — a metallic steel tone distinct from lead/glass. */
   readonly reinforcement: string
+  /** Ground the F-043 PNG snapshot composites onto: the paper stage, or the dark light-view stage. */
+  readonly snapshotGround: string
+  readonly snapshotGroundDark: string
 }
 
 /**
@@ -105,6 +108,8 @@ const FALLBACK: CanvasPalette = {
   severityWarning: '#d97706',
   severityInfo: '#1d50cf',
   reinforcement: '#57534e',
+  snapshotGround: '#ffffff',
+  snapshotGroundDark: '#050505',
 }
 
 /** Read the canvas palette from an element's resolved custom properties. */
@@ -146,6 +151,10 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     severityWarning: read('--amber-600', FALLBACK.severityWarning),
     severityInfo: read('--cobalt-600', FALLBACK.severityInfo),
     reinforcement: read('--ink-700', FALLBACK.reinforcement),
+    // Matches the stage backgrounds the canvas sits on: `--paper-0` normally, `--ink-950` in the
+    // light view. Snapshot chrome, so token-sourced like the rest of the overlay palette.
+    snapshotGround: read('--paper-0', FALLBACK.snapshotGround),
+    snapshotGroundDark: read('--ink-950', FALLBACK.snapshotGroundDark),
   }
 }
 

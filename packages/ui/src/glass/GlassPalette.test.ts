@@ -51,6 +51,14 @@ describe('GlassPalette (F-022)', () => {
     expect(screen.getByTestId('glass-count')).toHaveTextContent('3 of 3')
   })
 
+  // The enclosing DockPanel header already names the open section, so a "Glass" heading here read
+  // as the same word twice, ~100px apart (user test run 2026-07-29-a).
+  it('names the region without repeating the section label as a heading', () => {
+    render(GlassPalette, { library, libraryActions: actions() })
+    expect(screen.getByRole('region', { name: 'Glass palette' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Glass' })).not.toBeInTheDocument()
+  })
+
   it('filters by free-text search (FR-3)', async () => {
     const user = userEvent.setup()
     render(GlassPalette, { library, libraryActions: actions() })

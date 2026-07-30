@@ -16,10 +16,10 @@ design. Do not hand-edit tokens or invent new ones here — changes flow
 - `styles.css` — entry that `@import`s the token files, verbatim from source.
 - `tokens/` — `colors.css`, `typography.css`, `spacing.css`, `effects.css` are
   **content-identical** to source. `fonts.css` is the one deliberate deviation:
-  its Google Fonts `@import` is removed because the desktop app must run offline
-  (F-004 FR-3). Fonts are self-hosted instead — see below.
-- `index.ts` — the import surface for apps: pulls in the self-hosted fonts and
-  `styles.css`. Import this once per entry point.
+  its Google Fonts `@import` is replaced with local `@font-face` declarations,
+  because the desktop app must run offline (F-004 FR-3). See below.
+- `index.ts` — the import surface for apps: pulls in `styles.css` (which imports
+  `fonts.css`, so the fonts come with it). Import this once per entry point.
 - `assets/` — `logo.svg` (Shard V, for light surfaces) and `logo-on-dark.svg`.
 
 Ported components live one level up in `packages/ui/src/components/`, each next to
@@ -28,10 +28,22 @@ the `.prompt.md` brief and `.d.ts` contract it was ported from.
 ## Fonts (offline)
 
 The source specifies Onest (a stand-in for the commercial TT Norms Pro) and Geist
-Mono. Rather than fetch from Google Fonts at runtime, they are self-hosted via the
-`@fontsource-variable/onest` and `@fontsource-variable/geist-mono` packages,
-imported in `index.ts`. When TT Norms Pro is licensed, swap the font packages here
-and update `--font-sans` at the source, then re-sync.
+Mono. Rather than fetch from Google Fonts at runtime, the woff2 files bundled by
+`@fontsource-variable/onest` and `@fontsource-variable/geist-mono` are declared as
+`@font-face` rules in `tokens/fonts.css`.
+
+**Do not import those packages' own stylesheets.** They name their families
+`"Onest Variable"` / `"Geist Mono Variable"`, which is not what the canonical
+`--font-sans` / `--font-mono` tokens ask for — the mismatch silently drops the whole
+UI to the OS fallback sans, and no screenshot reveals it (found by user test run
+`docs/testing/runs/2026-07-29-a`, fixed 2026-07-29). `fonts.css` therefore declares
+the faces under the canonical family names, and `src/design.fonts.test.ts` fails if
+that bridge breaks. The oracle when auditing by hand: every entry of
+`[...document.fonts]` reads `unloaded` and
+`performance.getEntriesByType('resource')` contains no `woff2`.
+
+When TT Norms Pro is licensed, swap the font files in `fonts.css` and update
+`--font-sans` at the source, then re-sync.
 
 ## Re-sync procedure
 

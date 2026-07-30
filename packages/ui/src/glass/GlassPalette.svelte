@@ -131,22 +131,23 @@
 </script>
 
 <section class="palette" aria-label="Glass palette">
+  <!-- No visible heading: the enclosing DockPanel header already names the section, and repeating
+       "Glass" ~100px below it read as a duplicated label. The region keeps its accessible name, and
+       the scope tabs give the new-glass action a row to sit on. -->
   <div class="head">
-    <h3>Glass</h3>
+    {#if hasProject}
+      <Tabs
+        size="sm"
+        items={[
+          { value: 'library', label: 'Library' },
+          { value: 'project', label: 'Project' },
+        ]}
+        value={scope}
+        onchange={(v) => (scope = v as 'library' | 'project')}
+      />
+    {/if}
     <Button size="sm" variant="secondary" onclick={openNew}>New glass</Button>
   </div>
-
-  {#if hasProject}
-    <Tabs
-      size="sm"
-      items={[
-        { value: 'library', label: 'Library' },
-        { value: 'project', label: 'Project' },
-      ]}
-      value={scope}
-      onchange={(v) => (scope = v as 'library' | 'project')}
-    />
-  {/if}
 
   <Input size="sm" placeholder="Search glass…" value={query} onchange={(v) => (query = v)} />
 
@@ -249,14 +250,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
-
-  h3 {
-    margin: 0;
-    font: var(--text-eyebrow);
-    text-transform: uppercase;
-    letter-spacing: var(--tracking-eyebrow);
-    color: var(--text-muted);
+    gap: var(--space-2);
   }
 
   .filters {
