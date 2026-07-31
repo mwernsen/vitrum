@@ -95,14 +95,20 @@ export function resolveSnap(scene: SnapScene, query: SnapQuery): SnapHit | null 
     const hit = nearestIntersection(candidates, world, r2)
     if (hit) return hit
   }
+  // Under an angular constraint the ray's crossing with a curve outranks a midpoint: it satisfies
+  // both the locked angle and the curve, where a midpoint would hold the curve and break the angle.
+  // Endpoints and intersections still come first — landing on a true joint matters more than a
+  // round angle, and they weld.
+  if (query.ray && toggles['on-curve']) {
+    const hit = nearestCrossingAlongRay(candidates, world, query.ray, radiusMm)
+    if (hit) return hit
+  }
   if (toggles.midpoint) {
     const hit = nearestMidpoint(candidates, world, r2)
     if (hit) return hit
   }
-  if (toggles['on-curve']) {
-    const hit = query.ray
-      ? nearestCrossingAlongRay(candidates, world, query.ray, radiusMm)
-      : nearestOnCurve(candidates, world, r2)
+  if (!query.ray && toggles['on-curve']) {
+    const hit = nearestOnCurve(candidates, world, r2)
     if (hit) return hit
   }
   if (toggles.grid && query.gridMm) {

@@ -175,3 +175,13 @@ the on-curve step to `nearestCrossingAlongRay`, which reports where the ray cros
 than the nearest point on it. Both properties then hold — exact angle and on the curve — and the
 tool's own constraint is a no-op afterwards. Only the tools whose Shift locks a direction opt in
 (line, arc); for the span tools Shift means "keep it square", which is not a ray.
+
+_…and the tool must not constrain twice (2026-07-31):_ making the on-curve step ray-aware was not
+enough. The tool still re-applied `constrainAngle` to whatever the resolver returned, so any snap
+kind that is not on the ray — a midpoint, an endpoint, a grid point — was rotated straight back off
+it (measured: a midpoint snap landing exactly on the target line came out 0.44 mm off it). The
+resolver is now the single place the two are reconciled and says so: `ResolvedPoint.settled` /
+`PointerInput.settled` tell the line and arc tools to take the position as final. Under a constraint
+the ray crossing also outranks a midpoint, since only it satisfies both the angle and the curve;
+endpoints and intersections still outrank everything, because landing on a real joint matters more
+than a round angle and it welds.

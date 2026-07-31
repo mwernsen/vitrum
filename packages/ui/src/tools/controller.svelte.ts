@@ -196,25 +196,25 @@ export class ToolController {
     if (!this.#runner) return
     this.#applyMods(mods)
     this.#lastScreen = screen
-    const at = this.#resolve(screen)
-    this.#cursor = at
-    this.#dispatch({ type: 'down', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
+    const { world, settled } = this.#resolve(screen)
+    this.#cursor = world
+    this.#dispatch({ type: 'down', at: world, ...this.#modifiers(), settled })
   }
 
   pointerMove(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
     if (!this.#runner) return
     this.#applyMods(mods)
     this.#lastScreen = screen
-    const at = this.#resolve(screen)
-    this.#cursor = at
-    this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
+    const { world, settled } = this.#resolve(screen)
+    this.#cursor = world
+    this.#dispatch({ type: 'move', at: world, ...this.#modifiers(), settled })
   }
 
   pointerUp(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
     if (!this.#runner) return
     this.#applyMods(mods)
-    const at = this.#resolve(screen)
-    this.#dispatch({ type: 'up', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
+    const { world, settled } = this.#resolve(screen)
+    this.#dispatch({ type: 'up', at: world, ...this.#modifiers(), settled })
   }
 
   // --- Keyboard --------------------------------------------------------------
@@ -285,9 +285,9 @@ export class ToolController {
     if (event.key === 'Alt') this.alt = false
     // Re-apply the (un)constrained rubber band without waiting for a pointer move.
     if (this.#runner && this.#lastScreen) {
-      const at = this.#resolve(this.#lastScreen)
-      this.#cursor = at
-      this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt })
+      const { world, settled } = this.#resolve(this.#lastScreen)
+      this.#cursor = world
+      this.#dispatch({ type: 'move', at: world, ...this.#modifiers(), settled })
     }
   }
 
@@ -298,13 +298,7 @@ export class ToolController {
       const value = parseNumericEntry(this.numericBuffer, this.#host.viewport.unit)
       this.numericBuffer = ''
       if (value) {
-        this.#dispatch({
-          type: 'numeric',
-          value,
-          shift: this.shift,
-          alt: this.alt,
-          refDirs: this.#refDirs(),
-        })
+        this.#dispatch({ type: 'numeric', value, ...this.#modifiers() })
         return
       }
     }
@@ -360,15 +354,21 @@ export class ToolController {
     )
   }
 
-  #resolve(screen: Vec2): Vec2 {
+  /** The modifier/reference fields every pointer input carries. */
+  #modifiers(): { shift: boolean; alt: boolean; refDirs: readonly Vec2[] } {
+    return { shift: this.shift, alt: this.alt, refDirs: this.#refDirs() }
+  }
+
+  #resolve(screen: Vec2): { world: Vec2; settled: boolean } {
     const world = screenToWorld(this.#host.viewport.transform, screen)
     const anchors = this.#runner?.anchors() ?? []
     const activeId = this.#runner?.id ?? 'line'
-    return this.resolver(world, {
+    const resolved = this.resolver(world, {
       toolId: activeId,
       anchors,
       constrain: this.#constraint(anchors, activeId),
-    }).world
+    })
+    return { world: resolved.world, settled: resolved.settled ?? false }
   }
 
   /**

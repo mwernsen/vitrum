@@ -156,7 +156,11 @@ export class SnapController {
       },
     })
     this.hit = hit
-    if (hit) return { world: hit.world, snap: { kind: hit.kind, world: hit.world } }
-    return { world: constrained }
+    // `settled` whenever a constraint was in force: this resolver has already reconciled it with
+    // snapping, and only it can see both. Without the flag the tool constrains again and rotates
+    // the point off whatever it snapped to — the snap and the constraint undo each other.
+    const settled = ctx.constrain !== undefined
+    if (hit) return { world: hit.world, snap: { kind: hit.kind, world: hit.world }, settled }
+    return { world: constrained, settled }
   }
 }

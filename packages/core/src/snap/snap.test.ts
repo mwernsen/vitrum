@@ -224,3 +224,39 @@ describe('resolveSnap — on-curve along a constrained ray', () => {
     expect(hit?.world.y).toBeCloseTo(0, 9)
   })
 })
+
+describe('resolveSnap — priority under a constraint', () => {
+  it('prefers the ray crossing over a midpoint, since only it keeps the angle too', () => {
+    // A vertical line whose midpoint is (140, 105); a ray from the left crossing it lower down.
+    const target = scene(line(vec2(140, 10), vec2(140, 200)))
+    const origin = vec2(76.383, 80.517)
+    const dir = vec2(Math.cos(0.349), Math.sin(0.349))
+    const hit = resolveSnap(target, {
+      world: vec2(140.4, 104.113),
+      radiusMm: 8,
+      gridMm: null,
+      anchors: [origin],
+      ray: { origin, dir },
+      settings: only('midpoint', 'on-curve'),
+    })
+    expect(hit?.kind).toBe('on-curve')
+    expect(hit?.world.x).toBeCloseTo(140, 9)
+    // On the ray, so the constrained angle survives — a midpoint snap would not be.
+    expect(Math.atan2(hit!.world.y - origin.y, hit!.world.x - origin.x)).toBeCloseTo(0.349, 9)
+  })
+
+  it('an endpoint still outranks the ray crossing — a joint beats a round angle', () => {
+    const target = scene(line(vec2(140, 10), vec2(140, 200)))
+    const origin = vec2(76.383, 80.517)
+    const hit = resolveSnap(target, {
+      world: vec2(140.4, 12),
+      radiusMm: 8,
+      gridMm: null,
+      anchors: [origin],
+      ray: { origin, dir: vec2(Math.cos(0.349), Math.sin(0.349)) },
+      settings: only('endpoint', 'on-curve'),
+    })
+    expect(hit?.kind).toBe('endpoint')
+    expect(hit?.world).toEqual(vec2(140, 10))
+  })
+})

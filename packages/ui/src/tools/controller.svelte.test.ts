@@ -1,5 +1,5 @@
 import { makeViewport } from '@vitrum/core'
-import { distance, vec2, type Line } from '@vitrum/geometry'
+import { distance, vec2, type Line, type Vec2 } from '@vitrum/geometry'
 import { createEmptyProject, type Command, type Project } from '@vitrum/model'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -166,6 +166,78 @@ describe('ToolController drawing', () => {
       Object.values(doc.segments).filter((s) => s.endpoints.includes(drawn.endpoints[1])),
     ).toHaveLength(3)
     expect(Object.values(doc.segments).filter((s) => s.role === 'border')).toHaveLength(5)
+  })
+
+  it('shift locked parallel to the start line still lands on the line it ends at', () => {
+    const { tools, viewport, project } = setup()
+    const snap = new SnapController(viewport)
+    snap.toggles = { ...snap.toggles, grid: false, angle: false, midpoint: false }
+    tools.resolver = snap.resolver
+    const refresh = () => snap.updateScene(Object.values(project().segments))
+    const drawTo = (from: Vec2, to: Vec2, shift: boolean) => {
+      tools.activate('line')
+      tools.pointerDown(from, { shift: false, alt: false })
+      tools.pointerMove(to, { shift, alt: false })
+      tools.pointerDown(to, { shift, alt: false })
+      tools.handleKeyDown(key('Enter'))
+      refresh()
+    }
+
+    // Line A at 20°, then a vertical line further right to end on.
+    const a0 = vec2(20, 60)
+    const a1 = vec2(20 + Math.cos(0.349) * 60, 60 + Math.sin(0.349) * 60)
+    drawTo(a0, a1, false)
+    drawTo(vec2(140, 10), vec2(140, 200), false)
+
+    // From A's far end, Shift held: parallel to A is on the ladder. Aim a fraction past the
+    // vertical line. Snapping alone lands off-angle; the constraint alone lands off the line.
+    const aim = vec2(140.4, a1.y + Math.tan(0.349) * (140.4 - a1.x) + 0.3)
+    drawTo(a1, aim, true)
+
+    const doc = project()
+    const drawn = Object.values(doc.segments).find(
+      (s) => s.geometry.kind === 'line' && s.geometry.a.x === a1.x && s.geometry.a.y === a1.y,
+    )!
+    const geo = drawn.geometry as Line
+    // Exactly parallel to line A …
+    expect(Math.atan2(geo.b.y - geo.a.y, geo.b.x - geo.a.x)).toBeCloseTo(0.349, 9)
+    // … and exactly on the vertical line, welded into it as a T-junction.
+    expect(geo.b.x).toBe(140)
+    expect(
+      Object.values(doc.segments).filter((s) => s.endpoints.includes(drawn.endpoints[1])),
+    ).toHaveLength(3)
+  })
+
+  it('a joint off the constrained ray still wins: the end welds rather than dangling', () => {
+    const { tools, viewport, project } = setup()
+    const snap = new SnapController(viewport)
+    snap.toggles = { ...snap.toggles, grid: false, angle: false }
+    tools.resolver = snap.resolver
+    const drawTo = (from: Vec2, to: Vec2, shift: boolean) => {
+      tools.activate('line')
+      tools.pointerDown(from, { shift: false, alt: false })
+      tools.pointerMove(to, { shift, alt: false })
+      tools.pointerDown(to, { shift, alt: false })
+      tools.handleKeyDown(key('Enter'))
+      snap.updateScene(Object.values(project().segments))
+    }
+    const a0 = vec2(20, 60)
+    const a1 = vec2(20 + Math.cos(0.349) * 60, 60 + Math.sin(0.349) * 60)
+    drawTo(a0, a1, false)
+    // An endpoint clearly off every ladder ray from a1.
+    const joint = vec2(120, 130)
+    drawTo(vec2(180, 200), joint, false)
+    drawTo(a1, vec2(joint.x + 0.2, joint.y + 0.2), true)
+
+    const doc = project()
+    const jointNode = Object.entries(doc.nodes).find(
+      ([, n]) => n.pos.x === joint.x && n.pos.y === joint.y,
+    )?.[0]
+    expect(jointNode).toBeDefined()
+    // Both lines now meet at that node — landing on a joint beats keeping a round angle.
+    expect(
+      Object.values(doc.segments).filter((s) => s.endpoints.includes(jointNode!)),
+    ).toHaveLength(2)
   })
 
   it('escape discards an in-progress gesture without a command', () => {

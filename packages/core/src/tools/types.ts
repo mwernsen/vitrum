@@ -52,6 +52,13 @@ export interface PointerInput {
    * to the line a span starts from; empty leaves the plain 0/45/90° ladder.
    */
   readonly refDirs?: readonly Vec2[]
+  /**
+   * The resolver already reconciled the angular constraint with snapping for this position, so a
+   * tool must **not** constrain it again. Re-constraining rotates the point about the anchor
+   * preserving its distance, which walks it off whatever it had just snapped to — the snap and
+   * the constraint would then silently undo each other. See {@link ResolvedPoint.settled}.
+   */
+  readonly settled?: boolean
 }
 
 /**
@@ -152,6 +159,12 @@ export interface SnapResult {
 export interface ResolvedPoint {
   readonly world: Vec2
   readonly snap?: SnapResult
+  /**
+   * Set when the resolver has already applied the active angular constraint (Shift) and settled it
+   * against snapping — because only the resolver can see both. The tool must then take this
+   * position as final: constraining it again would rotate it off the snap it just landed on.
+   */
+  readonly settled?: boolean
 }
 
 /**

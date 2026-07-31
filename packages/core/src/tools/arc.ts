@@ -35,9 +35,10 @@ function constrained(
   at: Vec2,
   shift: boolean,
   refDirs: readonly Vec2[] = [],
+  settled = false,
 ): Vec2 {
   const ref = reference(state)
-  return shift && ref ? constrainAngle(ref, at, refDirs) : at
+  return shift && ref && !settled ? constrainAngle(ref, at, refDirs) : at
 }
 
 /** Circumcircle centre of three points, or `null` when they are collinear. */
@@ -99,7 +100,7 @@ export const arcTool: ToolDef<ArcState> = {
   reduce(state, input: ToolInput): ToolStep<ArcState> {
     switch (input.type) {
       case 'down': {
-        const at = constrained(state, input.at, input.shift ?? false, input.refDirs)
+        const at = constrained(state, input.at, input.shift ?? false, input.refDirs, input.settled)
         if (state.points.length === 2) return commitFrom(state, at)
         return { state: { ...state, points: [...state.points, at], cursor: at } }
       }
@@ -107,7 +108,13 @@ export const arcTool: ToolDef<ArcState> = {
         return {
           state: {
             ...state,
-            cursor: constrained(state, input.at, input.shift ?? false, input.refDirs),
+            cursor: constrained(
+              state,
+              input.at,
+              input.shift ?? false,
+              input.refDirs,
+              input.settled,
+            ),
           },
         }
       case 'numeric': {
