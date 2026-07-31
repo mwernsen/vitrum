@@ -168,9 +168,9 @@ const hingeLine: Rule = {
   title: 'Hinge line',
   defaultSeverity: 'warning',
   explain:
-    'This straight run of lead reaches from one edge of the panel to the other. It is a hinge: the ' +
-    'panel will flex and crease along it over time, and can fold there in transit. Stagger the ' +
-    'joints so no single line runs all the way across (like brickwork), or tie a reinforcement bar ' +
+    'These lead lines form one near-straight run covering most of the panel across this axis, so ' +
+    'the panel will flex and crease along it over time and can fold there in transit. Stagger the ' +
+    'joints so no single run covers the whole span (like brickwork), or tie a reinforcement bar ' +
     'across it.',
   thresholds: [HINGE_ANGLE, HINGE_SPAN],
   check: (input) => {
@@ -183,15 +183,15 @@ const hingeLine: Rule = {
     for (const chain of chains) {
       const spanVec = sub(chain.end, chain.start)
       const spanLen = Math.hypot(spanVec.x, spanVec.y)
-      // The relevant panel dimension is the one along the run's dominant axis. A run reaching this
-      // fraction of it is effectively edge to edge — a fold axis.
+      // The relevant panel dimension is the one along the run's dominant axis; the test is on the
+      // *span*, so a run can trip it without either end touching a border — the message says which.
       const horizontal = Math.abs(spanVec.x) >= Math.abs(spanVec.y)
       const panelDim = horizontal ? metrics.widthMm : metrics.heightMm
       if (panelDim <= 0 || spanLen < spanFraction * panelDim) continue
       const perfectlyStraight = chain.maxTurn <= 1 * DEG
       out.push({
         at: { x: (chain.start.x + chain.end.x) / 2, y: (chain.start.y + chain.end.y) / 2 },
-        message: `straight run ${mm(spanLen)} mm across a ${mm(panelDim)} mm panel`,
+        message: hingeMessage(chain, spanLen, panelDim, horizontal, metrics),
         identity: [...chain.segmentIds].sort(),
         segmentIds: [...chain.segmentIds],
         ...(perfectlyStraight ? { severity: 'error' as const } : {}),
@@ -199,6 +199,48 @@ const hingeLine: Rule = {
     }
     return out
   },
+}
+
+/** How close (mm) a run's end must be to the panel's edge to be described as reaching it. */
+const HINGE_EDGE_TOL = 1
+
+/** Distance from `p` to the nearest side of the panel's bounding box. */
+function distanceToPanelEdge(p: Vec2, metrics: PanelMetrics): number {
+  return Math.min(
+    p.x - metrics.bbox.min.x,
+    metrics.bbox.max.x - p.x,
+    p.y - metrics.bbox.min.y,
+    metrics.bbox.max.y - p.y,
+  )
+}
+
+/**
+ * Say what was actually found: how many lines were merged into the run, the span as a share of the
+ * panel dimension it is measured against, and — since the test is on span, not edge contact —
+ * whether the run really does reach the panel's edges. A run that stops short is still a weakness,
+ * but a workshop reading "hinge" needs to know it is not literally edge to edge.
+ */
+function hingeMessage(
+  chain: Chain,
+  spanLen: number,
+  panelDim: number,
+  horizontal: boolean,
+  metrics: PanelMetrics,
+): string {
+  const share = Math.round((spanLen / panelDim) * 100)
+  const axis = horizontal ? 'width' : 'height'
+  const lines = chain.segmentIds.length
+  const run = lines === 1 ? 'line' : `run of ${lines} lines`
+  const gaps = [chain.start, chain.end]
+    .map((p) => distanceToPanelEdge(p, metrics))
+    .filter((d) => d > HINGE_EDGE_TOL)
+  const reach =
+    gaps.length === 0
+      ? 'edge to edge'
+      : gaps.length === 1
+        ? `stops ${mm(gaps[0]!)} mm short of the edge at one end`
+        : `stops short of the edge at both ends (${gaps.map((g) => `${mm(g)} mm`).join(', ')})`
+  return `near-straight ${run}, ${mm(spanLen)} mm — ${share}% of the panel's ${mm(panelDim)} mm ${axis}; ${reach}`
 }
 
 interface Chain {
