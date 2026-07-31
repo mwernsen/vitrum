@@ -241,9 +241,14 @@
 />
 
 <style>
+  /* A column that fills the dock: the controls keep their natural height and the list takes
+     whatever is left, so it scrolls to the bottom of the panel instead of stopping short. */
   .palette {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: var(--space-2);
+    flex: 1;
+    min-height: 0;
   }
 
   .head {
@@ -278,7 +283,10 @@
     padding: 0;
     display: grid;
     gap: var(--space-2);
-    max-height: 22rem;
+    /* Fills the rest of the panel. The floor keeps a usable list on a short window — and makes
+       the dock scroll rather than clip when even that no longer fits. */
+    flex: 1;
+    min-height: 8rem;
     overflow-y: auto;
   }
 

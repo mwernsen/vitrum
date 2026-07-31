@@ -85,7 +85,12 @@
     {#if meta}<span class="meta">{meta}</span>{/if}
   </div>
 
-  <div class="body" class:bleed class:own-scroll={section === 'check'}>
+  <div
+    class="body"
+    class:bleed
+    class:own-scroll={section === 'check'}
+    class:fill={section === 'glass'}
+  >
     {#if section === 'draw'}
       <DrawPanel
         {viewport}
@@ -165,6 +170,14 @@
   /* Check owns an inner scroller and a pinned footer, so the dock must not scroll around it. */
   .body.own-scroll {
     overflow-y: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Glass fills the panel: its list is the scroller, so it reaches the bottom edge instead of
+     stopping at a fixed height. The body keeps `overflow-y: auto` from `.body`, so a window too
+     short even for the list's minimum scrolls here rather than clipping. */
+  .body.fill {
     display: flex;
     flex-direction: column;
   }
