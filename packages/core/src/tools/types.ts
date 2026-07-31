@@ -126,6 +126,20 @@ export interface ResolveContext {
   readonly toolId: ToolId
   /** Anchors already placed in the current gesture, world mm. */
   readonly anchors: readonly Vec2[]
+  /**
+   * The angular constraint in force (Shift on a tool that locks the span's direction), so the
+   * resolver can snap **along** the constrained ray rather than perpendicular to it. Without
+   * this the tool constrains whatever the resolver returned, rotating a snapped point off the
+   * curve it had just landed on. Absent when no constraint applies.
+   */
+  readonly constrain?:
+    | {
+        /** The point the span is measured from — the constraint's pivot. */
+        readonly origin: Vec2
+        /** Extra reference directions the ladder offers, as in {@link PointerInput.refDirs}. */
+        readonly refDirs: readonly Vec2[]
+      }
+    | undefined
 }
 
 /** Details of a snap the resolver applied, for overlay markers (shape reserved for F-012). */

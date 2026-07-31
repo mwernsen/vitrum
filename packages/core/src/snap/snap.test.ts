@@ -176,3 +176,51 @@ describe('curveEndpoints', () => {
     expect(b).toBe(l.b)
   })
 })
+
+describe('resolveSnap — on-curve along a constrained ray', () => {
+  const border = scene(line(vec2(0, 0), vec2(250, 0)))
+  const settings = only('on-curve')
+
+  it('reports where the ray crosses the curve, not the nearest point on it', () => {
+    const origin = vec2(87.38, 44.534)
+    // A vertical ray from the origin: it crosses y = 0 at x = 87.38, whereas the unconstrained
+    // nearest point to the cursor would be (89.535, 0).
+    const hit = resolveSnap(border, {
+      world: vec2(87.38, -0.05),
+      radiusMm: 5,
+      gridMm: null,
+      anchors: [origin],
+      ray: { origin, dir: vec2(0, -1) },
+      settings,
+    })
+    expect(hit?.kind).toBe('on-curve')
+    expect(hit?.world.x).toBeCloseTo(87.38, 9)
+    expect(hit?.world.y).toBeCloseTo(0, 9)
+  })
+
+  it('finds nothing when the ray misses every curve within the radius', () => {
+    const origin = vec2(50, 40)
+    const hit = resolveSnap(border, {
+      world: vec2(90, 40),
+      radiusMm: 5,
+      gridMm: null,
+      anchors: [origin],
+      ray: { origin, dir: vec2(1, 0) }, // parallel to the border — never crosses it
+      settings,
+    })
+    expect(hit).toBeNull()
+  })
+
+  it('without a ray it still snaps perpendicular, as before', () => {
+    const hit = resolveSnap(border, {
+      world: vec2(89.535, -0.387),
+      radiusMm: 5,
+      gridMm: null,
+      anchors: [],
+      settings,
+    })
+    expect(hit?.kind).toBe('on-curve')
+    expect(hit?.world.x).toBeCloseTo(89.535, 9)
+    expect(hit?.world.y).toBeCloseTo(0, 9)
+  })
+})

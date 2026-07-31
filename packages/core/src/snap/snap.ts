@@ -58,6 +58,13 @@ export interface SnapQuery {
    * (endpoints) and for angle/extension snapping relative to the last placed point.
    */
   readonly anchors: readonly Vec2[]
+  /**
+   * The ray the span is locked to, when an angular constraint is active (Shift). On-curve
+   * snapping then reports where the ray **crosses** a curve instead of the nearest point on it,
+   * so the constrained angle and the snap can both hold — without this, whichever is applied
+   * last wins and the other is silently discarded.
+   */
+  readonly ray?: { readonly origin: Vec2; readonly dir: Vec2 } | undefined
   readonly settings: SnapSettings
 }
 
@@ -93,7 +100,9 @@ export function resolveSnap(scene: SnapScene, query: SnapQuery): SnapHit | null 
     if (hit) return hit
   }
   if (toggles['on-curve']) {
-    const hit = nearestOnCurve(candidates, world, r2)
+    const hit = query.ray
+      ? nearestCrossingAlongRay(candidates, world, query.ray, radiusMm)
+      : nearestOnCurve(candidates, world, r2)
     if (hit) return hit
   }
   if (toggles.grid && query.gridMm) {
@@ -191,6 +200,43 @@ function nearestOnCurve(candidates: readonly Curve[], world: Vec2, r2: number): 
     if (d <= r2 && d < bestD) {
       bestD = d
       best = cp.point
+    }
+  }
+  return best ? { kind: 'on-curve', world: best } : null
+}
+
+/**
+ * On-curve snapping along a constrained ray: where does the ray the span is locked to actually
+ * cross a nearby curve? The crossing nearest the cursor within the radius wins, so a Shift-locked
+ * line ending on the border frame lands exactly on the frame *and* keeps its exact angle — the
+ * perpendicular projection {@link nearestOnCurve} returns would be off the ray, and the tool's
+ * angular constraint would then rotate it straight back off the curve.
+ *
+ * The ray is probed as a finite line from its origin to a little past the cursor, so the crossing
+ * we care about is covered without relying on huge coordinates.
+ */
+function nearestCrossingAlongRay(
+  candidates: readonly Curve[],
+  world: Vec2,
+  ray: { origin: Vec2; dir: Vec2 },
+  radiusMm: number,
+): SnapHit | null {
+  const reach = distance(ray.origin, world) + radiusMm
+  if (reach <= 0) return null
+  const probe: Curve = {
+    kind: 'line',
+    a: ray.origin,
+    b: add(ray.origin, scale(ray.dir, reach)),
+  }
+  let best: Vec2 | null = null
+  let bestD = Infinity
+  for (const c of candidates) {
+    for (const x of intersect(probe, c)) {
+      const d = distance(x.point, world)
+      if (d <= radiusMm && d < bestD) {
+        bestD = d
+        best = x.point
+      }
     }
   }
   return best ? { kind: 'on-curve', world: best } : null

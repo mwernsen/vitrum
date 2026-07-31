@@ -197,3 +197,21 @@ lines moved only one. A press that lands on something already selected now leave
 alone and resolves on pointer **up** instead (a click still narrows to one; Shift still toggles it
 out), so the drag moves the whole group. The `move` drag also builds its preview on the same event
 that crosses the movement threshold, instead of one event later.
+
+_T-junction welding (2026-07-31):_ `segmentsFromDrafts` welds an endpoint coincident with an
+existing **node**, which left the commonest join in a real panel unwelded — a line drawn onto the
+_interior_ of another line, typically the border frame. Snapping put the end exactly on the curve,
+but nothing split the target, so the end stayed a valence-1 node that only escaped F-030's
+dangling-line error via the detector's 0.01 mm "sits on the border" grace; a click a pixel off was
+reported as dangling. New `junctions.ts` (`planWeldedCommit` / `addSegmentsWelded`) splits the
+target at the landing and shares the node, so the end is genuinely connected and piece detection
+gets a real vertex. The split point comes from the same `splitAt` call the split command makes, so
+invariant I2 (bit-identical node ↔ endpoint) holds; `segmentsFromDrafts` gained an optional
+`pinnedByKey` so the endpoint can reference the node id the split mints. Several landings on one
+span chain correctly (each split runs on the tail the previous produced, parameter rescaled).
+Committed through the new `sequence` command, so a gesture stays one undo entry (FR-1).
+
+Not covered: the border tool still **replaces** the whole contour, so re-drawing the frame detaches
+ends welded into the old one (they survive as free ends, as before — no worse, but unwarned).
+Construction guides are never split; an arc draft does not weld at a landing end, since an arc
+cannot keep an endpoint off its circle.

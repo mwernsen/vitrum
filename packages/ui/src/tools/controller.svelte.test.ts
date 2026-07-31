@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ViewportController } from '../canvas/viewport.svelte'
 
 import { ToolController } from './controller.svelte'
+import { SnapController } from './snap.svelte'
 
 afterEach(() => localStorage.clear())
 
@@ -92,6 +93,79 @@ describe('ToolController drawing', () => {
     const bearing = Math.atan2(second.b.y - second.a.y, second.b.x - second.a.x)
     expect(bearing).toBeCloseTo(0.349, 6) // parallel to the first line, not on a 45° ray
     expect(distance(second.a, second.b)).toBeCloseTo(100, 6)
+  })
+
+  it('a line drawn onto the frame joins it: the border splits, no dangling end', () => {
+    const { tools, viewport, commands, project } = setup()
+    // A 250 × 250 frame, as the border tool leaves it.
+    const snap = new SnapController(viewport)
+    snap.master = true
+    tools.resolver = snap.resolver
+    tools.activate('border')
+    tools.pointerDown(vec2(0, 0), { shift: false, alt: false })
+    tools.pointerDown(vec2(250, 250), { shift: false, alt: false })
+    snap.updateScene(Object.values(project().segments))
+    expect(Object.values(project().segments).filter((s) => s.role === 'border')).toHaveLength(4)
+
+    // Draw a line from inside the panel to a click 0.387 mm *past* the top border — the
+    // sub-pixel overshoot a real click produces. Snapping pulls it onto the border.
+    tools.activate('line')
+    tools.pointerDown(vec2(87.38, 44.534), { shift: false, alt: false })
+    tools.pointerMove(vec2(89.535, -0.387), { shift: false, alt: false })
+    tools.pointerDown(vec2(89.535, -0.387), { shift: false, alt: false })
+    tools.handleKeyDown(key('Enter'))
+
+    const doc = project()
+    const nodeAt = (x: number, y: number) =>
+      Object.entries(doc.nodes).find(([, n]) => n.pos.x === x && n.pos.y === y)?.[0]
+    const junction = nodeAt(89.535, 0)
+    expect(junction).toBeDefined() // the end landed exactly on the border, not past it
+    const meeting = Object.values(doc.segments).filter((s) => s.endpoints.includes(junction!))
+    expect(meeting).toHaveLength(3) // two border halves + the drawn line — a real T-junction
+    expect(Object.values(doc.segments).filter((s) => s.role === 'border')).toHaveLength(5)
+    // Still one undo entry per gesture: the frame, then the welded line.
+    expect(commands).toHaveLength(2)
+  })
+
+  it('shift-drawing onto a line keeps the exact angle and still lands on the line', () => {
+    const { tools, viewport, project } = setup()
+    const snap = new SnapController(viewport)
+    // Only on-curve snapping, so the assertion is about the constraint, not the grid.
+    snap.toggles = {
+      endpoint: false,
+      intersection: false,
+      midpoint: false,
+      'on-curve': true,
+      grid: false,
+      angle: false,
+    }
+    tools.resolver = snap.resolver
+    tools.activate('border')
+    tools.pointerDown(vec2(0, 0), { shift: false, alt: false })
+    tools.pointerDown(vec2(250, 250), { shift: false, alt: false })
+    snap.updateScene(Object.values(project().segments))
+
+    // Aim at the top border on a deliberately non-45° bearing, with Shift held. Snapping alone
+    // would land on the border off-angle; the constraint alone would rotate it off the border.
+    tools.activate('line')
+    const from = vec2(87.38, 44.534)
+    const to = vec2(89.535, -0.387)
+    tools.pointerDown(from, { shift: false, alt: false })
+    tools.pointerMove(to, { shift: true, alt: false })
+    tools.pointerDown(to, { shift: true, alt: false })
+    tools.handleKeyDown(key('Enter'))
+
+    const doc = project()
+    const drawn = Object.values(doc.segments).find((s) => s.role === 'lead')!
+    const geo = drawn.geometry as Line
+    // Exactly vertical (the constrained ray) …
+    expect(Math.atan2(geo.b.y - geo.a.y, geo.b.x - geo.a.x)).toBeCloseTo(-Math.PI / 2, 9)
+    // … and exactly on the border, welded into it as a T-junction.
+    expect(geo.b.y).toBe(0)
+    expect(
+      Object.values(doc.segments).filter((s) => s.endpoints.includes(drawn.endpoints[1])),
+    ).toHaveLength(3)
+    expect(Object.values(doc.segments).filter((s) => s.role === 'border')).toHaveLength(5)
   })
 
   it('escape discards an in-progress gesture without a command', () => {

@@ -164,3 +164,14 @@ _Cockpit v2 (2026-07-30):_ the snap controls moved from the status-bar `SnapSett
 _Marker legibility (2026-07-31):_ the snap glyph and its text hint are drawn with a paper halo
 (`--paper-0`, the same treatment F-040's piece numbers use). Both were flat cobalt before, which
 disappeared wherever the snap landed on dark lead came — precisely where snapping matters most.
+
+_Snapping vs. the Shift constraint (2026-07-31):_ the two used to fight, and the constraint always
+won. The resolver snapped a point onto a curve, then the tool's `constrainAngle` rotated that point
+about the anchor onto the nearest ray **preserving its distance**, lifting it back off the curve —
+measurably, up to a few tenths of a millimetre, which is enough to turn a join into an F-030
+dangling line. `ResolveContext.constrain` now tells the resolver a constraint is in force, so it
+applies the constraint _first_ and then snaps **along** the resulting ray: `SnapQuery.ray` switches
+the on-curve step to `nearestCrossingAlongRay`, which reports where the ray crosses a curve rather
+than the nearest point on it. Both properties then hold — exact angle and on the curve — and the
+tool's own constraint is a no-op afterwards. Only the tools whose Shift locks a direction opt in
+(line, arc); for the span tools Shift means "keep it square", which is not a ray.

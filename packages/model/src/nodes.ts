@@ -265,6 +265,12 @@ export function synthesizeNodes(
 export function segmentsFromDrafts(
   drafts: readonly { readonly geometry: SegmentGeometry; readonly role: Segment['role'] }[],
   existingNodes: Readonly<Record<NodeId, Node>>,
+  /**
+   * Node ids to use at specific positions, keyed by {@link vecKey}. Lets a caller pre-commit a
+   * junction node the same gesture is about to create — a T-junction split (see `junctions.ts`)
+   * mints the node id, and the endpoint landing there must reference that exact id.
+   */
+  pinnedByKey?: ReadonlyMap<string, NodeId>,
 ): Segment[] {
   const existingByKey = new Map<string, NodeId>()
   for (const [id, node] of Object.entries(existingNodes)) existingByKey.set(vecKey(node.pos), id)
@@ -272,6 +278,8 @@ export function segmentsFromDrafts(
 
   const nodeFor = (pos: Vec2): NodeId => {
     const key = vecKey(pos)
+    const pinned = pinnedByKey?.get(key)
+    if (pinned) return pinned
     const existing = existingByKey.get(key)
     if (existing) return existing
     const local = localByKey.get(key)
