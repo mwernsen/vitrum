@@ -150,3 +150,10 @@ raster path (jsdom lacks `<canvas>` encoding) and the visual comparison are manu
 flow (Scope bullet) is deferred — it only becomes meaningful once F-023 assigns glass to pieces;
 consume-by-value is delivered, the version-diff re-link is not. Live manufacturer catalogs remain
 `F-058`. The palette should move to a dedicated Editor dock in/after F-023.
+
+_Texture preview (2026-07-31):_ the glass editor shows a live preview of the glass beside the
+appearance fields (`GlassPreview.svelte`), so the transparency and texture being picked are visible
+rather than inferred from their names. It draws on a 2D canvas through `textureModulation` — the CPU
+mirror of F-053's fragment-shader texture branch, added to `@vitrum/core`'s `shading.ts` — so the
+swatch reads the same as the piece will on the render view. An uploaded swatch photo takes over as
+the surface, as it does in the renderer.

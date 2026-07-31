@@ -190,3 +190,10 @@ before merge (lint, format:check, check, test 384, test:e2e 12).
 - `deleteNode` removes incident spans rather than dissolving a 2-valent node by re-joining its two
   curves; dissolve is a later refinement.
 - Edge (single-axis) scale handles were omitted (corners + rotate only).
+
+_Multi-select drag fix (2026-07-31):_ pressing on a segment used to resolve the click immediately,
+which collapsed a multi-selection to the one segment under the cursor — so dragging three selected
+lines moved only one. A press that lands on something already selected now leaves the selection
+alone and resolves on pointer **up** instead (a click still narrows to one; Shift still toggles it
+out), so the drag moves the whole group. The `move` drag also builds its preview on the same event
+that crosses the movement threshold, instead of one event later.

@@ -160,3 +160,7 @@ a hands-on rosette check whenever desired.
 
 _Cockpit v2 (2026-07-30):_ the snap controls moved from the status-bar `SnapSettings` popover into the **Draw** dock section as a master switch plus six kind chips, with a grid-spacing readout. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+
+_Marker legibility (2026-07-31):_ the snap glyph and its text hint are drawn with a paper halo
+(`--paper-0`, the same treatment F-040's piece numbers use). Both were flat cobalt before, which
+disappeared wherever the snap landed on dark lead came — precisely where snapping matters most.

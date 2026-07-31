@@ -30,9 +30,14 @@ function reference(state: ArcState): Vec2 | null {
   return state.mode === 'center' ? state.points[0]! : state.points.at(-1)!
 }
 
-function constrained(state: ArcState, at: Vec2, shift: boolean): Vec2 {
+function constrained(
+  state: ArcState,
+  at: Vec2,
+  shift: boolean,
+  refDirs: readonly Vec2[] = [],
+): Vec2 {
   const ref = reference(state)
-  return shift && ref ? constrainAngle(ref, at) : at
+  return shift && ref ? constrainAngle(ref, at, refDirs) : at
 }
 
 /** Circumcircle centre of three points, or `null` when they are collinear. */
@@ -94,16 +99,21 @@ export const arcTool: ToolDef<ArcState> = {
   reduce(state, input: ToolInput): ToolStep<ArcState> {
     switch (input.type) {
       case 'down': {
-        const at = constrained(state, input.at, input.shift ?? false)
+        const at = constrained(state, input.at, input.shift ?? false, input.refDirs)
         if (state.points.length === 2) return commitFrom(state, at)
         return { state: { ...state, points: [...state.points, at], cursor: at } }
       }
       case 'move':
-        return { state: { ...state, cursor: constrained(state, input.at, input.shift ?? false) } }
+        return {
+          state: {
+            ...state,
+            cursor: constrained(state, input.at, input.shift ?? false, input.refDirs),
+          },
+        }
       case 'numeric': {
         const ref = reference(state)
         if (!ref) return { state } // Need a first click (start/centre) before a value.
-        const at = placeNumeric(ref, input.value, state.cursor, input.shift ?? false)
+        const at = placeNumeric(ref, input.value, state.cursor, input.shift ?? false, input.refDirs)
         if (state.points.length === 2) return commitFrom(state, at)
         return { state: { ...state, points: [...state.points, at], cursor: at } }
       }

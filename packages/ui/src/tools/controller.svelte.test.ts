@@ -71,6 +71,29 @@ describe('ToolController drawing', () => {
     expect(tools.active).toBe(false)
   })
 
+  it('shift locks a span parallel to the document line it starts from', () => {
+    const { tools, project } = setup()
+    // An existing line at 20°, drawn first so it is in the document.
+    const end = vec2(Math.cos(0.349) * 100, Math.sin(0.349) * 100)
+    tools.activate('line')
+    tools.pointerDown(vec2(0, 0), { shift: false, alt: false })
+    tools.pointerDown(end, { shift: false, alt: false })
+    tools.handleKeyDown(key('Enter'))
+
+    // A second span starting at that line's far endpoint, shift-held at ~22° — off every 45° ray.
+    const raw = vec2(end.x + Math.cos(0.384) * 100, end.y + Math.sin(0.384) * 100)
+    tools.pointerDown(end, { shift: false, alt: false })
+    tools.pointerDown(raw, { shift: true, alt: false })
+    tools.handleKeyDown(key('Enter'))
+
+    const spans = Object.values(project().segments).map((s) => s.geometry as Line)
+    expect(spans).toHaveLength(2)
+    const second = spans.find((s) => s.a.x === end.x && s.a.y === end.y)!
+    const bearing = Math.atan2(second.b.y - second.a.y, second.b.x - second.a.x)
+    expect(bearing).toBeCloseTo(0.349, 6) // parallel to the first line, not on a 45° ray
+    expect(distance(second.a, second.b)).toBeCloseTo(100, 6)
+  })
+
   it('escape discards an in-progress gesture without a command', () => {
     const { tools, commands } = setup()
     tools.activate('line')

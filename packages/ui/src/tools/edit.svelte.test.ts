@@ -85,6 +85,38 @@ describe('EditController selection', () => {
     expect(doc(store).nodes[sharedNode]!.pos).toEqual(vec2(100, 0))
   })
 
+  it('drags the whole selection when the press lands on an already-selected segment', () => {
+    const { edit, selection, store, segments } = setup()
+    selection.replace([segments[0]!.id, segments[1]!.id])
+
+    // Press on the horizontal span (away from any node) and drag by (20, 10).
+    edit.pointerDown(vec2(50, 0), mods)
+    edit.pointerMove(vec2(70, 10), mods)
+    edit.pointerUp(vec2(70, 10), mods)
+
+    const d = doc(store)
+    const a = d.segments[segments[0]!.id]!.geometry
+    const b = d.segments[segments[1]!.id]!.geometry
+    expect(a.kind === 'line' && a.a).toEqual(vec2(20, 10))
+    expect(b.kind === 'line' && b.b).toEqual(vec2(120, 90))
+    expect(selection.size).toBe(2) // the press did not collapse the selection
+  })
+
+  it('a click (no drag) on an already-selected segment narrows to it; shift removes it', () => {
+    const { edit, selection, segments } = setup()
+    selection.replace([segments[0]!.id, segments[1]!.id])
+
+    edit.pointerDown(vec2(50, 0), mods)
+    edit.pointerUp(vec2(50, 0), mods)
+    expect([...selection.selected]).toEqual([segments[0]!.id])
+
+    selection.replace([segments[0]!.id, segments[1]!.id])
+    const shift = { shift: true, alt: false }
+    edit.pointerDown(vec2(50, 0), shift)
+    edit.pointerUp(vec2(50, 0), shift)
+    expect([...selection.selected]).toEqual([segments[1]!.id])
+  })
+
   it('deletes the selection and nudges it by the grid step', () => {
     const { edit, selection, store, viewport, segments } = setup()
     selection.replace([segments[0]!.id])

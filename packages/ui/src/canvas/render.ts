@@ -1030,8 +1030,10 @@ const SNAP_LABELS: Record<SnapKind, string> = {
  * Draw the active snap marker (F-012): a distinct glyph per kind at the snap point (square =
  * endpoint, × = intersection, triangle = midpoint, circle = on-curve, plus = grid, diamond =
  * angle), any alignment/extension guide lines, and a short text hint by the cursor. Drawn on
- * the overlay layer in a single accent (cobalt) so it reads as chrome, not glass. Guarded on
- * a null 2D context so component tests under jsdom are unaffected.
+ * the overlay layer in a single accent (cobalt) so it reads as chrome, not glass. Glyph and
+ * label both carry a paper halo, so they stay legible where the snap lands on dark lead — which
+ * is exactly where snapping matters most. Guarded on a null 2D context so component tests under
+ * jsdom are unaffected.
  */
 export function drawSnapMarker(
   ctx: CanvasRenderingContext2D | null,
@@ -1040,11 +1042,13 @@ export function drawSnapMarker(
   palette: CanvasPalette,
 ): void {
   if (!ctx || !hit) return
+  const halo = palette.rulerBg
   ctx.save()
   ctx.strokeStyle = palette.snap
   ctx.fillStyle = palette.snap
   ctx.lineWidth = 1.5
   ctx.setLineDash([])
+  ctx.lineJoin = 'round'
 
   // Alignment / extension guides (angle snap): faint dashed lines behind the glyph.
   if (hit.guides) {
@@ -1064,35 +1068,32 @@ export function drawSnapMarker(
 
   const s = worldToScreen(vp, hit.world)
   const g = SNAP_GLYPH
+  // Build the glyph as one path, then stroke it twice: a wide paper halo first, the accent over it.
   ctx.beginPath()
   switch (hit.kind) {
     case 'endpoint':
-      ctx.strokeRect(s.x - g, s.y - g, g * 2, g * 2)
+      ctx.rect(s.x - g, s.y - g, g * 2, g * 2)
       break
     case 'intersection':
       ctx.moveTo(s.x - g, s.y - g)
       ctx.lineTo(s.x + g, s.y + g)
       ctx.moveTo(s.x + g, s.y - g)
       ctx.lineTo(s.x - g, s.y + g)
-      ctx.stroke()
       break
     case 'midpoint':
       ctx.moveTo(s.x, s.y - g)
       ctx.lineTo(s.x + g, s.y + g)
       ctx.lineTo(s.x - g, s.y + g)
       ctx.closePath()
-      ctx.stroke()
       break
     case 'on-curve':
       ctx.arc(s.x, s.y, g, 0, Math.PI * 2)
-      ctx.stroke()
       break
     case 'grid':
       ctx.moveTo(s.x - g, s.y)
       ctx.lineTo(s.x + g, s.y)
       ctx.moveTo(s.x, s.y - g)
       ctx.lineTo(s.x, s.y + g)
-      ctx.stroke()
       break
     case 'angle':
       ctx.moveTo(s.x, s.y - g)
@@ -1100,14 +1101,19 @@ export function drawSnapMarker(
       ctx.lineTo(s.x, s.y + g)
       ctx.lineTo(s.x - g, s.y)
       ctx.closePath()
-      ctx.stroke()
       break
   }
+  ctx.lineWidth = 4
+  ctx.strokeStyle = halo
+  ctx.stroke()
+  ctx.lineWidth = 1.5
+  ctx.strokeStyle = palette.snap
+  ctx.stroke()
 
   ctx.font = '11px "Geist Mono", ui-monospace, monospace'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText(SNAP_LABELS[hit.kind], s.x + g + 4, s.y - g - 2)
+  drawHaloText(ctx, SNAP_LABELS[hit.kind], s.x + g + 4, s.y - g - 2, palette.snap, halo)
   ctx.restore()
 }
 

@@ -7,6 +7,7 @@ import {
   hexToRgb,
   litColor,
   rgbToHex,
+  textureModulation,
   textureParams,
   transmission,
   type Rgb,
@@ -129,5 +130,54 @@ describe('textureParams', () => {
     expect(textureParams('streaky').anisotropy).toBeGreaterThan(1)
     expect(textureParams('ripple').anisotropy).toBeGreaterThan(1)
     expect(textureParams('hammered').anisotropy).toBe(1)
+  })
+})
+
+describe('textureModulation', () => {
+  /** A coarse sample grid over 90 mm — the span the glass-editor preview draws. */
+  const samples = (tag: TextureTag): number[] => {
+    const out: number[] = []
+    for (let y = 0; y < 90; y += 3)
+      for (let x = 0; x < 90; x += 3) out.push(textureModulation(tag, x, y))
+    return out
+  }
+
+  it('smooth glass is perfectly flat', () => {
+    expect(samples('smooth').every((m) => m === 1)).toBe(true)
+  })
+
+  it('every textured tag actually varies across the surface', () => {
+    for (const tag of TAGS.filter((t) => t !== 'smooth')) {
+      const s = samples(tag)
+      expect(Math.max(...s) - Math.min(...s)).toBeGreaterThan(0.01)
+    }
+  })
+
+  it('stays within the tag amplitude, so a preview never blows out or goes black', () => {
+    for (const tag of TAGS) {
+      const amp = textureParams(tag).amplitude
+      for (const m of samples(tag)) {
+        expect(m).toBeGreaterThanOrEqual(1 - amp - 1e-9)
+        expect(m).toBeLessThanOrEqual(1 + amp + 1e-9)
+      }
+    }
+  })
+
+  it('is deterministic, so the preview does not shimmer between redraws', () => {
+    expect(samples('granite')).toEqual(samples('granite'))
+  })
+
+  it('reads apart tag by tag at the same point', () => {
+    const at = TAGS.filter((t) => t !== 'smooth').map((t) => textureModulation(t, 17, 23))
+    expect(new Set(at).size).toBe(at.length)
+  })
+
+  it('ripple runs along one axis: it varies down y but is flat in x at fixed y', () => {
+    // The wave term is a pure function of y; the noise term is what x contributes, so compare
+    // the y-sweep spread against the x-sweep spread at a fixed y.
+    const downY = Array.from({ length: 30 }, (_, i) => textureModulation('ripple', 0, i * 3))
+    const acrossX = Array.from({ length: 30 }, (_, i) => textureModulation('ripple', i * 3, 0))
+    const spread = (v: number[]): number => Math.max(...v) - Math.min(...v)
+    expect(spread(downY)).toBeGreaterThan(spread(acrossX))
   })
 })

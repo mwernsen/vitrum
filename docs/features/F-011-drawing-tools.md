@@ -177,3 +177,10 @@ the design-system rules; note for back-port.
 
 _Cockpit v2 (2026-07-30):_ the tool palette moved from a floating `Toolbar` into the **Draw** dock section (`DrawPanel`), which shows each tool's real shortcut and a one-line hint. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+
+_Parallel Shift constraint (2026-07-31):_ FR-3's Shift ladder is no longer only the absolute
+0/45/90° one. `constrainAngle` takes optional reference directions, and `ToolInput.refDirs` carries
+the directions of document lines through the point the active span is measured from — filled in by
+`ToolController` via `lineDirectionsAt` — so a span drawn off an existing line can lock parallel or
+perpendicular to it as well as to the world axes. Applies to the line and arc tools, including
+numeric entry. Nearest ray wins, so the absolute ladder is unaffected where it is closer.

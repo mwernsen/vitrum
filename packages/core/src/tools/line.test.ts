@@ -70,6 +70,20 @@ describe('lineTool', () => {
     expect(distance(geo.a, geo.b)).toBeCloseTo(Math.hypot(100, 90), 6)
   })
 
+  it('shift also constrains parallel to a reference line the span starts from', () => {
+    // A reference line at 20°; the second click is at ~22°, off every 45° ray.
+    const refDirs = [vec2(Math.cos(0.349), Math.sin(0.349))]
+    const raw = vec2(Math.cos(0.384) * 100, Math.sin(0.384) * 100)
+    const { commits } = run([
+      down(0, 0),
+      { type: 'down', at: raw, shift: true, refDirs },
+      { type: 'enter' },
+    ])
+    const geo = commits[0]![0]!.geometry as Line
+    expect(Math.atan2(geo.b.y, geo.b.x)).toBeCloseTo(0.349, 6)
+    expect(distance(geo.a, geo.b)).toBeCloseTo(100, 6)
+  })
+
   it('numeric entry places a span of an exact length (FR-2)', () => {
     // Click origin, move to give a direction, then type a 100 mm length.
     const { commits } = run([

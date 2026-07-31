@@ -6,6 +6,7 @@ export {
   hexToRgb,
   litColor,
   rgbToHex,
+  textureModulation,
   textureParams,
   transmission,
   type Backlight,

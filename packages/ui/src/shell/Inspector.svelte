@@ -290,6 +290,12 @@
           </div>
         </dl>
 
+        <h3>Placement</h3>
+        <p class="hint">
+          Drag the centre handle to move the image, a corner handle to resize it. Corners keep the
+          aspect ratio; alt-drag a corner to move it on its own.
+        </p>
+
         <h3>Opacity</h3>
         <div class="opacity">
           <input

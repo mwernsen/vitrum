@@ -5,6 +5,7 @@ import {
   circleTool,
   guideTool,
   identityResolver,
+  lineDirectionsAt,
   lineTool,
   parseNumericEntry,
   polygonTool,
@@ -42,6 +43,12 @@ export interface ToolHost {
   /** The current nodes, so a committed gesture welds to existing junctions (F-013). */
   getNodes(): Readonly<Record<NodeId, Node>>
 }
+
+/**
+ * How close (screen px) the span's origin must be to an existing line for that line to join the
+ * Shift ladder as a parallel/perpendicular reference.
+ */
+const REF_DIR_TOL_PX = 1
 
 /** The tools available for activation, keyed by their single-key shortcut. */
 const SHORTCUTS: Record<string, ToolId> = {
@@ -184,7 +191,7 @@ export class ToolController {
     this.#lastScreen = screen
     const at = this.#resolve(screen)
     this.#cursor = at
-    this.#dispatch({ type: 'down', at, shift: this.shift, alt: this.alt })
+    this.#dispatch({ type: 'down', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
   }
 
   pointerMove(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
@@ -193,14 +200,14 @@ export class ToolController {
     this.#lastScreen = screen
     const at = this.#resolve(screen)
     this.#cursor = at
-    this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt })
+    this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
   }
 
   pointerUp(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
     if (!this.#runner) return
     this.#applyMods(mods)
     const at = this.#resolve(screen)
-    this.#dispatch({ type: 'up', at, shift: this.shift, alt: this.alt })
+    this.#dispatch({ type: 'up', at, shift: this.shift, alt: this.alt, refDirs: this.#refDirs() })
   }
 
   // --- Keyboard --------------------------------------------------------------
@@ -284,7 +291,13 @@ export class ToolController {
       const value = parseNumericEntry(this.numericBuffer, this.#host.viewport.unit)
       this.numericBuffer = ''
       if (value) {
-        this.#dispatch({ type: 'numeric', value, shift: this.shift, alt: this.alt })
+        this.#dispatch({
+          type: 'numeric',
+          value,
+          shift: this.shift,
+          alt: this.alt,
+          refDirs: this.#refDirs(),
+        })
         return
       }
     }
@@ -313,6 +326,23 @@ export class ToolController {
       return
     }
     this.#host.execute(addSegments(segments))
+  }
+
+  /**
+   * Directions of the document lines through the point the active span is measured from (the
+   * gesture's last anchor). Shift then constrains parallel/perpendicular to those as well as to
+   * the world axes, so a span drawn off an existing line can follow it. Empty with no gesture
+   * in progress, or when the anchor sits on no line.
+   */
+  #refDirs(): readonly Vec2[] {
+    const origin = (this.#runner?.anchors() ?? []).at(-1)
+    if (!origin) return []
+    const tolMm = REF_DIR_TOL_PX / this.#host.viewport.transform.scale
+    return lineDirectionsAt(
+      this.#host.getSegments().map((s) => s.geometry),
+      origin,
+      tolMm,
+    )
   }
 
   #resolve(screen: Vec2): Vec2 {

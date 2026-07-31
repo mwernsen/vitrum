@@ -46,6 +46,12 @@ export interface PointerInput {
   readonly shift?: boolean
   /** Alt held ⇒ tool-specific modifier (e.g. break bézier tangent). */
   readonly alt?: boolean
+  /**
+   * Directions of existing lines through the point the active span is measured from. The UI
+   * fills these in from the document so the Shift ladder also offers parallel/perpendicular
+   * to the line a span starts from; empty leaves the plain 0/45/90° ladder.
+   */
+  readonly refDirs?: readonly Vec2[]
 }
 
 /**

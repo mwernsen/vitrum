@@ -45,6 +45,9 @@ export interface ReferenceHost {
 /** Longest edge of a freshly-placed layer, in mm, before the user calibrates. */
 const DEFAULT_LONGEST_MM = 300
 
+/** Floor for a corner resize, so dragging past the anchor cannot collapse or invert the layer. */
+const MIN_SCALE = 0.02
+
 /**
  * The reference-image underlay controller (F-051). Owns the runtime image blobs (the bytes embedded
  * in the `.vitrum` zip), the decoded GPU sources, the current selection and interaction mode, and
@@ -176,6 +179,30 @@ export class ReferenceController {
     if (i < 0 || j < 0 || j >= ids.length) return
     ;[ids[i], ids[j]] = [ids[j]!, ids[i]!]
     this.#host.execute(reorderReferenceLayers(ids))
+  }
+
+  /**
+   * Resize the layer by dragging one corner: the whole destination quad scales uniformly about
+   * the opposite corner, so the image keeps its aspect ratio (the "scale" op of the F-051 scope).
+   * The pointer is projected onto the anchor→corner diagonal, which keeps the handle under the
+   * cursor without ever shearing the quad. {@link dragCorner} is the free-corner variant.
+   */
+  scaleFromCorner(id: LayerId, corner: number, world: Vec2): void {
+    const layer = this.#layer(id)
+    if (!layer || layer.locked) return
+    const anchor = layer.dstQuad[(corner + 2) % 4]!
+    const grabbed = layer.dstQuad[corner]!
+    const dx = grabbed.x - anchor.x
+    const dy = grabbed.y - anchor.y
+    const lenSq = dx * dx + dy * dy
+    if (lenSq === 0) return
+    const projected = ((world.x - anchor.x) * dx + (world.y - anchor.y) * dy) / lenSq
+    const scale = Math.max(projected, MIN_SCALE)
+    const dstQuad = layer.dstQuad.map((p) => ({
+      x: anchor.x + (p.x - anchor.x) * scale,
+      y: anchor.y + (p.y - anchor.y) * scale,
+    })) as unknown as Quad
+    this.#patch(id, { dstQuad }, `ref-scale-${id}`)
   }
 
   /** Drag one destination-quad corner to `world` (free transform / perspective placement). */
