@@ -35,6 +35,7 @@ export {
   type LightSettings,
   type NestingSettings,
   type NestRotationPolicy,
+  type NestStrategy,
   type Node,
   type NodeId,
   type NumberingScheme,

@@ -48,6 +48,11 @@
     cost?: Snippet
     /** Live version-history content (F-055). */
     history?: Snippet
+    /**
+     * Live sheet-nesting content (F-057). Nest is a *view*, not a rail section, so when it is open
+     * this replaces whatever section is docked — the layout it drives fills the stage beside it.
+     */
+    nest?: Snippet
   }
 
   let {
@@ -69,29 +74,36 @@
     make,
     cost,
     history,
+    nest,
   }: Props = $props()
 
   const current = $derived(DOCK_SECTIONS.find((s) => s.id === section) ?? DOCK_SECTIONS[0]!)
+  /** The nest panel owns its own header and a wider column, so the dock hands it the bare box. */
+  const nesting = $derived(nest !== undefined)
 
   // Draw sets its own 14px gutters and Check owns a sticky footer plus an inner scroller, so the
   // dock hands both of them the bare box. Everything else gets the standard dock padding.
   const bleed = $derived(section === 'draw' || section === 'check')
 </script>
 
-<aside class="dock" aria-label="Panel dock">
-  <div class="header">
-    <span class="title">{current.label}</span>
-    <span class="spacer"></span>
-    {#if meta}<span class="meta">{meta}</span>{/if}
-  </div>
+<aside class="dock" class:wide={nesting} aria-label="Panel dock">
+  {#if !nesting}
+    <div class="header">
+      <span class="title">{current.label}</span>
+      <span class="spacer"></span>
+      {#if meta}<span class="meta">{meta}</span>{/if}
+    </div>
+  {/if}
 
   <div
     class="body"
-    class:bleed
+    class:bleed={bleed || nesting}
     class:own-scroll={section === 'check'}
     class:fill={section === 'glass'}
   >
-    {#if section === 'draw'}
+    {#if nesting}
+      {@render nest?.()}
+    {:else if section === 'draw'}
       <DrawPanel
         {viewport}
         {tools}
@@ -129,6 +141,12 @@
     min-height: 0;
     background: var(--paper-0);
     border-right: 1px solid var(--border-subtle);
+  }
+
+  /* The nest view's panel carries more per row (stock size, rotation, utilisation), so it gets the
+     wider column the redesign specifies. */
+  .dock.wide {
+    width: 392px;
   }
 
   .header {

@@ -19,6 +19,20 @@ import type { Vec2 } from '@vitrum/geometry'
  */
 export type NestRotationPolicy = 'free' | 'quadrant' | 'flip' | 'fixed'
 
+/**
+ * How pieces are ordered onto the sheets. Every strategy still prefers fewer sheets — for a fixed
+ * set of pieces on a fixed sheet size, utilisation *is* one over the sheet count, so nothing trades
+ * that away. What differs is the placement order, which changes how the offcuts fall and how the
+ * cuts run:
+ *
+ * - `fewest` — biggest area first. The best sheet count on most panels, at the cost of awkward
+ *   offcuts. The default, and what the nester has always done.
+ * - `tight` — tallest first, so pieces band into shelves of similar height and the leftover strips
+ *   are usable; cut directions end up mixed.
+ * - `fast` — widest first, so pieces line up in long rows and more scores run straight across.
+ */
+export type NestStrategy = 'fewest' | 'tight' | 'fast'
+
 /** A commercial sheet dimension pieces are laid onto (mm). */
 export interface NestSheetSize {
   readonly widthMm: number
@@ -53,6 +67,8 @@ export interface NestInput {
   readonly spacingMm: number
   /** Seed for the stochastic placement — the same seed always yields the same layout (FR-3). */
   readonly seed: number
+  /** Placement order. Defaults to `fewest` — the ordering the nester has always used. */
+  readonly strategy?: NestStrategy
   /** Target upper bound on raster cells per sheet (tunes speed vs. tightness). Default 200 000. */
   readonly maxCellsPerSheet?: number
 }

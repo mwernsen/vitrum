@@ -80,6 +80,7 @@
   import { type DockSection } from './dock'
   import DockPanel from './DockPanel.svelte'
   import Inspector, { type PanelStat } from './Inspector.svelte'
+  import NestPanel from './NestPanel.svelte'
   import NestView from './NestView.svelte'
   import OutputDrawer, { type DrawerTab } from './OutputDrawer.svelte'
   import OverlaysChip from './OverlaysChip.svelte'
@@ -1003,6 +1004,10 @@
   />
 {/snippet}
 
+{#snippet nestPanel()}
+  <NestPanel {nest} glasses={projectGlasses} unit={viewport.unit} />
+{/snippet}
+
 {#snippet costPanel()}
   <QuotePanel
     report={quoteReport}
@@ -1067,6 +1072,7 @@
       make={makePanel}
       cost={costPanel}
       history={versions ? historyPanel : undefined}
+      nest={viewMode === 'nest' ? nestPanel : undefined}
     />
     <div class="stage">
       <div class="viewport">
@@ -1128,6 +1134,7 @@
             glasses={projectGlasses}
             unit={viewport.unit}
             busy={nest.running}
+            onCuttingList={() => openDrawer('cut')}
           />
         {/if}
         {#if controller?.readOnly}
@@ -1135,7 +1142,8 @@
             <span>Read-only shared file</span>
             <button type="button" onclick={editSharedCopy}>Edit a copy</button>
           </div>
-        {:else if viewMeta?.banner}
+        {:else if viewMeta?.banner && viewMode !== 'nest'}
+          <!-- Nest has its own canvas toolbar naming and totalling the layout, so no banner. -->
           <ViewBanner title={viewMeta.banner} meta={bannerMeta} />
         {/if}
 
@@ -1171,30 +1179,30 @@
         />
       {/if}
     </div>
-    <Inspector
-      unit={viewport.unit}
-      {viewMode}
-      {edit}
-      {selection}
-      {paint}
-      {reinforce}
-      {reference}
-      {assignments}
-      {numbering}
-      onSetNumber={setPieceNumber}
-      doc={controller?.doc}
-      {pieces}
-      execute={controller ? (command) => controller.execute(command) : undefined}
-      {panelStats}
-      {legend}
-      scheme={numbering.scheme}
-      violations={drc.result.violations}
-      onQuickFix={(v) => drc.applyQuickFix(v)}
-      light={controller ? light : undefined}
-      nest={viewMode === 'nest' ? nest : undefined}
-      glasses={projectGlasses}
-      onPrintTemplate={exportAvailable && exportPdf ? openTemplate : undefined}
-    />
+    {#if viewMode !== 'nest'}
+      <Inspector
+        unit={viewport.unit}
+        {viewMode}
+        {edit}
+        {selection}
+        {paint}
+        {reinforce}
+        {reference}
+        {assignments}
+        {numbering}
+        onSetNumber={setPieceNumber}
+        doc={controller?.doc}
+        {pieces}
+        execute={controller ? (command) => controller.execute(command) : undefined}
+        {panelStats}
+        {legend}
+        scheme={numbering.scheme}
+        violations={drc.result.violations}
+        onQuickFix={(v) => drc.applyQuickFix(v)}
+        light={controller ? light : undefined}
+        onPrintTemplate={exportAvailable && exportPdf ? openTemplate : undefined}
+      />
+    {/if}
   </div>
   <StatusBar
     {viewport}

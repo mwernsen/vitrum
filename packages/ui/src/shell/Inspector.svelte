@@ -16,8 +16,6 @@
     setCameOverride,
     updateRenderSettings,
     type Command,
-    type Glass,
-    type GlassId,
     type Project,
     type Segment,
   } from '@vitrum/model'
@@ -27,7 +25,6 @@
   import Select from '../components/Select.svelte'
   import type { AssignmentController } from '../glass/assignment.svelte'
   import type { LightController } from '../light/controller.svelte'
-  import type { NestController } from '../nest/controller.svelte'
   import type { NumberingController } from '../numbering/controller.svelte'
   import type { ReferenceController } from '../reference/controller.svelte'
   import type { EditController } from '../tools/edit.svelte'
@@ -36,7 +33,6 @@
   import type { SelectionController } from '../tools/selection.svelte'
 
   import LightPanel from './LightPanel.svelte'
-  import NestControls from './NestControls.svelte'
   import type { LegendEntry } from './NumberingPanel.svelte'
   import PieceInspector from './PieceInspector.svelte'
   import type { ViewMode } from './viewmode'
@@ -85,10 +81,6 @@
     onQuickFix?: (violation: Violation) => void
     /** Sunlight simulation (F-054) — the light view's controls live here. */
     light?: LightController
-    /** Sheet nesting (F-057) — the nest view's controls live here. */
-    nest?: NestController
-    /** Project glasses, for the nest controls' names. */
-    glasses?: Readonly<Record<GlassId, Glass>>
     /** Open the export hub on the 1:1 tiled template (F-041), from the cartoon view. */
     onPrintTemplate?: () => void
   }
@@ -113,8 +105,6 @@
     violations = [],
     onQuickFix,
     light,
-    nest,
-    glasses = {},
     onPrintTemplate,
   }: Props = $props()
 
@@ -687,10 +677,6 @@
     {:else if viewMode === 'light' && light}
       <div class="pad">
         <LightPanel {light} lightViewActive={true} />
-      </div>
-    {:else if viewMode === 'nest' && nest}
-      <div class="pad">
-        <NestControls {nest} {glasses} {unit} />
       </div>
     {/if}
   </div>

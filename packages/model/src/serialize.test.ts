@@ -78,6 +78,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 12, migrate: (file) => ({ schemaVersion: 13, project: file.project }) },
       { from: 13, migrate: (file) => ({ schemaVersion: 14, project: file.project }) },
       { from: 14, migrate: (file) => ({ schemaVersion: 15, project: file.project }) },
+      { from: 15, migrate: (file) => ({ schemaVersion: 16, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -450,7 +451,7 @@ describe('schema versioning (FR-4)', () => {
     const legacy = createEmptyProject() as unknown as Record<string, unknown>
     delete legacy.nesting
     const project = deserialize(JSON.stringify({ schemaVersion: 14, project: legacy }))
-    expect(project.nesting).toEqual({ spacingMm: 3, seed: 1, perGlass: {} })
+    expect(project.nesting).toEqual({ spacingMm: 3, seed: 1, strategy: 'fewest', perGlass: {} })
 
     // A pre-release v14 file that already carries a partial nesting block keeps its fields.
     const partial = createEmptyProject() as unknown as Record<string, unknown>

@@ -19,5 +19,6 @@ export type {
   NestRotationPolicy,
   NestSheet,
   NestSheetSize,
+  NestStrategy,
   PlacedPart,
 } from './types'

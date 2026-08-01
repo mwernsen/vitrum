@@ -117,3 +117,25 @@ rendered document content.
 
 _Cockpit v2 (2026-07-30):_ the floating `NestControls` card moved into the inspector's nest-view context. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+_Nest page rework (2026-08-01):_ built from the "Nesting page redesign" Claude Design project
+(`92930ce8`, `Nest.dc.html`). The controls moved out of the floating card in the inspector into a
+docked 392 px panel beside the layout they drive (`NestPanel.svelte`, replacing `NestControls`),
+ordered as the decision runs — what went wrong, how to arrange, what stock to buy it on — and the
+inspector steps aside in this view, so the sheets get the full stage. `NestView` gained a toolbar
+that names and totals the layout (sheets, pieces, utilisation) plus the cutting-list action, and one
+card per physical sheet carrying its own utilisation bar, so the barely-used sheet is visible
+without reading the panel. The view banner is suppressed here — the toolbar says the same thing.
+
+**Placement strategy** is the one new engine capability: `NestStrategy` (`fewest` / `tight` /
+`fast`) on `NestInput` and persisted in `NestingSettings` (schema v16, defaulting v15 files to
+`fewest` so they re-nest identically). Every strategy still prefers fewer sheets — on a fixed set of
+pieces and sheet size, utilisation _is_ one over the sheet count, so none of them trade that away.
+What differs is the ordering key: area, bbox height (pieces band into shelves, leftover strips stay
+usable), or bbox width (long rows, more straight scores).
+
+Deviations from the design, agreed with Mathieu before building: the "Glass to buy" cost/waste card,
+the per-stock-size comparison table with its "Best value" badge, and the per-piece lock/rotate
+selection toolbar were all left out. The first two are derivable but were descoped; the third needs
+pinned placements in `NestInput` and engine support for honouring them across re-nests. The design's
+boolean "Rotate pieces 90°" switch is kept as the real four-way rotation policy — collapsing it
+would lose the grain-constrained `flip`/`fixed` distinction the design's own grain note depends on.
