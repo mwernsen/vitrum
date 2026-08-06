@@ -77,8 +77,8 @@ the file system.
   unsettled questions (is "Fired" set by hand or derived? does any status gate
   anything?) → its own spec, `F-061`.
 - Templates gallery / starter patterns (Glass Eye ships 400+; ours needs content
-  design first) → `F-060`. The "Start a panel" card should leave room for the third
-  path.
+  design first) → backlog **F-060** (see ROADMAP's backlog table). The "Start a panel"
+  card should leave room for the third path.
 - Glass search, pinning, folders (revisit when real libraries grow).
 - Managed storage, cloud sync, or importing files into an app-owned folder.
 - Multi-window / multiple simultaneously open panels (resolved: replace in place).

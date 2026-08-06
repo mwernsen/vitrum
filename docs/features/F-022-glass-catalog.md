@@ -34,8 +34,9 @@ instances (so a shared project file is self-contained).
 - Assigning glass to pieces and rendering (F-023).
 - Live manufacturer catalog integrations (Bullseye, Wissmach, Oceanside, Kokomo,
   Lamberts, Saint-Just). Diafane lists this as _planned_, so it's a differentiator —
-  but it needs data-sourcing/licensing research first. Backlog: `F-058
-manufacturer-catalogs`; the data model here must already fit it (hence SKU fields).
+  but it needs data-sourcing/licensing research first. Backlog: **F-062**
+  (see ROADMAP's backlog table); the data model here must already fit it (hence the
+  SKU fields).
 
 ## Design
 

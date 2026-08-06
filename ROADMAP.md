@@ -112,6 +112,23 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-058](docs/features/F-058-panel-library.md)      | Panel library & launch screen                     | F-002, F-055 |
 | [F-061](docs/features/F-061-panel-lifecycle.md)    | Panel lifecycle & workshop status                 | F-058        |
 
+## Backlog — ids reserved, not yet scoped
+
+Ideas that specs already point at by number, but which have **no spec and no agreed
+scope**. They live here so a reference like "→ F-060" is findable and so the same
+number is never claimed twice (it has happened). Nothing here is implementable: give it
+a spec from [TEMPLATE.md](docs/features/TEMPLATE.md) first, then a ROADMAP row above.
+
+| ID    | Idea                                                                                          | Referenced by |
+| ----- | --------------------------------------------------------------------------------------------- | ------------- |
+| F-059 | Raster autotrace — bitmap → lead lines; pairs with the F-051 underlay                         | F-050         |
+| F-060 | Pattern templates / starter designs (Glass Eye ships 400+); needs content design              | F-058         |
+| F-062 | Manufacturer glass catalogs (Bullseye, Wissmach, Oceanside, …); needs data/licensing research | F-022         |
+
+**Allocating an id**: add the row here the moment a spec first cites the number, and
+never reuse one. F-058 was briefly cited by F-022 as "manufacturer-catalogs" before it
+became the panel library — that ambiguity is exactly what this table exists to stop.
+
 ## Dependency shape
 
 ```mermaid
