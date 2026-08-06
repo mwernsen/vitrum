@@ -116,7 +116,9 @@ describe('PieceDetector — incremental equals full (FR-4)', () => {
       ),
       { numRuns: 150 },
     )
-  })
+    // 150 property runs land ~1-2 s locally; a loaded CI runner has been seen
+    // past the 5 s default. The generous ceiling still catches a real hang.
+  }, 30_000)
 })
 
 describe('detectPieces — performance (FR-5, generous CI bound)', () => {

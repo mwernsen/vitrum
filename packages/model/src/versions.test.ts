@@ -146,7 +146,9 @@ describe('storage budget (FR-4)', () => {
     expect(bytes.byteLength).toBeLessThan(50 * 1024 * 1024)
     // Sanity: deltas make it far smaller than 60 full copies would be.
     expect(bytes.byteLength).toBeLessThan(5 * 1024 * 1024)
-  })
+    // Building and serializing 60 snapshots of a 2000-segment project runs ~3 s
+    // locally — too close to the 5 s default to survive a loaded CI runner.
+  }, 30_000)
 })
 
 describe('rename (FR-3/FR-5)', () => {
