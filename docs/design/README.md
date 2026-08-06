@@ -23,16 +23,31 @@ reach it" as "no design exists".
 | ------------------------- | ----------------------------------------------------------------------------------- | ---------- |
 | `portal-redesign.dc.html` | Portal redesign (`1ec655e3-ab21-4450-b3be-f2caaca64ea3`), `Portal redesign.dc.html` | 2026-08-06 |
 
-`portal-redesign.dc.html` is the exact file content. Anchors match the panel ids, so
-jump straight to the panel a spec names — `#2a`, `#3a`…`#3e`. Panel map:
+`portal-redesign.dc.html` is the exact file content (887 lines). **Read only the panel
+you need** — `Read` it with `offset`/`limit` from the map below rather than pulling the
+whole 151 KB file into context. Line numbers are for the vendored copy and must be
+re-checked after any re-fetch.
 
-- **turn 3** (`#3a`–`#3e`) — the editor cockpit's five rail panels: Layers, Glass,
-  Rules, Make, Versions. **Canonical for the editor IA**; implemented in
-  `packages/ui/src/shell/`.
-- **turn 2** — `#2a` "Launch — resume & library" (**canonical for the launch
-  screen**, F-058) and `#2b` the cockpit editor (superseded by turn 3).
-- **turn 1** (`#1a`–`#1d`) — the three explored directions plus the original launch;
-  kept for reference, superseded.
+| Panel | Lines   | What it is                                                        |
+| ----- | ------- | ----------------------------------------------------------------- |
+| `#3a` | 69–98   | Layers rail panel — visibility, overlays, symmetry                |
+| `#3b` | 99–128  | Glass rail panel — catalog & assignment                           |
+| `#3c` | 129–163 | Rules rail panel — DRC engine & violations                        |
+| `#3d` | 164–203 | Make rail panel — numbering, cutting list, BOM, export            |
+| `#3e` | 204–244 | Versions rail panel — snapshots & restore                         |
+| `#2a` | 245–336 | **Launch — resume & library. Canonical for F-058.**               |
+| `#2b` | 337–476 | Cockpit editor — superseded by turn 3                             |
+| `#1a` | 477–587 | Original launch — project library; superseded by `#2a`            |
+| `#1b` | 588–675 | Workshop stages (Draw→Glass→Check→Produce) — explicitly abandoned |
+| `#1c` | 676–790 | CAD cockpit — superseded by turn 3                                |
+| `#1d` | 791–887 | Studio desk — superseded by turn 3                                |
+
+- **turn 3** (`#3a`–`#3e`) — the editor cockpit's five rail panels. **Canonical for the
+  editor IA**; implemented in `packages/ui/src/shell/`.
+- **turn 2** — `#2a` the launch screen (canonical, F-058) and `#2b` the cockpit editor.
+- **turn 1** (`#1a`–`#1d`) — three explored directions plus the original launch; kept
+  for reference. `#1b`'s forced linear stages were dropped deliberately: the work isn't
+  linear, and a per-facet readiness signal replaced them.
 
 Turn 3 supersedes turns 1–2 **for the editor**; it never revisited the launch screen,
 so `#2a` remains the design of record there (turn 2's own intro says it keeps turn 1's
