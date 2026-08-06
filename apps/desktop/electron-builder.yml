@@ -12,6 +12,16 @@ directories:
 files:
   - out/**
 
+# Owning `.vitrum` is what makes double-clicking a panel launch (or focus) Vitrum — the OS then
+# delivers the path via `open-file` (macOS) or argv (Windows/Linux), which F-058 FR-1 routes
+# straight into the editor, bypassing the launch screen.
+fileAssociations:
+  - ext: vitrum
+    name: Vitrum panel
+    description: Vitrum stained-glass panel
+    role: Editor
+    mimeType: application/x-vitrum
+
 mac:
   category: public.app-category.graphics-design
   # Unsigned until an Apple Developer ID is provisioned; first launch needs

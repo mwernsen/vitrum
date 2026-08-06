@@ -115,6 +115,8 @@
     importSvg?: () => Promise<OpenedFile | null>
     /** Reads a raster image to add as a reference underlay (F-051). Absent ⇒ the add button hides. */
     importImage?: () => Promise<OpenedImage | null>
+    /** Leave the editor for the panel library (F-058 FR-5). Absent ⇒ the back button stays inert. */
+    onLibrary?: () => void
   }
 
   let {
@@ -128,6 +130,7 @@
     exportPng,
     importSvg,
     importImage,
+    onLibrary,
   }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
@@ -1038,6 +1041,7 @@
     onExport={exportText || exportPdf ? openExport : undefined}
     exportEnabled={exportAvailable && pieces.length > 0}
     onImport={importSvg && controller ? openImport : undefined}
+    {onLibrary}
     onGoTo={(section) => (dockSection = section)}
     pieceCount={pieces.length}
     {unassignedCount}

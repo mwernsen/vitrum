@@ -34,6 +34,8 @@
     exportEnabled?: boolean
     /** Open the SVG import dialog (F-050). Absent ⇒ the import button is hidden. */
     onImport?: () => void
+    /** Leave the editor for the panel library (F-058 FR-5). Absent ⇒ the back button stays inert. */
+    onLibrary?: () => void
     /** Jump to a dock section from the readiness meter. */
     onGoTo?: (section: DockSection) => void
     // --- Readiness inputs (F-020/023/030/040), collapsed into the one meter -------------------
@@ -56,6 +58,7 @@
     onExport,
     exportEnabled = false,
     onImport,
+    onLibrary,
     onGoTo,
     pieceCount = 0,
     unassignedCount = 0,
@@ -70,8 +73,15 @@
 </script>
 
 <header class="topbar">
-  <Tooltip label="Panel library (coming soon)" side="bottom">
-    <IconButton label="Back to panel library" variant="ghost" size="sm" disabled>
+  <!-- F-058: the design's chevron is real now — this leaves the editor for the panel library. -->
+  <Tooltip label={onLibrary ? 'Panel library' : 'Panel library (coming soon)'} side="bottom">
+    <IconButton
+      label="Back to panel library"
+      variant="ghost"
+      size="sm"
+      disabled={!onLibrary}
+      onclick={() => onLibrary?.()}
+    >
       <ArrowLeft size={17} />
     </IconButton>
   </Tooltip>

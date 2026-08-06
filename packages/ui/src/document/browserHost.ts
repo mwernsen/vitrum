@@ -1,5 +1,6 @@
 import type {
   GlassLibraryPort,
+  LibraryPort,
   OpenedFile,
   PriceBookPort,
   StoragePort,
@@ -18,6 +19,14 @@ const AUTOSAVE_KEY = 'vitrum:autosave'
 const GLASS_LIBRARY_KEY = 'vitrum:glass-library'
 const PRICE_BOOK_KEY = 'vitrum:price-book'
 const VERSIONS_PREFIX = 'vitrum:versions:'
+const LIBRARY_KEY = 'vitrum:panel-library'
+const LIBRARY_THUMB_PREFIX = 'vitrum:panel-thumb:'
+/**
+ * A virtual disk for the dev stub (F-058): a browser cannot read a path, so files "saved" in
+ * `pnpm dev:ui` are also kept here, which is what makes the launch screen's grid, thumbnails and
+ * open-an-entry work in the browser. The desktop host reads real files.
+ */
+const FILES_PREFIX = 'vitrum:file:'
 
 /** A localStorage-safe key fragment for a document path (F-055). */
 function safeKey(key: string): string {
@@ -37,11 +46,23 @@ export function createBrowserHost(): AppHost {
   }
 
   const storage: StoragePort = {
-    openFile: () => pickFileBytes('.vitrum,application/zip'),
-    saveFile: async (_path, contents) => {
+    openFile: async () => {
+      const file = await pickFileBytes('.vitrum,application/zip')
+      if (file) writeVirtualFile(file.path, file.contents)
+      return file
+    },
+    readFile: async (path) => {
+      const stored = safeLocalStorage()?.getItem(`${FILES_PREFIX}${safeKey(path)}`)
+      if (!stored) return null
+      const record = parseVirtualFile(stored)
+      return record ? { path, contents: record.bytes } : null
+    },
+    saveFile: async (path, contents) => {
+      writeVirtualFile(path, contents)
       downloadBytes('design.vitrum', contents, 'application/octet-stream')
     },
     saveFileAs: async (suggestedName, contents) => {
+      writeVirtualFile(suggestedName, contents)
       downloadBytes(suggestedName, contents, 'application/octet-stream')
       return suggestedName
     },
@@ -122,6 +143,27 @@ export function createBrowserHost(): AppHost {
     },
   }
 
+  // The panel library (F-058). Recents + thumbnail cache in localStorage; `stat` answers from the
+  // virtual disk above, so a file the dev session never wrote reads as missing (exercising FR-2).
+  const library: LibraryPort = {
+    load: async () => safeLocalStorage()?.getItem(LIBRARY_KEY) ?? null,
+    save: async (contents) => {
+      safeLocalStorage()?.setItem(LIBRARY_KEY, contents)
+    },
+    stat: async (paths) =>
+      paths.map((path) => {
+        const stored = safeLocalStorage()?.getItem(`${FILES_PREFIX}${safeKey(path)}`)
+        return stored ? (parseVirtualFile(stored)?.mtimeMs ?? null) : null
+      }),
+    loadThumbnail: async (key) => {
+      const stored = safeLocalStorage()?.getItem(`${LIBRARY_THUMB_PREFIX}${safeKey(key)}`)
+      return stored ? base64ToBytes(stored) : null
+    },
+    saveThumbnail: async (key, bytes) => {
+      safeLocalStorage()?.setItem(`${LIBRARY_THUMB_PREFIX}${safeKey(key)}`, bytesToBase64(bytes))
+    },
+  }
+
   return {
     storage,
     glassLibrary,
@@ -129,6 +171,13 @@ export function createBrowserHost(): AppHost {
     export: exportPort,
     import: importPort,
     versionStore: versions,
+    library,
+    // `pnpm dev:ui` lands straight in the editor so component work needs no click-through; append
+    // `?library` to the dev URL to work on the launch screen itself (F-058 technical guidance).
+    launchScreen:
+      typeof location !== 'undefined' && new URLSearchParams(location.search).has('library'),
+    // A browser cannot resolve a dropped file's path; the caller falls back to its name.
+    filePathFor: () => null,
     reportDirty: (value) => {
       dirty = value
     },
@@ -138,6 +187,31 @@ export function createBrowserHost(): AppHost {
       typeof window === 'undefined'
         ? false
         : window.confirm('Recover unsaved work from your previous session?'),
+  }
+}
+
+/** Record bytes on the dev stub's virtual disk, stamped with the write time as its "mtime". */
+function writeVirtualFile(path: string, bytes: Uint8Array): void {
+  try {
+    safeLocalStorage()?.setItem(
+      `${FILES_PREFIX}${safeKey(path)}`,
+      JSON.stringify({ mtimeMs: Date.now(), data: bytesToBase64(bytes) }),
+    )
+  } catch {
+    // Quota exceeded — the dev stub simply forgets the file; the desktop host writes real disk.
+  }
+}
+
+function parseVirtualFile(stored: string): { mtimeMs: number; bytes: Uint8Array } | null {
+  try {
+    const parsed = JSON.parse(stored) as { mtimeMs?: unknown; data?: unknown }
+    if (typeof parsed.data !== 'string') return null
+    return {
+      mtimeMs: typeof parsed.mtimeMs === 'number' ? parsed.mtimeMs : 0,
+      bytes: base64ToBytes(parsed.data),
+    }
+  } catch {
+    return null
   }
 }
 

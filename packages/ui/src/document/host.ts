@@ -1,5 +1,6 @@
 import type {
   GlassLibraryPort,
+  LibraryPort,
   OpenedFile,
   PriceBookPort,
   StoragePort,
@@ -96,6 +97,35 @@ export interface AppHost {
    * `versionStore` rather than `versions` to avoid clashing with the preload's version-strings.)
    */
   readonly versionStore?: VersionPort
+  /**
+   * The panel library's recents store + thumbnail cache (F-058). Absent means the host does not
+   * persist recents — the launch screen then shows an in-memory list for the session only. Backed by
+   * the app-data directory on the desktop, `localStorage` in the browser, in-memory in tests.
+   */
+  readonly library?: LibraryPort
+  /**
+   * Whether the app opens on the launch screen (F-058 FR-1). The desktop host says yes; the browser
+   * dev host says no by default so `pnpm dev:ui` lands straight in the editor on a scratch document
+   * and component work needs no click-through (`?library` in the dev URL opts in). Absent ⇒ false.
+   */
+  readonly launchScreen?: boolean
+  /**
+   * The `.vitrum` file the app was launched with — a double-click, `open`, or a CLI argument (F-058
+   * FR-1). Resolves to null for a plain launch, in which case the launch screen is shown. Absent
+   * means the host cannot be launched with a file.
+   */
+  initialFile?(): Promise<string | null>
+  /**
+   * Subscribe to a file the OS asks us to open while the app is already running (macOS fires
+   * `open-file` for a double-click without relaunching). Returns an unsubscribe function.
+   */
+  onOpenFile?(handler: (path: string) => void): () => void
+  /**
+   * Resolve the absolute path of a file the user dragged onto the window (F-058 FR-4). Electron
+   * exposes this through `webUtils`; a plain browser cannot, so it returns null and the caller falls
+   * back to the file's name (the dropped bytes are read from the `File` either way).
+   */
+  filePathFor?(file: File): string | null
   /** Subscribe to native-menu commands. Returns an unsubscribe function. */
   onMenuAction?(handler: (action: MenuAction) => void): () => void
   /** Report unsaved-changes state so the host can guard window close. */

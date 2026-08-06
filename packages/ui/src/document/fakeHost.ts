@@ -1,5 +1,6 @@
 import type {
   GlassLibraryPort,
+  LibraryPort,
   OpenedFile,
   PriceBookPort,
   StoragePort,
@@ -39,19 +40,33 @@ export interface FakeHost extends AppHost {
   readonly versionArchives: Map<string, Uint8Array>
   /** Persisted version thumbnails, keyed by `key/id` (F-055). */
   readonly versionThumbnails: Map<string, Uint8Array>
+  /** Persisted panel-library JSON (null = first run) (F-058). */
+  panelLibraryStore: string | null
+  /** Persisted panel thumbnails, keyed by {@link panelThumbnailKey} (F-058). */
+  readonly panelThumbnails: Map<string, Uint8Array>
+  /** Modification times the library's `stat` reports; a path absent here reads as missing (F-058). */
+  readonly mtimes: Map<string, number>
   emitMenu(action: MenuAction): void
+  /** Deliver an `open-file` event, as the OS does for a double-click while running (F-058). */
+  emitOpenFile(path: string): void
 }
 
 export function createFakeHost(): FakeHost {
   const files = new Map<string, Uint8Array>()
   const versionArchives = new Map<string, Uint8Array>()
   const versionThumbnails = new Map<string, Uint8Array>()
+  const panelThumbnails = new Map<string, Uint8Array>()
+  const mtimes = new Map<string, number>()
   let menuHandler: ((action: MenuAction) => void) | undefined
+  let openFileHandler: ((path: string) => void) | undefined
 
   const host: FakeHost = {
     files,
     versionArchives,
     versionThumbnails,
+    panelThumbnails,
+    mtimes,
+    panelLibraryStore: null,
     autosave: null,
     dirty: false,
     nextOpen: null,
@@ -69,11 +84,19 @@ export function createFakeHost(): FakeHost {
     nextImportImage: null,
     storage: {
       openFile: async () => host.nextOpen,
+      readFile: async (path) => {
+        const contents = files.get(path)
+        return contents ? { path, contents } : null
+      },
       saveFile: async (path, contents) => {
         files.set(path, contents)
+        mtimes.set(path, mtimes.size + 1)
       },
       saveFileAs: async (_name, contents) => {
-        if (host.nextSaveAsPath) files.set(host.nextSaveAsPath, contents)
+        if (host.nextSaveAsPath) {
+          files.set(host.nextSaveAsPath, contents)
+          mtimes.set(host.nextSaveAsPath, mtimes.size + 1)
+        }
         return host.nextSaveAsPath
       },
       writeAutosave: async (contents) => {
@@ -129,6 +152,24 @@ export function createFakeHost(): FakeHost {
         versionThumbnails.set(`${key}/${id}`, bytes)
       },
     } satisfies VersionPort,
+    library: {
+      load: async () => host.panelLibraryStore,
+      save: async (contents) => {
+        host.panelLibraryStore = contents
+      },
+      stat: async (paths) => paths.map((path) => mtimes.get(path) ?? null),
+      loadThumbnail: async (key) => panelThumbnails.get(key) ?? null,
+      saveThumbnail: async (key, bytes) => {
+        panelThumbnails.set(key, bytes)
+      },
+    } satisfies LibraryPort,
+    onOpenFile: (handler) => {
+      openFileHandler = handler
+      return () => {
+        openFileHandler = undefined
+      }
+    },
+    emitOpenFile: (path) => openFileHandler?.(path),
     onMenuAction: (handler) => {
       menuHandler = handler
       return () => {

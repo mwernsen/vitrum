@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import {
@@ -69,6 +69,50 @@ function versionKeyDir(key: string): string {
 function priceBookPath(): string {
   return process.env['VITRUM_PRICE_BOOK_PATH'] ?? join(app.getPath('userData'), 'price-book.json')
 }
+
+/** Base directory for the panel library (F-058), overridable so E2E runs stay isolated. */
+function libraryBaseDir(): string {
+  return process.env['VITRUM_LIBRARY_PATH'] ?? join(app.getPath('userData'), 'library')
+}
+
+/** The recents store. Paths + display metadata only — never document content. */
+function libraryPath(): string {
+  return join(libraryBaseDir(), 'panels.json')
+}
+
+/** Cached panel previews, keyed by the renderer's path + mtime key (FR-6). */
+function libraryThumbPath(key: string): string {
+  return join(libraryBaseDir(), 'thumbs', `${key.replace(/[^a-zA-Z0-9._-]/g, '_')}.png`)
+}
+
+/**
+ * A `.vitrum` file the app was launched with (F-058 FR-1): a `open-file` event on macOS, or a
+ * command-line argument on Windows/Linux. Consumed once by the renderer at startup; later events
+ * are forwarded straight to the open window.
+ */
+let pendingOpenPath: string | null = null
+
+/** Pull a `.vitrum` path out of a process argv, ignoring Electron's own flags and the app path. */
+function panelPathFromArgv(argv: readonly string[]): string | null {
+  for (const arg of argv.slice(1)) {
+    if (arg.startsWith('-') || arg === '.') continue
+    if (arg.toLowerCase().endsWith('.vitrum')) return arg
+  }
+  return null
+}
+
+/** Route a file the OS asked us to open: to the live window, or held for the renderer's first ask. */
+function routeOpenFile(path: string): void {
+  const window = BrowserWindow.getAllWindows()[0]
+  if (window && !window.webContents.isLoading()) window.webContents.send('app:openFile', path)
+  else pendingOpenPath = path
+}
+
+// macOS delivers double-clicked files here, and does so before `whenReady` on a cold launch.
+app.on('open-file', (event, path) => {
+  event.preventDefault()
+  routeOpenFile(path)
+})
 
 // Unsaved-changes state, reported by the renderer, used to guard window close (F-002).
 let documentDirty = false
@@ -203,6 +247,68 @@ function registerIpc(): void {
 
   ipcMain.handle('storage:save', async (_event, path: string, contents: Uint8Array) => {
     await writeFile(path, Buffer.from(contents))
+  })
+
+  // Read an already-known path with no dialog (F-058): a library entry, a launch argument, a drop.
+  // A missing or unreadable file resolves null so a stale entry degrades to its missing state.
+  ipcMain.handle('storage:read', async (_event, path: string) => {
+    try {
+      return { path, contents: new Uint8Array(await readFile(path)) }
+    } catch {
+      return null
+    }
+  })
+
+  // The panel library (F-058). Recents JSON + cached previews under a folder in the app-data
+  // directory (`VITRUM_LIBRARY_PATH` isolates E2E runs).
+  ipcMain.handle('library:load', async () => {
+    try {
+      return await readFile(libraryPath(), 'utf8')
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('library:save', async (_event, contents: string) => {
+    await mkdir(libraryBaseDir(), { recursive: true })
+    await writeFile(libraryPath(), contents, 'utf8')
+  })
+
+  // Modification time per path, or null where the file is gone — the grid's missing state (FR-2) and
+  // the thumbnail cache key (FR-6). Never rejects, so a slow or absent disk cannot block the library.
+  ipcMain.handle('library:stat', async (_event, paths: string[]) =>
+    Promise.all(
+      paths.map(async (path) => {
+        try {
+          const info = await stat(path)
+          return info.isFile() ? info.mtimeMs : null
+        } catch {
+          return null
+        }
+      }),
+    ),
+  )
+
+  ipcMain.handle('library:loadThumbnail', async (_event, key: string) => {
+    try {
+      return new Uint8Array(await readFile(libraryThumbPath(key)))
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('library:saveThumbnail', async (_event, key: string, bytes: Uint8Array) => {
+    await mkdir(join(libraryBaseDir(), 'thumbs'), { recursive: true })
+    await writeFile(libraryThumbPath(key), Buffer.from(bytes))
+  })
+
+  // The file the app was launched with, asked for once by the renderer at startup (FR-1).
+  // `VITRUM_INITIAL_FILE` lets an E2E run assert the bypass without a real double-click.
+  ipcMain.handle('app:initialFile', async () => {
+    const path =
+      pendingOpenPath ?? process.env['VITRUM_INITIAL_FILE'] ?? panelPathFromArgv(process.argv)
+    pendingOpenPath = null
+    return path ?? null
   })
 
   // Read an SVG file to import (F-050). `VITRUM_IMPORT_SVG_PATH` bypasses the native dialog so E2E

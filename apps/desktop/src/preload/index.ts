@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 /** Menu commands the main process forwards to the renderer. Mirror of ui's `MenuAction`. */
 type MenuAction = 'new' | 'open' | 'save' | 'saveAs' | 'undo' | 'redo' | 'togglePalette'
@@ -26,6 +26,8 @@ const api = {
   },
   storage: {
     openFile: (): Promise<OpenedFile | null> => ipcRenderer.invoke('storage:open'),
+    readFile: (path: string): Promise<OpenedFile | null> =>
+      ipcRenderer.invoke('storage:read', path),
     saveFile: (path: string, contents: Uint8Array): Promise<void> =>
       ipcRenderer.invoke('storage:save', path, contents),
     saveFileAs: (suggestedName: string, contents: Uint8Array): Promise<string | null> =>
@@ -67,6 +69,33 @@ const api = {
       ipcRenderer.invoke('versions:loadThumbnail', key, id),
     saveThumbnail: (key: string, id: string, bytes: Uint8Array): Promise<void> =>
       ipcRenderer.invoke('versions:saveThumbnail', key, id, bytes),
+  },
+  // The panel library (F-058): recents + the cached-preview store, plus the launch-with-a-file and
+  // drag-and-drop integrations. The desktop app is the one host that opens on the launch screen.
+  library: {
+    load: (): Promise<string | null> => ipcRenderer.invoke('library:load'),
+    save: (contents: string): Promise<void> => ipcRenderer.invoke('library:save', contents),
+    stat: (paths: readonly string[]): Promise<readonly (number | null)[]> =>
+      ipcRenderer.invoke('library:stat', [...paths]),
+    loadThumbnail: (key: string): Promise<Uint8Array | null> =>
+      ipcRenderer.invoke('library:loadThumbnail', key),
+    saveThumbnail: (key: string, bytes: Uint8Array): Promise<void> =>
+      ipcRenderer.invoke('library:saveThumbnail', key, bytes),
+  },
+  launchScreen: true,
+  initialFile: (): Promise<string | null> => ipcRenderer.invoke('app:initialFile'),
+  onOpenFile: (handler: (path: string) => void): (() => void) => {
+    const listener = (_event: unknown, path: string): void => handler(path)
+    ipcRenderer.on('app:openFile', listener)
+    return () => ipcRenderer.removeListener('app:openFile', listener)
+  },
+  // `File.path` was removed from Electron's renderer; `webUtils` is the sanctioned replacement.
+  filePathFor: (file: File): string | null => {
+    try {
+      return webUtils.getPathForFile(file) || null
+    } catch {
+      return null
+    }
   },
   onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
     const listener = (_event: unknown, action: MenuAction): void => handler(action)

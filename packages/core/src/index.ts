@@ -50,6 +50,13 @@ export {
   type LengthUnit,
 } from './units'
 export {
+  MAX_PANEL_MM,
+  validateNewPanel,
+  type NewPanelErrors,
+  type NewPanelForm,
+  type NewPanelValidation,
+} from './newPanel'
+export {
   arcFromCenter,
   arcThroughPoints,
   arcTool,

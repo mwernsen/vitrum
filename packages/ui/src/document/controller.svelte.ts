@@ -14,6 +14,7 @@ import {
   addSegment,
   constructionSegmentIds,
   createEmptyProject,
+  createPanelProject,
   createSegment,
   DocumentStore,
   editableCopy,
@@ -29,6 +30,7 @@ import type {
   AssetId,
   Command,
   ExecuteOptions,
+  NewPanelSpec,
   Project,
   ReferenceAsset,
   Segment,
@@ -83,6 +85,20 @@ export class DocumentController {
    */
   collectAssets: () => ReadonlyMap<AssetId, ReferenceAsset> = () => new SvelteMap()
   loadAssets: (assets: ReadonlyMap<AssetId, ReferenceAsset>) => void = () => {}
+
+  /**
+   * What the "New" command does (F-058 FR-3). The shell sets it to open the new-panel dialog, so
+   * Cmd-N and the native File ▸ New both ask for a name, size and technique instead of silently
+   * dropping a blank document. Unset ⇒ the F-002 behaviour ({@link newDocument}).
+   */
+  onNewPanel: (() => void) | undefined
+
+  /**
+   * Called with the file's path after a successful save (F-058): the shell records the panel in the
+   * library so a freshly saved document appears in the grid, with a preview keyed to the file's new
+   * modification time (FR-2/FR-6).
+   */
+  onSaved: ((path: string) => void) | undefined
 
   segmentCount = $derived(Object.keys(this.doc.segments).length)
 
@@ -257,18 +273,83 @@ export class DocumentController {
     await this.#host.storage.clearAutosave()
   }
 
-  open = async (): Promise<void> => {
-    if (!(await this.#confirmDiscard())) return
+  /** Open a file through the native dialog. Resolves false when cancelled (F-058 needs to know). */
+  open = async (): Promise<boolean> => {
+    if (!(await this.#confirmDiscard())) return false
     const file = await this.#host.storage.openFile()
-    if (!file) return
+    if (!file) return false
+    this.#load(file.path, file.contents)
+    await this.#host.storage.clearAutosave()
+    return true
+  }
+
+  /**
+   * Ask about unsaved changes, if there are any (F-058). Exposed so the shell can guard leaving the
+   * editor for the launch screen with the same prompt open/new use (FR-5). True ⇒ go ahead.
+   */
+  confirmDiscardIfDirty = (): Promise<boolean> => this.#confirmDiscard()
+
+  /**
+   * Open a `.vitrum` file by path, with no dialog — how the panel library opens an entry, how a file
+   * the app was launched with is loaded, and where a dropped file ends up (F-058 FR-1/FR-2/FR-4).
+   * Replaces the open document in place, behind the unsaved-changes guard (Open question 2). Resolves
+   * false when the user cancelled, the host cannot read paths, or the file is missing/not a panel.
+   */
+  openPath = async (path: string): Promise<boolean> => {
+    const read = this.#host.storage.readFile
+    if (!read) return false
+    if (!(await this.#confirmDiscard())) return false
+    const file = await read.call(this.#host.storage, path)
+    if (!file) return false
+    return this.#openBytes(file.path, file.contents)
+  }
+
+  /**
+   * Open already-read `.vitrum` bytes under a path (F-058 FR-4 drag-and-drop, where the browser hands
+   * us the file's contents directly). Behind the unsaved-changes guard, like {@link openPath}.
+   * Resolves false when the user cancelled or the bytes are not a readable panel.
+   */
+  openBytes = async (path: string, contents: Uint8Array): Promise<boolean> => {
+    if (!(await this.#confirmDiscard())) return false
+    return this.#openBytes(path, contents)
+  }
+
+  /**
+   * Start a new panel from the new-panel dialog's choices (F-058 FR-3): the document enters the
+   * editor with the chosen settings and technique, an empty undo history, and no file path — it is
+   * unsaved until the user chooses where it lives (Open question 1, "Save-As decides"). Resolves
+   * false when the user kept their unsaved changes instead.
+   */
+  newPanel = async (spec: NewPanelSpec): Promise<boolean> => {
+    if (!(await this.#confirmDiscard())) return false
     this.#detector.reset()
     this.#cutCache.reset()
-    const { project, assets } = unpackDocument(file.contents)
+    this.#store.load(createPanelProject(spec))
+    this.currentPath = null
+    this.readOnly = false
+    await this.#host.storage.clearAutosave()
+    return true
+  }
+
+  /** Load document bytes into the store. Returns false for anything that is not a readable panel. */
+  async #openBytes(path: string, contents: Uint8Array): Promise<boolean> {
+    try {
+      this.#load(path, contents)
+    } catch {
+      return false
+    }
+    await this.#host.storage.clearAutosave()
+    return true
+  }
+
+  #load(path: string, contents: Uint8Array): void {
+    const { project, assets } = unpackDocument(contents)
+    this.#detector.reset()
+    this.#cutCache.reset()
     this.loadAssets(assets)
     this.#store.load(project)
-    this.currentPath = file.path
+    this.currentPath = path
     this.readOnly = isReadOnly(project)
-    await this.#host.storage.clearAutosave()
   }
 
   /** Silent save in place (Cmd-S); falls back to Save-As for a document with no path. */
@@ -281,6 +362,7 @@ export class DocumentController {
     await this.#host.storage.saveFile(this.currentPath, this.#packFile())
     this.#store.markSaved()
     await this.#host.storage.clearAutosave()
+    this.onSaved?.(this.currentPath)
   }
 
   saveAs = async (): Promise<void> => {
@@ -290,6 +372,7 @@ export class DocumentController {
     this.currentPath = path
     this.#store.markSaved()
     await this.#host.storage.clearAutosave()
+    this.onSaved?.(path)
   }
 
   /** Restore an autosave snapshot after a crash. The result is treated as unsaved. */
@@ -311,7 +394,9 @@ export class DocumentController {
   #runMenuAction(action: MenuAction): void {
     switch (action) {
       case 'new':
-        void this.newDocument()
+        // F-058 FR-3: "New" opens the new-panel dialog when the shell offers one.
+        if (this.onNewPanel) this.onNewPanel()
+        else void this.newDocument()
         break
       case 'open':
         void this.open()

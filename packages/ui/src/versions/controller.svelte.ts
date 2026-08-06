@@ -17,7 +17,7 @@ import {
 
 import { SvelteMap } from 'svelte/reactivity'
 
-import { renderThumbnail } from './thumbnail'
+import { renderThumbnail } from '../thumbnail'
 
 /** After this many document changes since the last snapshot, take an automatic one (Decision §2). */
 const AUTO_COMMAND_THRESHOLD = 24

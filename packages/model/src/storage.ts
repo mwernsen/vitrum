@@ -18,6 +18,14 @@ export interface StoragePort {
   /** Show the open dialog and read the chosen file. Resolves to null if cancelled. */
   openFile(): Promise<OpenedFile | null>
 
+  /**
+   * Read an already-known path with no dialog — how the panel library opens an entry, how a file the
+   * app was launched with is loaded, and how a dropped file is read (F-058 FR-1/FR-2/FR-4). Resolves
+   * to null when the file is missing or unreadable, so a stale library entry degrades to its missing
+   * state instead of throwing. Optional so an older host without it still saves and opens by dialog.
+   */
+  readFile?(path: string): Promise<OpenedFile | null>
+
   /** Write to an already-known path — the silent Cmd-S save-in-place path. */
   saveFile(path: string, contents: Uint8Array): Promise<void>
 

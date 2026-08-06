@@ -266,6 +266,25 @@ export {
   type VersionPort,
 } from './versions'
 
+// Panel library & launch screen (F-058)
+export {
+  createPanelProject,
+  deserializePanelLibrary,
+  emptyPanelLibrary,
+  forgetPanel,
+  MAX_LIBRARY_ENTRIES,
+  PANEL_LIBRARY_VERSION,
+  panelEntryFor,
+  panelThumbnailKey,
+  recordPanelOpened,
+  relocatePanel,
+  serializePanelLibrary,
+  type LibraryPort,
+  type NewPanelSpec,
+  type PanelEntry,
+  type PanelLibrary,
+} from './library'
+
 // Storage port
 export type { OpenedFile, StoragePort } from './storage'
 

@@ -13,11 +13,12 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Status bar' })).toBeInTheDocument()
   })
 
-  it('opens the sample panel on an empty document with no geometry yet', () => {
+  it('names the open document, with no geometry yet', () => {
     render(App)
-    // The panel name lives in the top-bar document chip; the readiness meter reflects real F-020
+    // The chip reads the *document's* own name now the new-panel dialog sets it (F-058 FR-3); the
+    // hardcoded "Sample panel" placeholder is gone. The readiness meter reflects real F-020
     // detection — an empty document has cleared none of the four steps.
-    expect(screen.getByTestId('document-chip')).toHaveTextContent('Sample panel')
+    expect(screen.getByTestId('document-chip')).toHaveTextContent('Untitled')
     expect(screen.getByTestId('readiness-meter')).toHaveTextContent('0 / 4')
   })
 })

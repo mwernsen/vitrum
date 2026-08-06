@@ -2,17 +2,18 @@ import { expandNetwork } from '@vitrum/core'
 import { outputSegments, type Project } from '@vitrum/model'
 import { bboxOf, bboxUnion, type BBox } from '@vitrum/geometry'
 
-import { segmentToWorldPoints } from '../canvas/scene'
+import { segmentToWorldPoints } from './canvas/scene'
 
 /**
- * Render a small preview of a version snapshot to PNG bytes (F-055 FR-6). Thumbnails are lead-line
- * linework (Decision §5) — the symmetry-expanded output network fit to the panel bounds, drawn dark
- * on a paper ground. This is rendered document content (a design preview), so it uses fixed preview
- * colours rather than chrome tokens, mirroring the F-043 snapshot rasteriser.
+ * Render a small preview of a document to PNG bytes — the one document→bitmap renderer, shared by
+ * the version browser (F-055 FR-6) and the panel library grid (F-058 FR-6). Thumbnails are lead-line
+ * linework (F-055 Decision §5): the symmetry-expanded output network fit to the panel bounds, drawn
+ * dark on a paper ground. This is rendered document content (a design preview), so it uses fixed
+ * preview colours rather than chrome tokens, mirroring the F-043 snapshot rasteriser.
  *
- * Called lazily by the browser and cached to disk, never at snapshot time. Resolves null when no 2D
- * canvas is available (e.g. jsdom in component tests), so the browser shows a neutral placeholder
- * instead of erroring.
+ * Called lazily on browse and cached, never on a save or snapshot path, so neither feature adds an
+ * editing hitch. Resolves null when no 2D canvas is available (e.g. jsdom in component tests), so
+ * callers show a neutral placeholder instead of erroring.
  */
 const GROUND = '#f4f1ea'
 const INK = '#3a3733'
