@@ -19,7 +19,7 @@
     "check": "pnpm -r check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "pnpm --filter @vitrum/geometry exec vitest run --coverage",
+    "test:coverage": "VITEST_COVERAGE=1 pnpm --filter @vitrum/geometry exec vitest run --coverage",
     "test:e2e": "pnpm --filter @vitrum/desktop test:e2e"
   },
   "devDependencies": {

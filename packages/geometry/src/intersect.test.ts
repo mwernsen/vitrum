@@ -118,8 +118,13 @@ describe('performance (FR-5)', () => {
     const pairs = Array.from({ length: 10_000 }, () => [rng.line(), rng.line()] as const)
     const t0 = Date.now()
     for (const [a, b] of pairs) intersect(a, b)
-    // Budget is 100ms; local runs land ~10ms, so this holds with wide CI headroom.
-    expect(Date.now() - t0).toBeLessThan(100)
+    // Budget is 100ms (FR-5); local runs land ~10ms. Under `--coverage` the V8
+    // instrumentation slows this hot loop enough to breach 100ms on shared CI
+    // runners (seen: 115ms), so coverage runs (`pnpm test:coverage`, which sets
+    // VITEST_COVERAGE) get headroom — the real budget is still enforced by the
+    // uninstrumented test step, and intersect.bench.ts measures precisely.
+    const budget = process.env.VITEST_COVERAGE ? 400 : 100
+    expect(Date.now() - t0).toBeLessThan(budget)
   })
 })
 
