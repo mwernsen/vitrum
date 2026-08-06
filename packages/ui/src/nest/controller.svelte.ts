@@ -7,6 +7,7 @@ import {
   type GlassNestConfig,
   type NestingSettings,
   type NestRotationPolicy,
+  type NestStrategy,
   type Project,
   type SheetSize,
 } from '@vitrum/model'
@@ -133,7 +134,13 @@ export class NestController {
       const cfg = this.configFor(glassId)
       return { glassId, sheet: cfg.sheet, rotation: cfg.rotation }
     })
-    return { parts, glasses, spacingMm: this.settings.spacingMm, seed: this.settings.seed }
+    return {
+      parts,
+      glasses,
+      spacingMm: this.settings.spacingMm,
+      seed: this.settings.seed,
+      strategy: this.settings.strategy,
+    }
   }
 
   /** Whether there is anything to nest (at least one assigned piece). */
@@ -196,6 +203,16 @@ export class NestController {
   setSpacing(mm: number): void {
     const spacingMm = Math.max(0, mm)
     if (spacingMm !== this.settings.spacingMm) this.#patch({ spacingMm })
+  }
+
+  /**
+   * Choose the placement order and re-nest. Every strategy still prefers fewer sheets; what changes
+   * is where the offcuts fall and how the cuts run (see `NestStrategy`).
+   */
+  setStrategy(strategy: NestStrategy): void {
+    if (strategy === this.settings.strategy) return
+    this.#patch({ strategy })
+    void this.run()
   }
 
   /**

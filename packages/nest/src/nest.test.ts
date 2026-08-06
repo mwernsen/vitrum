@@ -225,3 +225,46 @@ describe('nestSheets — progress & grouping', () => {
     expect(result.totalSheets).toBe(2)
   })
 })
+
+describe('placement strategy (F-057 nest rework)', () => {
+  /** Pieces with clearly different width/height profiles, so the orderings genuinely differ. */
+  const parts: NestPart[] = [
+    rect('wide', 'g', 180, 30),
+    rect('tall', 'g', 30, 180),
+    rect('big', 'g', 120, 120),
+    rect('small', 'g', 40, 40),
+  ]
+  const input = (strategy?: NestInput['strategy']): NestInput => ({
+    parts,
+    glasses: [glass('g', 400, 400, 'fixed')],
+    spacingMm: 2,
+    seed: 5,
+    ...(strategy ? { strategy } : {}),
+  })
+
+  it('defaults to `fewest`, so an input without a strategy nests exactly as before', () => {
+    expect(nestSheets(input())).toEqual(nestSheets(input('fewest')))
+  })
+
+  it('places every piece whichever order is used', () => {
+    for (const s of ['fewest', 'tight', 'fast'] as const) {
+      const g = nestSheets(input(s)).glasses[0]!
+      expect(g.unplaced).toEqual([])
+      expect(g.sheets.flatMap((sh) => sh.parts)).toHaveLength(parts.length)
+    }
+  })
+
+  it('lays the pieces out differently: tallest first vs. widest first', () => {
+    const first = (s: NestInput['strategy']): string =>
+      nestSheets(input(s)).glasses[0]!.sheets[0]!.parts[0]!.id
+    // `tight` keys on height, so the 30 × 180 piece leads; `fast` keys on width, so the 180 × 30 does.
+    expect(first('tight')).toBe('tall')
+    expect(first('fast')).toBe('wide')
+    // `fewest` keys on area, so the biggest piece leads.
+    expect(first('fewest')).toBe('big')
+  })
+
+  it('is reproducible: the same strategy and seed give the same layout (FR-3)', () => {
+    expect(nestSheets(input('tight'))).toEqual(nestSheets(input('tight')))
+  })
+})

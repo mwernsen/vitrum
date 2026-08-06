@@ -140,3 +140,9 @@ in `@vitrum/paper`.
 
 _Cockpit v2 (2026-07-30):_ the reference-layer list moved from the Layers panel into the **Draw** dock section's Tracing block. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+
+_Corner resize (2026-07-31):_ in `place` mode a corner handle now **scales** the layer about the
+opposite corner, keeping the aspect ratio (`ReferenceController.scaleFromCorner`, the pointer
+projected onto the anchor→corner diagonal) — the "scale" op the Scope bullet calls for. The free
+per-corner drag it replaced (`dragCorner`) stays available on alt-drag for a manual perspective
+tweak; FR-2 rectification is unchanged and remains the proper tool for a photographed rectangle.

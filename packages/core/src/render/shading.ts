@@ -150,3 +150,69 @@ const TEXTURE_PARAMS: Record<TextureTag, TextureParams> = {
 export function textureParams(texture: TextureTag): TextureParams {
   return TEXTURE_PARAMS[texture]
 }
+
+/* -------------------------------------------------------------------------- */
+/* Procedural texture — the CPU mirror of the fragment shader                  */
+/* -------------------------------------------------------------------------- */
+
+/** Hash → 0..1, the fragment shader's `hash` verbatim (same constants, same result). */
+function hash(x: number, y: number): number {
+  const fract = (v: number): number => v - Math.floor(v)
+  let px = fract(x * 123.34)
+  let py = fract(y * 456.21)
+  const d = px * px + py * py + px * 45.32 + py * 45.32
+  px += d
+  py += d
+  return fract(px * py)
+}
+
+/** Value noise with a smoothstep fade — the shader's `vnoise`. */
+function vnoise(x: number, y: number): number {
+  const ix = Math.floor(x)
+  const iy = Math.floor(y)
+  const fx = x - ix
+  const fy = y - iy
+  const ux = fx * fx * (3 - 2 * fx)
+  const uy = fy * fy * (3 - 2 * fy)
+  const a = hash(ix, iy)
+  const b = hash(ix + 1, iy)
+  const c = hash(ix, iy + 1)
+  const d = hash(ix + 1, iy + 1)
+  const top = a + (b - a) * ux
+  const bottom = c + (d - c) * ux
+  return top + (bottom - top) * uy
+}
+
+/**
+ * The brightness multiplier a glass's surface texture applies at a point in texture space
+ * (world mm). This is the CPU mirror of the F-053 fragment shader's texture branch — same noise,
+ * same per-tag formulas — so a 2D preview of a glass (the glass editor's swatch) reads the same
+ * as the piece will on the render view. `smooth` is flat and always returns exactly 1.
+ */
+export function textureModulation(texture: TextureTag, x: number, y: number): number {
+  const { kind, frequencyPerMm: freq, amplitude: amp, anisotropy: aniso } = textureParams(texture)
+  const fx = x * freq
+  const fy = y * freq
+  switch (kind) {
+    case TEXTURE_KIND.hammered:
+      return 1 + amp * (2 * vnoise(fx, fy) - 1)
+    case TEXTURE_KIND.seedy: {
+      const n = vnoise(fx, fy)
+      // Sparse dark bubbles: the shader's smoothstep(0.72, 0.9, n).
+      const t = clamp01((n - 0.72) / (0.9 - 0.72))
+      return 1 - amp * (t * t * (3 - 2 * t))
+    }
+    case TEXTURE_KIND.streaky:
+      return 1 + amp * (2 * vnoise(fx / aniso, fy) - 1)
+    case TEXTURE_KIND.ripple: {
+      const wave = Math.sin((y * freq * 2 * Math.PI) / aniso)
+      return 1 + amp * wave * (0.6 + 0.4 * vnoise(fx, fy))
+    }
+    case TEXTURE_KIND.granite: {
+      const n = vnoise(fx, fy) * 0.6 + vnoise(fx * 2.7, fy * 2.7) * 0.4
+      return 1 + amp * (2 * n - 1)
+    }
+    default:
+      return 1
+  }
+}

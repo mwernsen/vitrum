@@ -45,23 +45,29 @@
   const markerScreens = $derived(controller.rectifyMarkers?.map(toLocal) ?? [])
   const calibrationScreens = $derived(controller.calibrationPoints.map(toLocal))
 
-  type Drag = { kind: 'corner' | 'move' | 'marker'; index: number; last: Vec2 }
+  type Drag = {
+    kind: 'corner' | 'move' | 'marker'
+    index: number
+    last: Vec2
+    /** Corner drags: Alt held at press frees the corner (distort) instead of resizing. */
+    free: boolean
+  }
   let drag: Drag | null = null
 
   function startCorner(event: PointerEvent, index: number) {
     if (!editable) return
-    drag = { kind: 'corner', index, last: toWorld(event) }
+    drag = { kind: 'corner', index, last: toWorld(event), free: event.altKey }
     capture(event)
   }
 
   function startMove(event: PointerEvent) {
     if (!editable) return
-    drag = { kind: 'move', index: -1, last: toWorld(event) }
+    drag = { kind: 'move', index: -1, last: toWorld(event), free: false }
     capture(event)
   }
 
   function startMarker(event: PointerEvent, index: number) {
-    drag = { kind: 'marker', index, last: toWorld(event) }
+    drag = { kind: 'marker', index, last: toWorld(event), free: false }
     capture(event)
   }
 
@@ -75,7 +81,10 @@
     if (!drag) return
     const world = toWorld(event)
     if (drag.kind === 'corner' && editable) {
-      controller.dragCorner(editable.id, drag.index, world)
+      // A corner handle resizes the layer, keeping its aspect ratio and pinning the opposite
+      // corner; hold Alt when starting the drag to move that one corner freely instead.
+      if (drag.free) controller.dragCorner(editable.id, drag.index, world)
+      else controller.scaleFromCorner(editable.id, drag.index, world)
     } else if (drag.kind === 'move' && editable) {
       controller.translate(editable.id, world.x - drag.last.x, world.y - drag.last.y)
       drag.last = world
@@ -118,8 +127,10 @@
     {#each cornerScreens as p, i (i)}
       <button
         class="handle corner"
+        class:nwse={i % 2 === 0}
         style="left:{p.x}px; top:{p.y}px"
-        aria-label="Move {cornerLabels[i]} corner"
+        aria-label="Resize from the {cornerLabels[i]} corner"
+        title="Drag to resize, alt-drag to move this corner alone"
         onpointerdown={(e) => startCorner(e, i)}
       ></button>
     {/each}
@@ -216,6 +227,13 @@
   }
   .handle:hover {
     background: var(--cobalt-100);
+  }
+  /* Corner handles resize; the cursor names the diagonal they pull along. */
+  .handle.corner {
+    cursor: nesw-resize;
+  }
+  .handle.corner.nwse {
+    cursor: nwse-resize;
   }
   .handle.move {
     border-radius: 50%;

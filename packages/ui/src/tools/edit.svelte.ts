@@ -72,7 +72,18 @@ interface Handle {
 type Drag =
   | { readonly kind: 'none' }
   | { readonly kind: 'marquee'; from: Vec2; to: Vec2 }
-  | { readonly kind: 'pending'; start: Vec2; moved: boolean }
+  | {
+      readonly kind: 'pending'
+      start: Vec2
+      /** Candidates under the cursor, nearest first. */
+      readonly candidates: readonly string[]
+      readonly additive: boolean
+      /**
+       * True when the press landed on something already selected, so the selection change was
+       * held back — the drag moves the whole group, and a click without a drag resolves on up.
+       */
+      readonly deferred: boolean
+    }
   | { readonly kind: 'move'; start: Vec2; ids: string[] }
   | {
       readonly kind: 'node'
@@ -228,11 +239,20 @@ export class EditController {
     // 4. A segment under the cursor.
     const hits = pickSegments(this.pickScene(), world, this.tolMm(HIT_PX))
     if (hits.length > 0) {
-      this.sel.click(
-        hits.map((h) => h.id),
-        mods.shift,
-      )
-      this.#drag = { kind: 'pending', start: world, moved: false }
+      const candidates = hits.map((h) => h.id)
+      // Pressing on part of the current selection keeps that selection, so the drag moves the
+      // whole group (all three sides of a triangle, not just the side under the cursor). The
+      // click itself is resolved on pointer up, where a press without a drag still narrows to
+      // one segment (and shift still toggles it out).
+      const deferred = candidates.some((id) => this.sel.has(id))
+      if (!deferred) this.sel.click(candidates, mods.shift)
+      this.#drag = {
+        kind: 'pending',
+        start: world,
+        candidates,
+        additive: mods.shift,
+        deferred,
+      }
       return
     }
     // 5. Empty space → start a marquee (or clear).
@@ -253,7 +273,13 @@ export class EditController {
       case 'pending': {
         const startScreen = worldToScreen(this.vp.transform, drag.start)
         if (distance(startScreen, screen) >= MOVE_THRESHOLD_PX) {
-          this.#drag = { kind: 'move', start: drag.start, ids: [...this.sel.selected] }
+          // The whole selection moves, not just the segment under the cursor.
+          const ids = [...this.sel.selected]
+          this.#drag = { kind: 'move', start: drag.start, ids }
+          this.preview = {
+            transform: translation(world.x - drag.start.x, world.y - drag.start.y),
+            ids,
+          }
         }
         break
       }
@@ -296,6 +322,11 @@ export class EditController {
           else this.sel.replace(ids)
         }
         this.marquee = null
+        break
+      }
+      case 'pending': {
+        // A press on the existing selection that never became a drag: resolve it now.
+        if (drag.deferred) this.sel.click(drag.candidates, drag.additive)
         break
       }
       case 'move':

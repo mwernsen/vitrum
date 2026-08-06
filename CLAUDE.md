@@ -54,6 +54,7 @@ F-004). Non-negotiables for implementing agents:
 ```sh
 pnpm dev           # Electron app, hot reload
 pnpm dev:ui        # UI alone in a browser
+pnpm dev:site      # landing page (apps/website) in a browser
 pnpm lint          # ESLint
 pnpm format:check  # Prettier (format with `pnpm format`)
 pnpm check         # tsc + svelte-check, all packages

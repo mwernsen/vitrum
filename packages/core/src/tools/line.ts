@@ -27,10 +27,20 @@ export interface LineState {
 
 const INITIAL: LineState = { anchors: [], cursor: null }
 
-/** Constrain `to` against the last anchor when Shift is held. */
-function resolveSpanEnd(anchors: readonly Vec2[], to: Vec2, shift: boolean): Vec2 {
+/**
+ * Constrain `to` against the last anchor when Shift is held. A position the resolver already
+ * settled (it reconciled the constraint with snapping) is taken as final — constraining twice
+ * would rotate it off the snap.
+ */
+function resolveSpanEnd(
+  anchors: readonly Vec2[],
+  to: Vec2,
+  shift: boolean,
+  refDirs: readonly Vec2[] = [],
+  settled = false,
+): Vec2 {
   const last = anchors.at(-1)
-  return shift && last ? constrainAngle(last, to) : to
+  return shift && last && !settled ? constrainAngle(last, to, refDirs) : to
 }
 
 /** Build the chain's spans as line drafts. Coincident anchors (a doubled click) are skipped. */
@@ -53,17 +63,35 @@ export const lineTool: ToolDef<LineState> = {
   reduce(state, input: ToolInput): ToolStep<LineState> {
     switch (input.type) {
       case 'down': {
-        const at = resolveSpanEnd(state.anchors, input.at, input.shift ?? false)
+        const at = resolveSpanEnd(
+          state.anchors,
+          input.at,
+          input.shift ?? false,
+          input.refDirs,
+          input.settled,
+        )
         return { state: { anchors: [...state.anchors, at], cursor: at } }
       }
       case 'move': {
-        const cursor = resolveSpanEnd(state.anchors, input.at, input.shift ?? false)
+        const cursor = resolveSpanEnd(
+          state.anchors,
+          input.at,
+          input.shift ?? false,
+          input.refDirs,
+          input.settled,
+        )
         return { state: { ...state, cursor } }
       }
       case 'numeric': {
         const last = state.anchors.at(-1)
         if (!last) return { state } // Need a starting anchor first.
-        const at = placeNumeric(last, input.value, state.cursor, input.shift ?? false)
+        const at = placeNumeric(
+          last,
+          input.value,
+          state.cursor,
+          input.shift ?? false,
+          input.refDirs,
+        )
         return { state: { anchors: [...state.anchors, at], cursor: at } }
       }
       case 'enter': {

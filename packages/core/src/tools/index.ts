@@ -22,7 +22,7 @@ export {
   type ToolStep,
 } from './types'
 
-export { constrainAngle, placeNumeric } from './constrain'
+export { constrainAngle, lineDirectionsAt, placeNumeric } from './constrain'
 export { isNumericChar, parseNumericEntry } from './numeric'
 export {
   ellipseDrafts,

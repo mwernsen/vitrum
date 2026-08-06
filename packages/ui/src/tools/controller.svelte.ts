@@ -5,6 +5,7 @@ import {
   circleTool,
   guideTool,
   identityResolver,
+  lineDirectionsAt,
   lineTool,
   parseNumericEntry,
   polygonTool,
@@ -21,7 +22,7 @@ import {
 } from '@vitrum/core'
 import type { Vec2 } from '@vitrum/geometry'
 import {
-  addSegments,
+  addSegmentsWelded,
   replaceSegments,
   segmentsFromDrafts,
   type Command,
@@ -42,6 +43,19 @@ export interface ToolHost {
   /** The current nodes, so a committed gesture welds to existing junctions (F-013). */
   getNodes(): Readonly<Record<NodeId, Node>>
 }
+
+/**
+ * How close (screen px) the span's origin must be to an existing line for that line to join the
+ * Shift ladder as a parallel/perpendicular reference.
+ */
+const REF_DIR_TOL_PX = 1
+
+/**
+ * The tools whose Shift constrains the active span to an angular ladder (as opposed to the span
+ * tools, where Shift keeps the shape square/uniform). Only these tell the resolver to snap along
+ * the constrained ray.
+ */
+const ANGULAR_CONSTRAINT_TOOLS = new Set<ToolId>(['line', 'arc'])
 
 /** The tools available for activation, keyed by their single-key shortcut. */
 const SHORTCUTS: Record<string, ToolId> = {
@@ -182,25 +196,25 @@ export class ToolController {
     if (!this.#runner) return
     this.#applyMods(mods)
     this.#lastScreen = screen
-    const at = this.#resolve(screen)
-    this.#cursor = at
-    this.#dispatch({ type: 'down', at, shift: this.shift, alt: this.alt })
+    const { world, settled } = this.#resolve(screen)
+    this.#cursor = world
+    this.#dispatch({ type: 'down', at: world, ...this.#modifiers(), settled })
   }
 
   pointerMove(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
     if (!this.#runner) return
     this.#applyMods(mods)
     this.#lastScreen = screen
-    const at = this.#resolve(screen)
-    this.#cursor = at
-    this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt })
+    const { world, settled } = this.#resolve(screen)
+    this.#cursor = world
+    this.#dispatch({ type: 'move', at: world, ...this.#modifiers(), settled })
   }
 
   pointerUp(screen: Vec2, mods: { shift: boolean; alt: boolean }): void {
     if (!this.#runner) return
     this.#applyMods(mods)
-    const at = this.#resolve(screen)
-    this.#dispatch({ type: 'up', at, shift: this.shift, alt: this.alt })
+    const { world, settled } = this.#resolve(screen)
+    this.#dispatch({ type: 'up', at: world, ...this.#modifiers(), settled })
   }
 
   // --- Keyboard --------------------------------------------------------------
@@ -271,9 +285,9 @@ export class ToolController {
     if (event.key === 'Alt') this.alt = false
     // Re-apply the (un)constrained rubber band without waiting for a pointer move.
     if (this.#runner && this.#lastScreen) {
-      const at = this.#resolve(this.#lastScreen)
-      this.#cursor = at
-      this.#dispatch({ type: 'move', at, shift: this.shift, alt: this.alt })
+      const { world, settled } = this.#resolve(this.#lastScreen)
+      this.#cursor = world
+      this.#dispatch({ type: 'move', at: world, ...this.#modifiers(), settled })
     }
   }
 
@@ -284,7 +298,7 @@ export class ToolController {
       const value = parseNumericEntry(this.numericBuffer, this.#host.viewport.unit)
       this.numericBuffer = ''
       if (value) {
-        this.#dispatch({ type: 'numeric', value, shift: this.shift, alt: this.alt })
+        this.#dispatch({ type: 'numeric', value, ...this.#modifiers() })
         return
       }
     }
@@ -299,12 +313,11 @@ export class ToolController {
   }
 
   #commit(drafts: readonly SegmentDraft[]): void {
-    // Weld the gesture: coincident endpoints within it share a node, and an endpoint snapped
-    // onto an existing junction reuses that node id (F-013), so editing later never tears.
-    const segments = segmentsFromDrafts(drafts, this.#host.getNodes())
     // The border tool replaces the single border contour (v1): removing any existing
-    // border segments and adding the new ones in one undo entry.
+    // border segments and adding the new ones in one undo entry. A contour is closed on
+    // itself, so it needs no junction welding.
     if (drafts.every((d) => d.role === 'border')) {
+      const segments = segmentsFromDrafts(drafts, this.#host.getNodes())
       const existing = this.#host
         .getSegments()
         .filter((s) => s.role === 'border')
@@ -312,14 +325,65 @@ export class ToolController {
       this.#host.execute(replaceSegments(existing, segments))
       return
     }
-    this.#host.execute(addSegments(segments))
+    // Weld the gesture into the network: coincident endpoints within it share a node, an endpoint
+    // snapped onto an existing junction reuses that node id, and an endpoint that landed on
+    // another segment's *interior* splits it into a real T-junction (F-013) — so a line drawn
+    // onto the frame is genuinely joined to it, not a free end resting on top of it.
+    this.#host.execute(
+      addSegmentsWelded(
+        { segments: this.#host.getSegments(), nodes: this.#host.getNodes() },
+        drafts,
+      ),
+    )
   }
 
-  #resolve(screen: Vec2): Vec2 {
+  /**
+   * Directions of the document lines through the point the active span is measured from (the
+   * gesture's last anchor). Shift then constrains parallel/perpendicular to those as well as to
+   * the world axes, so a span drawn off an existing line can follow it. Empty with no gesture
+   * in progress, or when the anchor sits on no line.
+   */
+  #refDirs(): readonly Vec2[] {
+    const origin = (this.#runner?.anchors() ?? []).at(-1)
+    if (!origin) return []
+    const tolMm = REF_DIR_TOL_PX / this.#host.viewport.transform.scale
+    return lineDirectionsAt(
+      this.#host.getSegments().map((s) => s.geometry),
+      origin,
+      tolMm,
+    )
+  }
+
+  /** The modifier/reference fields every pointer input carries. */
+  #modifiers(): { shift: boolean; alt: boolean; refDirs: readonly Vec2[] } {
+    return { shift: this.shift, alt: this.alt, refDirs: this.#refDirs() }
+  }
+
+  #resolve(screen: Vec2): { world: Vec2; settled: boolean } {
     const world = screenToWorld(this.#host.viewport.transform, screen)
     const anchors = this.#runner?.anchors() ?? []
     const activeId = this.#runner?.id ?? 'line'
-    return this.resolver(world, { toolId: activeId, anchors }).world
+    const resolved = this.resolver(world, {
+      toolId: activeId,
+      anchors,
+      constrain: this.#constraint(anchors, activeId),
+    })
+    return { world: resolved.world, settled: resolved.settled ?? false }
+  }
+
+  /**
+   * The angular constraint the resolver should snap along, or undefined. Only the tools whose
+   * Shift locks the span's *direction* qualify — for a span tool Shift means "keep it square",
+   * which is not a ray. Telling the resolver lets it put the endpoint where the locked ray crosses
+   * a curve, instead of the tool rotating a freshly-snapped point back off that curve.
+   */
+  #constraint(
+    anchors: readonly Vec2[],
+    toolId: ToolId,
+  ): { origin: Vec2; refDirs: readonly Vec2[] } | undefined {
+    if (!this.shift || !ANGULAR_CONSTRAINT_TOOLS.has(toolId)) return undefined
+    const origin = anchors.at(-1)
+    return origin ? { origin, refDirs: this.#refDirs() } : undefined
   }
 
   #cancelGesture(): void {

@@ -1,6 +1,7 @@
 import {
   DEFAULT_SNAP_SETTINGS,
   buildSnapScene,
+  constrainAngle,
   resolveSnap,
   type PointerResolver,
   type ResolvedPoint,
@@ -10,9 +11,17 @@ import {
   type SnapToggles,
 } from '@vitrum/core'
 import type { Segment } from '@vitrum/model'
-import type { Vec2 } from '@vitrum/geometry'
+import { equals, type Vec2 } from '@vitrum/geometry'
 
 import type { ViewportController } from '../canvas/viewport.svelte'
+
+/** Unit direction from `a` to `b`; the caller guarantees they differ. */
+function direction(a: Vec2, b: Vec2): Vec2 {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  return { x: dx / len, y: dy / len }
+}
 
 /** Which pointer devices get the wider snap radius (resolved Open question). */
 type PointerType = 'mouse' | 'pen' | 'touch' | ''
@@ -123,11 +132,22 @@ export class SnapController {
    */
   resolver: PointerResolver = (world, ctx) => {
     const scale = this.#viewport.transform.scale
+    // With an angular constraint in force (Shift), apply it *first* and snap along the resulting
+    // ray. The tool constrains again afterwards, which is then a no-op — whereas snapping first
+    // and constraining second would rotate the point straight off whatever it had snapped to.
+    const constrained = ctx.constrain
+      ? constrainAngle(ctx.constrain.origin, world, ctx.constrain.refDirs)
+      : world
+    const ray =
+      ctx.constrain && !equals(constrained, ctx.constrain.origin)
+        ? { origin: ctx.constrain.origin, dir: direction(ctx.constrain.origin, constrained) }
+        : undefined
     const hit = resolveSnap(this.#scene, {
-      world,
+      world: constrained,
       radiusMm: this.radiusPx / scale,
       gridMm: this.toggles.grid ? this.#viewport.grid.minor : null,
       anchors: ctx.anchors,
+      ray,
       settings: {
         toggles: this.toggles,
         master: this.master && !this.#snapOff,
@@ -136,6 +156,11 @@ export class SnapController {
       },
     })
     this.hit = hit
-    return hit ? { world: hit.world, snap: { kind: hit.kind, world: hit.world } } : { world }
+    // `settled` whenever a constraint was in force: this resolver has already reconciled it with
+    // snapping, and only it can see both. Without the flag the tool constrains again and rotates
+    // the point off whatever it snapped to — the snap and the constraint undo each other.
+    const settled = ctx.constrain !== undefined
+    if (hit) return { world: hit.world, snap: { kind: hit.kind, world: hit.world }, settled }
+    return { world: constrained, settled }
   }
 }

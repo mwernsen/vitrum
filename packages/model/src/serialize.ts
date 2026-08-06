@@ -32,7 +32,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 15
+export const CURRENT_SCHEMA_VERSION = 16
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -355,9 +355,28 @@ const migrateV14ToV15: Migration = {
     const nesting: NestingSettings = {
       spacingMm: prior?.spacingMm ?? base.spacingMm,
       seed: prior?.seed ?? base.seed,
+      strategy: prior?.strategy ?? base.strategy,
       perGlass: prior?.perGlass ?? base.perGlass,
     }
     return { schemaVersion: 15, project: { ...project, nesting } }
+  },
+}
+
+/**
+ * v15 → v16 (F-057 nest rework): the nesting intent gained a placement `strategy`. v15 files have
+ * none; default them to `fewest`, the order the nester has always used, so a v15 project re-nests
+ * byte-for-byte identically after the upgrade.
+ */
+const migrateV15ToV16: Migration = {
+  from: 15,
+  migrate: (file) => {
+    const project = file.project as Project & { nesting: Partial<NestingSettings> }
+    const nesting: NestingSettings = {
+      ...defaultNestingSettings(),
+      ...project.nesting,
+      strategy: project.nesting?.strategy ?? defaultNestingSettings().strategy,
+    }
+    return { schemaVersion: 16, project: { ...project, nesting } }
   },
 }
 
@@ -376,6 +395,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV12ToV13,
   migrateV13ToV14,
   migrateV14ToV15,
+  migrateV15ToV16,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */

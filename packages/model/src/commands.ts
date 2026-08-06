@@ -147,6 +147,28 @@ export function replaceSegments(removeIds: readonly SegmentId[], add: readonly S
   }
 }
 
+/**
+ * Run several commands as one undo entry, in order. Each command's inverse is computed against
+ * the state that command actually saw, and the inverses run in reverse — so a sequence is exactly
+ * reversible even where a later command depends on an earlier one's result (a T-junction commit
+ * splits a segment, then adds spans welded into the node that split created).
+ */
+export function sequence(commands: readonly Command[]): Command {
+  return {
+    kind: 'sequence',
+    apply: (doc) => commands.reduce((next, command) => command.apply(next), doc),
+    invert: (before) => {
+      const inverses: Command[] = []
+      let doc = before
+      for (const command of commands) {
+        inverses.push(command.invert(doc))
+        doc = command.apply(doc)
+      }
+      return sequence(inverses.reverse())
+    },
+  }
+}
+
 /** Remove several segments as one command — the inverse of {@link addSegments}. */
 export function removeSegments(ids: readonly SegmentId[]): Command {
   return {

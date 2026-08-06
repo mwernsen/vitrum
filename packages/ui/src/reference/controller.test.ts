@@ -75,6 +75,44 @@ describe('ReferenceController — layer ops (undoable)', () => {
     expect(controller.layers[0]!.dstQuad).toEqual(before)
   })
 
+  it('a corner drag resizes the layer about the opposite corner, keeping the aspect ratio', async () => {
+    const { controller } = setup()
+    const layer = await addLayer(controller)
+    const [tl, tr, br] = layer.dstQuad
+    const w0 = tr.x - tl.x
+    const h0 = br.y - tr.y
+
+    // Drag the bottom-right corner (index 2) out along the diagonal to double the size.
+    controller.scaleFromCorner(layer.id, 2, { x: tl.x + w0 * 2, y: tl.y + h0 * 2 })
+    const q = controller.layers[0]!.dstQuad
+    expect(q[0]).toEqual(tl) // the opposite corner is pinned
+    expect(q[1].x - q[0].x).toBeCloseTo(w0 * 2, 6)
+    expect(q[2].y - q[1].y).toBeCloseTo(h0 * 2, 6)
+    // Aspect preserved, so a pointer off the diagonal cannot stretch one axis.
+    controller.scaleFromCorner(layer.id, 2, { x: tl.x + w0 * 2, y: tl.y + h0 * 8 })
+    const q2 = controller.layers[0]!.dstQuad
+    expect((q2[1].x - q2[0].x) / (q2[2].y - q2[1].y)).toBeCloseTo(w0 / h0, 6)
+  })
+
+  it('a corner drag past the anchor clamps instead of inverting the layer', async () => {
+    const { controller } = setup()
+    const layer = await addLayer(controller)
+    const tl = layer.dstQuad[0]
+    controller.scaleFromCorner(layer.id, 2, { x: tl.x - 5000, y: tl.y - 5000 })
+    const q = controller.layers[0]!.dstQuad
+    expect(q[1].x - q[0].x).toBeGreaterThan(0)
+    expect(q[2].y - q[1].y).toBeGreaterThan(0)
+  })
+
+  it('a locked layer ignores a corner resize', async () => {
+    const { controller } = setup()
+    const layer = await addLayer(controller)
+    controller.toggleLock(layer.id)
+    const before = controller.layers[0]!.dstQuad
+    controller.scaleFromCorner(layer.id, 2, { x: 9999, y: 9999 })
+    expect(controller.layers[0]!.dstQuad).toEqual(before)
+  })
+
   it('reorders the stack', async () => {
     const { controller } = setup()
     const a = await addLayer(controller, [1])

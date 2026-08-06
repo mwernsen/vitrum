@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "pnpm --filter @vitrum/desktop dev",
     "dev:ui": "pnpm --filter @vitrum/ui dev",
+    "dev:site": "pnpm --filter @vitrum/website dev",
     "build": "pnpm -r build",
     "lint": "eslint . && stylelint \"packages/**/*.{css,svelte}\" \"apps/**/*.{css,svelte}\"",
     "lint:styles": "stylelint \"packages/**/*.{css,svelte}\" \"apps/**/*.{css,svelte}\"",

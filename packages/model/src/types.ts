@@ -290,6 +290,16 @@ export interface BomSettings {
 export type NestRotationPolicy = 'free' | 'quadrant' | 'flip' | 'fixed'
 
 /**
+ * The order pieces are laid onto sheets in (F-057). Every strategy still prefers fewer sheets — on a
+ * fixed set of pieces and sheet size, utilisation is one over the sheet count, so none of them trade
+ * that away. What differs is where the offcuts fall and how the cuts run: `fewest` takes the biggest
+ * area first, `tight` the tallest (banding pieces into shelves with usable leftover strips), `fast`
+ * the widest (long rows, more straight scores). Structurally identical to `@vitrum/nest`'s
+ * `NestStrategy`; mirrored here so the model stays engine-free.
+ */
+export type NestStrategy = 'fewest' | 'tight' | 'fast'
+
+/**
  * Per-glass nesting choices (F-057): which commercial sheet to lay pieces on and how pieces of that
  * glass may rotate. Both fields are optional intent — an omitted `sheet` resolves to the glass's
  * largest catalog {@link SheetSize} (or a fallback), and an omitted `rotation` is derived from the
@@ -310,12 +320,16 @@ export interface GlassNestConfig {
 export interface NestingSettings {
   readonly spacingMm: number
   readonly seed: number
+  readonly strategy: NestStrategy
   readonly perGlass: Readonly<Record<GlassId, GlassNestConfig>>
 }
 
-/** Fresh nesting intent: a 3 mm cut allowance, a fixed reproducible seed, no per-glass overrides. */
+/**
+ * Fresh nesting intent: a 3 mm cut allowance, a fixed reproducible seed, the `fewest` placement
+ * order, no per-glass overrides.
+ */
 export function defaultNestingSettings(): NestingSettings {
-  return { spacingMm: 3, seed: 1, perGlass: {} }
+  return { spacingMm: 3, seed: 1, strategy: 'fewest', perGlass: {} }
 }
 
 /**

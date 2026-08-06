@@ -11,6 +11,7 @@ import type {
   NestProgress,
   NestResult,
   NestSheet,
+  NestStrategy,
   PlacedPart,
 } from './types'
 
@@ -174,18 +175,42 @@ function packOnce(
   return { sheets, unplaced }
 }
 
-/** Order parts largest-first, optionally jittering the key (seeded) to explore alternatives. */
+/**
+ * The sort key a strategy orders by, descending. `fewest` keys on area (the long-standing
+ * behaviour); `tight` on the part's bbox height, so similar-height pieces band into shelves;
+ * `fast` on its width, so pieces line up in rows. The key is a length for the two bbox
+ * strategies and an area for `fewest` — they are never compared with each other.
+ */
+function orderKey(part: NestPart, area: number, strategy: NestStrategy): number {
+  if (strategy === 'fewest') return area
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const p of part.ring) {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.y > maxY) maxY = p.y
+  }
+  const w = maxX - minX
+  const h = maxY - minY
+  // Secondary extent breaks ties within a band, scaled down so it never outranks the primary one.
+  return strategy === 'tight' ? h + w / 1e6 : w + h / 1e6
+}
+
+/** Order parts by the strategy's key, optionally jittering it (seeded) to explore alternatives. */
 function orderParts(
   parts: readonly NestPart[],
   areaById: Map<string, number>,
   rng: (() => number) | null,
+  strategy: NestStrategy,
 ): NestPart[] {
   const keyed = parts.map((p) => {
-    const a = areaById.get(p.id)!
     const jitter = rng ? 0.85 + 0.3 * rng() : 1
-    return { p, k: a * jitter }
+    return { p, k: orderKey(p, areaById.get(p.id)!, strategy) * jitter }
   })
-  // Stable tie-break by id so equal-area parts have a deterministic order.
+  // Stable tie-break by id so equal-key parts have a deterministic order.
   keyed.sort((x, y) => y.k - x.k || (x.p.id < y.p.id ? -1 : x.p.id > y.p.id ? 1 : 0))
   return keyed.map((e) => e.p)
 }
@@ -197,6 +222,7 @@ function nestGlass(
   maxCells: number,
   seed: number,
   glassIndex: number,
+  strategy: NestStrategy,
 ): GlassNestResult {
   const { widthMm, heightMm, label } = glass.sheet
   const res = resolveRes(widthMm, heightMm, spacingMm, maxCells)
@@ -222,7 +248,7 @@ function nestGlass(
     return [r.unplaced.length, r.sheets.length, last ? -last.placedArea : 0]
   }
   for (let i = 0; i < restarts; i++) {
-    const ordered = orderParts(parts, areaById, i === 0 ? null : rng)
+    const ordered = orderParts(parts, areaById, i === 0 ? null : rng, strategy)
     const result = packOnce(ordered, areaById, candsById, sheetCols, sheetRows, res)
     if (!best) {
       best = result
@@ -266,6 +292,7 @@ function nestGlass(
  */
 export function nestSheets(input: NestInput, onProgress?: (p: NestProgress) => void): NestResult {
   const maxCells = input.maxCellsPerSheet ?? DEFAULT_MAX_CELLS
+  const strategy = input.strategy ?? 'fewest'
   const byGlass = new Map<string, NestPart[]>()
   for (const part of input.parts) {
     const list = byGlass.get(part.glassId)
@@ -282,7 +309,7 @@ export function nestSheets(input: NestInput, onProgress?: (p: NestProgress) => v
     const result =
       parts.length === 0
         ? { glassId: glass.glassId, sheets: [], sheetCount: 0, unplaced: [], utilization: 0 }
-        : nestGlass(parts, glass, input.spacingMm, maxCells, input.seed, i)
+        : nestGlass(parts, glass, input.spacingMm, maxCells, input.seed, i, strategy)
     glasses.push(result)
     sheetsSoFar += result.sheetCount
   })

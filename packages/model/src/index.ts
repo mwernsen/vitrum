@@ -35,6 +35,7 @@ export {
   type LightSettings,
   type NestingSettings,
   type NestRotationPolicy,
+  type NestStrategy,
   type Node,
   type NodeId,
   type NumberingScheme,
@@ -156,6 +157,15 @@ export {
   transformGeometry,
 } from './nodes'
 
+// T-junction welding for committed gestures (F-011/F-013)
+export {
+  JUNCTION_TOLERANCE,
+  addSegmentsWelded,
+  planWeldedCommit,
+  type SegmentDraftLike,
+  type WeldedCommit,
+} from './junctions'
+
 // Commands
 export {
   addReferenceLayer,
@@ -181,6 +191,7 @@ export {
   setGlassAssignments,
   setPieceTextureTransforms,
   setSegmentRole,
+  sequence,
   setSymmetry,
   setTechniqueKind,
   splitSegmentAtNode,

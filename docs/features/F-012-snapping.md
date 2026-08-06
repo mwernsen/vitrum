@@ -160,3 +160,28 @@ a hands-on rosette check whenever desired.
 
 _Cockpit v2 (2026-07-30):_ the snap controls moved from the status-bar `SnapSettings` popover into the **Draw** dock section as a master switch plus six kind chips, with a grid-spacing readout. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+
+_Marker legibility (2026-07-31):_ the snap glyph and its text hint are drawn with a paper halo
+(`--paper-0`, the same treatment F-040's piece numbers use). Both were flat cobalt before, which
+disappeared wherever the snap landed on dark lead came — precisely where snapping matters most.
+
+_Snapping vs. the Shift constraint (2026-07-31):_ the two used to fight, and the constraint always
+won. The resolver snapped a point onto a curve, then the tool's `constrainAngle` rotated that point
+about the anchor onto the nearest ray **preserving its distance**, lifting it back off the curve —
+measurably, up to a few tenths of a millimetre, which is enough to turn a join into an F-030
+dangling line. `ResolveContext.constrain` now tells the resolver a constraint is in force, so it
+applies the constraint _first_ and then snaps **along** the resulting ray: `SnapQuery.ray` switches
+the on-curve step to `nearestCrossingAlongRay`, which reports where the ray crosses a curve rather
+than the nearest point on it. Both properties then hold — exact angle and on the curve — and the
+tool's own constraint is a no-op afterwards. Only the tools whose Shift locks a direction opt in
+(line, arc); for the span tools Shift means "keep it square", which is not a ray.
+
+_…and the tool must not constrain twice (2026-07-31):_ making the on-curve step ray-aware was not
+enough. The tool still re-applied `constrainAngle` to whatever the resolver returned, so any snap
+kind that is not on the ray — a midpoint, an endpoint, a grid point — was rotated straight back off
+it (measured: a midpoint snap landing exactly on the target line came out 0.44 mm off it). The
+resolver is now the single place the two are reconciled and says so: `ResolvedPoint.settled` /
+`PointerInput.settled` tell the line and arc tools to take the position as final. Under a constraint
+the ray crossing also outranks a midpoint, since only it satisfies both the angle and the curve;
+endpoints and intersections still outrank everything, because landing on a real joint matters more
+than a round angle and it welds.

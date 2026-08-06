@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:ui", "--port", "5199", "--strictPort"],
       "port": 5199
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:site", "--strictPort"],
+      "port": 5180
     }
   ]
 }

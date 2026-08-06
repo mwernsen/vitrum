@@ -185,3 +185,13 @@ seam decisions (A–F below) were approved by Mathieu before coding.
 
 _Cockpit v2 (2026-07-30):_ the reinforcement tool moved from the floating `Toolbar` into the **Draw** dock section's tool grid. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.
+
+_Hinge reporting (2026-07-31):_ the rule tests the _span_ of a near-straight run (≥ 85 % of the
+panel dimension along its dominant axis), but its explanation claimed the run "reaches from one edge
+of the panel to the other" — which a run tripping the span test need not do. Reported from a real
+panel: a 3-line run covering 88 % of the height, whose upper end sits 38 mm inside the panel, read as
+an edge-to-edge fold axis the user could not find. Detection is unchanged (the thresholds are tuned
+and the Mondrian/brick goldens still discriminate); the explanation now describes what is measured,
+and the message reports how many lines were merged into the run, the span as a share of the
+dimension it is measured against, and whether the run actually reaches the edges or how far it stops
+short. Whether the check itself should _require_ edge contact is an open question for Mathieu.

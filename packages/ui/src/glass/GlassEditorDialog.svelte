@@ -8,6 +8,7 @@
   import Select from '../components/Select.svelte'
 
   import { downscaleImage } from './downscale'
+  import GlassPreview from './GlassPreview.svelte'
 
   interface Props {
     open: boolean
@@ -133,40 +134,51 @@
   <div class="grid">
     <Input label="Name" value={draft.name} onchange={(v) => (draft = { ...draft, name: v })} />
 
-    <div class="row">
-      <div class="color-field">
-        <span class="label">Colour</span>
-        <div class="color-row">
-          <input
-            class="color-input"
-            type="color"
-            aria-label="Base colour"
-            value={draft.color}
-            oninput={(e) => (draft = { ...draft, color: e.currentTarget.value })}
+    <!-- Appearance: the fields on the left, a live preview of the glass beside them, so the
+         texture and transparency being picked are visible rather than guessed from their names. -->
+    <div class="appearance">
+      <div class="fields">
+        <div class="row">
+          <div class="color-field">
+            <span class="label">Colour</span>
+            <div class="color-row">
+              <input
+                class="color-input"
+                type="color"
+                aria-label="Base colour"
+                value={draft.color}
+                oninput={(e) => (draft = { ...draft, color: e.currentTarget.value })}
+              />
+              <Input value={draft.color} onchange={(v) => (draft = { ...draft, color: v })} />
+            </div>
+          </div>
+          <Input
+            label="Thickness (mm)"
+            value={String(draft.thicknessMm)}
+            onchange={(v) => setNumberField('thicknessMm', v, 0)}
           />
-          <Input value={draft.color} onchange={(v) => (draft = { ...draft, color: v })} />
+        </div>
+
+        <div class="row">
+          <Select
+            label="Transparency"
+            options={transparencyOptions}
+            value={draft.transparency}
+            onchange={(v) => (draft = { ...draft, transparency: v as Glass['transparency'] })}
+          />
+          <Select
+            label="Texture"
+            options={textureOptions}
+            value={draft.texture}
+            onchange={(v) => (draft = { ...draft, texture: v as Glass['texture'] })}
+          />
         </div>
       </div>
-      <Input
-        label="Thickness (mm)"
-        value={String(draft.thicknessMm)}
-        onchange={(v) => setNumberField('thicknessMm', v, 0)}
-      />
-    </div>
 
-    <div class="row">
-      <Select
-        label="Transparency"
-        options={transparencyOptions}
-        value={draft.transparency}
-        onchange={(v) => (draft = { ...draft, transparency: v as Glass['transparency'] })}
-      />
-      <Select
-        label="Texture"
-        options={textureOptions}
-        value={draft.texture}
-        onchange={(v) => (draft = { ...draft, texture: v as Glass['texture'] })}
-      />
+      <div class="preview-field">
+        <span class="label">Preview</span>
+        <GlassPreview glass={draft} />
+      </div>
     </div>
 
     <p class="section">Commercial</p>
@@ -265,6 +277,24 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--space-3);
     align-items: end;
+  }
+
+  .appearance {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-3);
+    align-items: start;
+  }
+
+  .fields {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .preview-field {
+    display: flex;
+    flex-direction: column;
   }
 
   .label {

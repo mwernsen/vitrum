@@ -46,6 +46,19 @@ export interface PointerInput {
   readonly shift?: boolean
   /** Alt held ⇒ tool-specific modifier (e.g. break bézier tangent). */
   readonly alt?: boolean
+  /**
+   * Directions of existing lines through the point the active span is measured from. The UI
+   * fills these in from the document so the Shift ladder also offers parallel/perpendicular
+   * to the line a span starts from; empty leaves the plain 0/45/90° ladder.
+   */
+  readonly refDirs?: readonly Vec2[]
+  /**
+   * The resolver already reconciled the angular constraint with snapping for this position, so a
+   * tool must **not** constrain it again. Re-constraining rotates the point about the anchor
+   * preserving its distance, which walks it off whatever it had just snapped to — the snap and
+   * the constraint would then silently undo each other. See {@link ResolvedPoint.settled}.
+   */
+  readonly settled?: boolean
 }
 
 /**
@@ -120,6 +133,20 @@ export interface ResolveContext {
   readonly toolId: ToolId
   /** Anchors already placed in the current gesture, world mm. */
   readonly anchors: readonly Vec2[]
+  /**
+   * The angular constraint in force (Shift on a tool that locks the span's direction), so the
+   * resolver can snap **along** the constrained ray rather than perpendicular to it. Without
+   * this the tool constrains whatever the resolver returned, rotating a snapped point off the
+   * curve it had just landed on. Absent when no constraint applies.
+   */
+  readonly constrain?:
+    | {
+        /** The point the span is measured from — the constraint's pivot. */
+        readonly origin: Vec2
+        /** Extra reference directions the ladder offers, as in {@link PointerInput.refDirs}. */
+        readonly refDirs: readonly Vec2[]
+      }
+    | undefined
 }
 
 /** Details of a snap the resolver applied, for overlay markers (shape reserved for F-012). */
@@ -132,6 +159,12 @@ export interface SnapResult {
 export interface ResolvedPoint {
   readonly world: Vec2
   readonly snap?: SnapResult
+  /**
+   * Set when the resolver has already applied the active angular constraint (Shift) and settled it
+   * against snapping — because only the resolver can see both. The tool must then take this
+   * position as final: constraining it again would rotate it off the snap it just landed on.
+   */
+  readonly settled?: boolean
 }
 
 /**

@@ -141,10 +141,14 @@
 <style>
   /* Content-only: the enclosing DockPanel (Portal cockpit "2b") owns the column chrome
      (width, border, scroll). This just lays out the glass controls. */
+  /* A column, so the palette below can take the leftover height and scroll to the panel's
+     bottom edge; the controls above it keep their natural size. */
   .dock {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: var(--space-3);
-    align-content: start;
+    flex: 1;
+    min-height: 0;
   }
 
   .selected {

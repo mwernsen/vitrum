@@ -602,6 +602,9 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-2);
+    /* Bottom-align, so the inputs line up even when one label wraps to two lines at this
+       dock width ("Margin — markup (%)" does). */
+    align-items: end;
   }
 
   .settings {

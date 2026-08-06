@@ -94,6 +94,25 @@ describe('GlassPalette (F-022)', () => {
     expect(created.id).toBe('new-id')
   })
 
+  it('previews the glass being created, tracking the texture and transparency picked', async () => {
+    const user = userEvent.setup()
+    render(GlassPalette, { library, libraryActions: actions() })
+
+    await user.click(screen.getByRole('button', { name: 'New glass' }))
+    const dialog = screen.getByRole('dialog')
+    // The preview names what it is showing, so the picked surface is described, not just drawn.
+    expect(
+      within(dialog).getByRole('img', { name: 'Preview of transparent smooth glass' }),
+    ).toBeInTheDocument()
+
+    const [transparency, texture] = within(dialog).getAllByRole('combobox')
+    await user.selectOptions(texture!, 'hammered')
+    await user.selectOptions(transparency!, 'opalescent')
+    expect(
+      within(dialog).getByRole('img', { name: 'Preview of opalescent hammered glass' }),
+    ).toBeInTheDocument()
+  })
+
   it('edits an existing glass and reports the change', async () => {
     const user = userEvent.setup()
     const libraryActions = actions()

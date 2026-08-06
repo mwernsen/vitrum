@@ -120,6 +120,35 @@ describe('hinge-line (FR-1)', () => {
     expect(countByRule(runChecks(buildInput(foil), STRUCTURAL_RULES))['hinge-line'] ?? 0).toBe(0)
   })
 
+  it('says edge to edge only when the run really reaches both edges', () => {
+    const w = 600
+    const h = 600
+    const drafts: Draft[] = [
+      ...borderWithMidpoints(w, h),
+      seg(vec2(w / 2, 0), vec2(w / 2, h / 2)),
+      seg(vec2(w / 2, h / 2), vec2(w / 2, h)),
+    ]
+    const result = runChecks(buildInput(projectFrom(drafts)), STRUCTURAL_RULES)
+    const hinge = result.violations.find((v) => v.ruleId === 'hinge-line')!
+    expect(hinge.message).toContain('edge to edge')
+    expect(hinge.message).toContain('2 lines')
+    expect(hinge.message).toContain("100% of the panel's 600 mm height")
+  })
+
+  it('reports how far a run that trips the span test stops short of the edge', () => {
+    // 88 % of the width, but starting 60 mm inside the left edge: a hinge by span, not edge to edge.
+    const w = 1000
+    const h = 400
+    const drafts: Draft[] = [...borderWithMidpoints(w, h), seg(vec2(60, 40), vec2(940, 40))]
+    const result = runChecks(buildInput(projectFrom(drafts)), STRUCTURAL_RULES)
+    const hinge = result.violations.find((v) => v.ruleId === 'hinge-line')!
+    expect(hinge.message).toContain("88% of the panel's 1000 mm width")
+    // Both ends are inside the panel, and the message says so rather than claiming edge to edge.
+    expect(hinge.message).not.toContain('edge to edge')
+    expect(hinge.message).toContain('stops short of the edge at both ends')
+    expect(hinge.message).toContain('40 mm')
+  })
+
   it('respects a per-project threshold override', () => {
     // The same 88 % run, but the project pins the span threshold to 95 % — no longer a hinge.
     const w = 1000

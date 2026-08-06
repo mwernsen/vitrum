@@ -10,7 +10,12 @@ describe('updateNestingSettings', () => {
   it('starts from the shipped defaults', () => {
     const store = new DocumentStore()
     expect(store.document.nesting).toEqual(defaultNestingSettings())
-    expect(store.document.nesting).toEqual({ spacingMm: 3, seed: 1, perGlass: {} })
+    expect(store.document.nesting).toEqual({
+      spacingMm: 3,
+      seed: 1,
+      strategy: 'fewest',
+      perGlass: {},
+    })
   })
 
   it('patches only the given fields and is one undo entry', () => {
@@ -41,7 +46,12 @@ describe('updateNestingSettings', () => {
     const store = new DocumentStore()
     store.execute(updateNestingSettings({ spacingMm: 4 }))
     store.execute(updateNestingSettings({ seed: 2 }))
-    expect(store.document.nesting).toEqual({ spacingMm: 4, seed: 2, perGlass: {} })
+    expect(store.document.nesting).toEqual({
+      spacingMm: 4,
+      seed: 2,
+      strategy: 'fewest',
+      perGlass: {},
+    })
     store.undo()
     expect(store.document.nesting.seed).toBe(1)
     expect(store.document.nesting.spacingMm).toBe(4)
@@ -53,6 +63,7 @@ describe('updateNestingSettings', () => {
       updateNestingSettings({
         spacingMm: 2.5,
         seed: 7,
+        strategy: 'tight',
         perGlass: { 'gl-x': { rotation: 'fixed' } },
       }),
     )
@@ -60,6 +71,7 @@ describe('updateNestingSettings', () => {
     expect(back.nesting).toEqual({
       spacingMm: 2.5,
       seed: 7,
+      strategy: 'tight',
       perGlass: { 'gl-x': { rotation: 'fixed' } },
     })
   })
