@@ -2,20 +2,24 @@
   "name": "@vitrum/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "CAD-grade design application for stained glass",
+  "author": "Mathieu Wernsen <mwn@synadia.nl>",
+  "homepage": "https://github.com/mwernsen/vitrum",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "check": "tsc --noEmit",
-    "test:e2e": "electron-vite build && playwright test"
-  },
-  "dependencies": {
-    "@vitrum/core": "workspace:*",
-    "@vitrum/ui": "workspace:*"
+    "test:e2e": "electron-vite build && playwright test",
+    "package": "electron-vite build && electron-builder --publish never",
+    "release": "electron-vite build && electron-builder --publish always"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@vitrum/core": "workspace:*",
+    "@vitrum/ui": "workspace:*",
+    "electron-builder": "^26.0.12",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^26.1.1",
     "electron": "^43.1.1",

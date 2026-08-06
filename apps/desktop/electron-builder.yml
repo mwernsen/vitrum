@@ -1,0 +1,47 @@
+# Packaging for the Vitrum desktop app (electron-builder).
+#
+# The renderer, main and preload bundles in out/ are self-contained (main and
+# preload import only electron + node builtins; the renderer bundles the
+# workspace packages), so no node_modules ship in the package — all workspace
+# deps are devDependencies by design. build/icon.png is a placeholder rendered
+# from the design-system logo; replace it when brand assets are finalised.
+appId: com.github.mwernsen.vitrum
+productName: Vitrum
+directories:
+  buildResources: build
+files:
+  - out/**
+
+mac:
+  category: public.app-category.graphics-design
+  # Unsigned until an Apple Developer ID is provisioned; first launch needs
+  # right-click → Open. Add notarization alongside signing when available.
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  category: Graphics
+  maintainer: mwn@synadia.nl
+  target:
+    - AppImage
+    - deb
+
+# Publishes installers to a draft GitHub release for the pushed tag; review the
+# draft and publish it by hand. GH_TOKEN comes from the workflow environment.
+publish:
+  provider: github
+  owner: mwernsen
+  repo: vitrum
