@@ -48,15 +48,40 @@ the file system.
 - **Thumbnails**: rendered lazily on browse and cached keyed by file path + mtime,
   placeholder on failure — same discipline as F-055's version thumbnails (FR-6
   there); reuse its renderer.
+- **`#2a` chrome**: 56px header (logo, wordmark, search field, account avatar) and
+  the 210px `--paper-50` nav rail. "Panels" is live; **"Glass library", "Cut lists",
+  "Versions" and "Settings" render as disabled placeholders tagged with their feature
+  ids**, the repo's established convention for unbuilt surfaces (`dock.ts`,
+  `viewmode.ts`). This keeps `#2a`'s geometry honest without inventing three screens.
+  Note "Cut lists" and "Versions" are per-document today (F-042/F-055) and have no
+  cross-document meaning yet.
+- **"Continue" hero card, in full** — thumbnail, title, "edited … · N panes · N m
+  came", the readiness pills ("Geometry complete"; "Glass 86%" with a conic-gradient
+  dot; "N checks to review"), and the "Resume editing" / "Version history" actions.
+  This is the design's thesis and costs nothing new: the in-flight document is loaded,
+  so the F-020/F-030/F-042 controllers already compute these live.
+- **Save-time library index**: when the editor saves, write the panel's derived facts
+  (panes, came metres, glass %, checks) into its library entry, since they are already
+  computed at that moment. The grid then shows real numbers without opening files.
+  Never index at browse time — that would run piece detection across every file.
+- **Search field**: rendered per `#2a`, filtering recents by name. Glass search waits
+  for a cross-document glass home.
+- **"Start a panel"** trailing card offering **blank** or **from a photo** (the latter
+  is new-panel-then-F-051-reference-import — the restoration on-ramp). Templates are
+  deferred, so the card reads "blank or photo".
 
 ### Non-goals
 
+- **Panel lifecycle** — `#2a`'s Active/Fired/Archived filters and its Awaiting glass /
+  Breakage badges. Real workshop vocabulary, but a persisted domain concept with
+  unsettled questions (is "Fired" set by hand or derived? does any status gate
+  anything?) → its own spec, `F-061`.
 - Templates gallery / starter patterns (Glass Eye ships 400+; ours needs content
-  design first — backlog `F-059 pattern-templates`; the new-panel dialog should
-  leave visual room for it).
+  design first) → `F-060`. The "Start a panel" card should leave room for the third
+  path.
+- Glass search, pinning, folders (revisit when real libraries grow).
 - Managed storage, cloud sync, or importing files into an app-owned folder.
-- Multi-window / multiple simultaneously open panels (see Open question 2).
-- Pinning, folders, search within the library (revisit when real libraries grow).
+- Multi-window / multiple simultaneously open panels (resolved: replace in place).
 
 ## Design
 
@@ -94,10 +119,11 @@ draft of this spec under-scoped it badly; the panel itself remains authoritative
 - A trailing "Start a panel" card: "blank, template or photo".
 
 The design's thesis is printed on it: _"opens on what's in flight, not an empty
-grid."_ Three elements are new **domain** concepts rather than layout, and are
-gated in Open questions below rather than left to the implementer: the lifecycle
-taxonomy, per-panel metrics/readiness shown without opening a file, and the
-template/photo creation paths.
+grid."_ Three elements were new **domain** concepts rather than layout, so they were
+taken to Mathieu rather than left to the implementer; all three are settled — see
+Scope and Open questions 4–6. The lifecycle badge and its filters are the only part
+of `#2a` deliberately absent from v1 (deferred to `F-061`); build the card and filter
+row's geometry without them rather than re-flowing the design.
 
 ## Functional requirements
 
@@ -118,6 +144,23 @@ template/photo creation paths.
   cached by path + mtime, and degrade to a neutral placeholder.
 - FR-7: The recents store survives restarts, caps at a sane length (e.g. 50,
   oldest evicted), and never blocks startup on missing/slow disk entries.
+- FR-8: The launch screen matches `#2a`'s chrome: 56px header and 210px nav rail with
+  "Panels" live and the other four destinations visibly disabled and labelled with
+  their feature ids — never silently absent, never fake-clickable.
+- FR-9: The Continue hero shows the most-recently-edited panel with its real derived
+  figures (panes, came metres, glass %, outstanding checks) and its readiness pills;
+  "Resume editing" opens it, "Version history" opens it with the history panel active.
+  With no recent panel, the hero is replaced by the empty state, not left blank.
+- FR-10: Saving writes the panel's derived facts into its library entry, so grid cards
+  show real panes/came figures without opening the files. An entry saved by an older
+  build (no indexed facts) renders without them rather than erroring, and gains them
+  on the next save.
+- FR-11: The search field filters recents by name, case-insensitively, leaving the
+  Continue hero in place; a query matching nothing shows a "no panels match" state
+  distinct from the empty library.
+- FR-12: "Start a panel → from a photo" creates the panel then runs F-051's
+  reference-image import against it; cancelling the import leaves a valid empty panel,
+  not a half-created document.
 
 ## Technical guidance
 
@@ -137,13 +180,15 @@ template/photo creation paths.
 
 - Unit: recents store (add/evict/rebind/missing), new-panel validation, thumbnail
   cache keyed by path + mtime (fake fs/clock).
-- Component: `LibraryScreen` grid states (populated, empty, missing file),
-  new-panel dialog.
+- Component: `LibraryScreen` states (populated, empty, missing file, search-no-match),
+  the Continue hero (with and without a recent panel), the nav rail's live-vs-disabled
+  split, and the new-panel dialog.
 - E2E (Playwright, packaged app): launch → new panel via dialog → draw a segment →
-  save → back to library → the entry is listed with a thumbnail → reopen it →
-  content intact. Second E2E: launch with a file argument bypasses the library.
+  save → back to library → the entry is listed with a thumbnail and real panes figure
+  → reopen it → content intact. Second E2E: launch with a file argument bypasses the
+  library.
 - Manual (Mathieu): macOS double-click a `.vitrum` file; drag-drop onto the launch
-  screen; visual sign-off of the grid against Portal "2a".
+  screen; visual sign-off against `#2a` (lines 245–336 of the vendored design).
 
 ## Open questions
 
@@ -162,10 +207,44 @@ _All resolved by Mathieu 2026-08-06 — this spec is `agreed`._
    unclear precedence. The library stays a view over real files on disk; recovered
    scratch work enters it the moment the user saves it somewhere.
 
-## Implementation status (2026-08-06) — paused on a scope question
+_Questions 4–6 arose after the first draft was written, when panel `#2a` was finally
+read and found to contain three new domain concepts the spec had missed. Resolved by
+Mathieu 2026-08-06:_
 
-Branch `f-058-panel-library`, not merged. The **design-independent half is built and
-green**; the **launch screen's own scope is blocked** pending Mathieu's decision.
+4. **How faithful is v1 to `#2a`?** → **Resume-first cut.** Build `#2a`'s real chrome
+   and its thesis — header, nav rail (Panels live, four tagged disabled placeholders),
+   the Continue hero in full, the grid geometry, New panel, Start a panel. Defer only
+   the lifecycle taxonomy.
+5. **Where does the lifecycle taxonomy belong?** → **Its own spec, `F-061`.** Active /
+   Fired / Archived plus Awaiting glass / Breakage is real bench vocabulary but a
+   persisted domain concept, and it must first settle whether a status is set by hand
+   or derived, and whether any status gates anything. Out of F-058.
+6. **How do grid cards know panes/came without opening files?** → **A save-time
+   index** (the implementer's counter-proposal, better than either option offered):
+   write the derived facts when the editor saves, because they are already computed
+   then. Browse-time indexing was rejected — it would run F-020 detection across every
+   file in the library.
+7. **The two elements the first draft called non-goals** → **both in**, my call at
+   Mathieu's delegation: the search field (name-only filtering, ~10 lines, and leaving
+   it out makes the header visibly depart from the design) and "from a photo" (F-051
+   already exists, so it is new-panel-then-import; it is the restoration on-ramp and
+   brings the Start-a-panel card closer to the design's "blank, template or photo").
+   Glass search and templates stay out.
+
+## Implementation status
+
+**Round 1 (2026-08-06) — paused on the `#2a` scope question, now resolved.** Branch
+`f-058-panel-library`. The design-independent half is built and green (recents store,
+new-panel validation, `LibraryController`, shared `renderThumbnail`, the
+`library | editor` app state with FR-1 precedence, host + desktop wiring, `.vitrum`
+association, drag-and-drop). `LibraryScreen.svelte` and `NewPanelDialog.svelte` from
+that round are **provisional scaffolding written from spec prose, not a design
+proposal** — the implementer could not reach the design (`DesignSync` is unavailable to
+subagents; fixed by vendoring it, see [docs/design](../design/README.md)) and correctly
+declined to invent one. Component and E2E tests were deferred with them.
+
+**Round 2** builds the real `#2a` surface against the vendored design, per the
+decisions above, and adds the deferred tests.
 
 **Blocker.** Portal panel "2a" is materially wider than this spec's Scope/FR list. Three
 of its elements are new domain concepts rather than layout, so they cannot be absorbed

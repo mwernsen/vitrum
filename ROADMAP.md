@@ -110,6 +110,7 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-056](docs/features/F-056-cost-estimation.md)    | Cost estimation & quoting                         | F-042        |
 | [F-057](docs/features/F-057-nesting.md)            | Sheet nesting & yield optimization                | F-042        |
 | [F-058](docs/features/F-058-panel-library.md)      | Panel library & launch screen                     | F-002, F-055 |
+| [F-061](docs/features/F-061-panel-lifecycle.md)    | Panel lifecycle & workshop status                 | F-058        |
 
 ## Dependency shape
 
