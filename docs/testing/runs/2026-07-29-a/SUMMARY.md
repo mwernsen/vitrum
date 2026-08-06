@@ -5,16 +5,16 @@ Requested scope: F-001 … F-013, skipping features that need no user testing.
 
 ## Verdicts
 
-| Feature | Verdict | S1 | S2 | S3 | S4 | env-limited | manual |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| F-001 architecture & scaffolding | skipped — infra, no user surface | — | — | — | — | — | — |
-| F-002 document model, persistence, undo/redo | pass-with-issues | 0 | 1 | 5 | 2 | 6 | 0 |
-| F-003 canvas viewport | **not run** — tooling outage | — | — | — | — | — | — |
-| F-004 design system | pass-with-issues (smoke) | 0 | 1 | 0 | 2 | 4 | 0 |
-| F-010 geometry kernel | skipped — pure library, unit-tested, no UI | — | — | — | — | — | — |
-| F-011 drawing tools | **not run** — tooling outage | — | — | — | — | — | — |
-| F-012 snapping & guides | **not run** — tooling outage | — | — | — | — | — | — |
-| F-013 selection, node editing, transforms | **not run** — tooling outage | — | — | — | — | — | — |
+| Feature                                      | Verdict                                    | S1  | S2  | S3  | S4  | env-limited | manual |
+| -------------------------------------------- | ------------------------------------------ | --- | --- | --- | --- | ----------- | ------ |
+| F-001 architecture & scaffolding             | skipped — infra, no user surface           | —   | —   | —   | —   | —           | —      |
+| F-002 document model, persistence, undo/redo | pass-with-issues                           | 0   | 1   | 5   | 2   | 6           | 0      |
+| F-003 canvas viewport                        | **not run** — tooling outage               | —   | —   | —   | —   | —           | —      |
+| F-004 design system                          | pass-with-issues (smoke)                   | 0   | 1   | 0   | 2   | 4           | 0      |
+| F-010 geometry kernel                        | skipped — pure library, unit-tested, no UI | —   | —   | —   | —   | —           | —      |
+| F-011 drawing tools                          | **not run** — tooling outage               | —   | —   | —   | —   | —           | —      |
+| F-012 snapping & guides                      | **not run** — tooling outage               | —   | —   | —   | —   | —           | —      |
+| F-013 selection, node editing, transforms    | **not run** — tooling outage               | —   | —   | —   | —   | —           | —      |
 
 F-001 and F-010 were excluded as infra per the skill's gate (no UI surface; covered by
 unit tests). F-004 was run as a smoke pass only: boot, tokens, chrome metrics, light/dark,
