@@ -6,6 +6,17 @@ import type { Curve } from './types'
 import { arc, cubic, line, polyline } from './types'
 import { distance, vec2 } from './vec2'
 
+/**
+ * Whether this run is instrumented for coverage, which slows the perf guard's hot loop. Read off
+ * `globalThis` rather than `process.env` directly: `packages/geometry` ships no `@types/node` (it must
+ * stay platform-free, and `pnpm check` type-checks test files too), so the one env read in this file
+ * is narrowed here instead of dragging node types into the package.
+ */
+function coverageRun(): boolean {
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+  return Boolean(proc?.env?.['VITEST_COVERAGE'])
+}
+
 describe('segment × segment', () => {
   it('finds a transversal crossing with parameters on both curves', () => {
     const a = line(vec2(0, 0), vec2(10, 10))
@@ -123,7 +134,7 @@ describe('performance (FR-5)', () => {
     // runners (seen: 115ms), so coverage runs (`pnpm test:coverage`, which sets
     // VITEST_COVERAGE) get headroom — the real budget is still enforced by the
     // uninstrumented test step, and intersect.bench.ts measures precisely.
-    const budget = process.env.VITEST_COVERAGE ? 400 : 100
+    const budget = coverageRun() ? 400 : 100
     expect(Date.now() - t0).toBeLessThan(budget)
   })
 })
