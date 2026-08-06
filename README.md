@@ -16,6 +16,11 @@ so that when you finally reach for the glass cutter, the surprises are the good 
 It's early days, and the workshop is very much still being built. If you make glass,
 write code, or both, you're in the right place.
 
+> [!IMPORTANT]
+> **Vitrum is in beta.** The core drawing, checking and output tools work, but features
+> are still landing and you may hit rough edges. Back up designs that matter, and please
+> report anything that breaks.
+
 ## A look inside
 
 ![Vitrum's design view: a stained-glass panel mid-cut, with a layers list, lead-came technique settings, and a live readiness strip up top](docs/screenshots/home.png)

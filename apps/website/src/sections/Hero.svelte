@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Badge } from '@vitrum/ui'
+
   import AppWindowMock from '../lib/AppWindowMock.svelte'
   import Cta from '../lib/Cta.svelte'
   import { GITHUB_URL } from '../links'
@@ -6,7 +8,10 @@
 
 <section class="hero container">
   <div class="copy">
-    <p class="eyebrow">CAD for stained glass</p>
+    <div class="eyebrow-row">
+      <p class="eyebrow">CAD for stained glass</p>
+      <Badge tone="neutral">Beta</Badge>
+    </div>
     <h1>Draw the lead lines. Everything else follows.</h1>
     <p class="sub">
       Vitrum is a desktop app for designing stained glass panels with CAD discipline. The lead line
@@ -35,8 +40,15 @@
     padding-block: var(--space-20);
   }
 
+  .eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
   .eyebrow {
-    margin: 0 0 var(--space-4);
+    margin: 0;
     font: var(--text-eyebrow);
     letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
