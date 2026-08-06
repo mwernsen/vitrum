@@ -43,10 +43,20 @@ supervisor, and anything the spec doesn't settle gets asked, not assumed.
   patterns over inventing new ones, and note any net-new screen in the spec's
   Implementation notes so it can be back-ported to the Claude Design project
   (`3c259295-607a-4eba-8cad-3890f7e80063`, readable via DesignSync) later.
+- **Read cited designs from `docs/design/`, not from Claude Design.** `DesignSync` is
+  **not available to you** — it only works in a main session. Design screens are
+  vendored into [docs/design/](../../docs/design/) (see its README for the panel map
+  and anchors); specs link the exact panel. If a spec cites a design that is not
+  vendored, **stop and ask Mathieu to vendor it**. Never improvise the surface, and
+  never treat "I cannot reach the design" as "no design exists" — those are different,
+  and only the second one licenses designing in code.
 - **Slot new surfaces into the cockpit shell, don't bolt panels on.** The app shell
-  follows the **Portal redesign** design project
-  (`1ec655e3-ab21-4450-b3be-f2caaca64ea3`, file `Portal redesign.dc.html`, **"turn 3 ·
-  information architecture" is canonical** — it supersedes turns 1–2; read it via DesignSync).
+  follows the **Portal redesign** design
+  ([docs/design/portal-redesign.dc.html](../../docs/design/portal-redesign.dc.html),
+  source project `1ec655e3-ab21-4450-b3be-f2caaca64ea3`), where **"turn 3 ·
+  information architecture" (`#3a`–`#3e`) is canonical for the editor** — it
+  supersedes turns 1–2 there. It never revisited the launch screen, so `#2a` remains
+  the design of record for that (F-058).
   Its cockpit (panels 3a–3e) is implemented in
   `packages/ui/src/shell/` (`AppShell.svelte` composes `TopBar` → `ReadinessStrip` →
   body[`ActivityRail` | `DockPanel` | canvas stage with the floating `Toolbar` |
@@ -61,7 +71,8 @@ supervisor, and anything the spec doesn't settle gets asked, not assumed.
   - per-selection editing → `Inspector.svelte`; canvas overlays → `Canvas.svelte`.
   Placeholder entries already exist for the unbuilt roadmap features (each tagged with
   its F-0XX id) — your feature turns its placeholder live rather than adding a new slot.
-  The Portal launch screen ("2a") is not built yet; see F-002/F-055 before adding it.
+  The Portal launch screen (`#2a`) is scoped as F-058 (panel library & launch screen);
+  it is a top-level app state above the shell, not a dock section or view mode.
 - **Tests ship with the change**: core logic → Vitest unit tests (property-based
   where the spec says so), components → Testing Library, each user-facing flow → one
   Playwright E2E test. Specs name mandatory tests in their acceptance criteria.
@@ -309,3 +320,17 @@ this file steers every future feature.
 - (F-056, 2026-07-22, harness) A git worktree needs its own `pnpm install`; running `pnpm` after
   `cd`-ing to the shared checkout silently tests `main`, not the worktree — always run gates from the
   worktree root.
+- (F-058, 2026-08-06, process) When a spec cites a design panel, **read the panel before writing the
+  surface** — spec prose summarising a design is not a substitute for it, and "the fetch failed" is not
+  "no design exists". Designs are vendored in `docs/design/` precisely because `DesignSync` cannot be
+  reached from a subagent; if a cited design is missing there, stop and ask.
+- (F-058, 2026-08-06) App-data that is **per-file rather than per-document-session** (recents) still
+  follows the F-022/F-055 port pattern, but needs `StoragePort.readFile(path)` — dialog-only file
+  access cannot serve a library that opens by path. Add `readFile`, don't widen the library port.
+- (F-058, 2026-08-06) Key a cached per-file derived asset on **path + mtime**, not path alone: it makes
+  "changed outside the app" self-correcting and gives F-055/F-058-style thumbnail freshness for free
+  after a save.
+- (F-058, 2026-08-06) `File.path` is gone in Electron 43 — drag-and-drop needs `webUtils.getPathForFile`
+  exposed through the preload, and a browser host must degrade to `file.name`.
+- (F-058, 2026-08-06) `{@const}` must be the immediate child of a block: two consts for one `{#each}`
+  row both belong directly under `{#each}`, not nested inside the row's markup.

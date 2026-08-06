@@ -13,3 +13,7 @@ pnpm-lock.yaml
 # (F-004). Formatting is owned by the design system, not this repo.
 packages/ui/src/design/
 packages/ui/src/components/*.prompt.md
+
+# Vendored design screens — read-only mirrors of Claude Design files, kept
+# byte-identical so they stay diffable against source. See docs/design/README.md.
+docs/design/*.dc.html

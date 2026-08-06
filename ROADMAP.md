@@ -109,6 +109,7 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-055](docs/features/F-055-versioning-sharing.md) | Versioning & sharing                              | F-002        |
 | [F-056](docs/features/F-056-cost-estimation.md)    | Cost estimation & quoting                         | F-042        |
 | [F-057](docs/features/F-057-nesting.md)            | Sheet nesting & yield optimization                | F-042        |
+| [F-058](docs/features/F-058-panel-library.md)      | Panel library & launch screen                     | F-002, F-055 |
 
 ## Dependency shape
 
