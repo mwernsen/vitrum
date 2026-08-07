@@ -79,6 +79,7 @@ describe('schema versioning (FR-4)', () => {
       { from: 13, migrate: (file) => ({ schemaVersion: 14, project: file.project }) },
       { from: 14, migrate: (file) => ({ schemaVersion: 15, project: file.project }) },
       { from: 15, migrate: (file) => ({ schemaVersion: 16, project: file.project }) },
+      { from: 16, migrate: (file) => ({ schemaVersion: 17, project: file.project }) },
     ]
     const project = deserialize(legacy, migrations)
     expect(project.settings.name).toBe('migrated')
@@ -459,6 +460,39 @@ describe('schema versioning (FR-4)', () => {
     const withNesting = deserialize(JSON.stringify({ schemaVersion: 14, project: partial }))
     expect(withNesting.nesting.spacingMm).toBe(5)
     expect(withNesting.nesting.seed).toBe(1) // defaulted
+  })
+
+  it('v16 → v17 marks existing reference layers as uncalibrated (F-059)', () => {
+    // A v16 layer records no calibration state, so it defaults to `false`: autotrace then asks for a
+    // measurement rather than tracing at a scale it cannot vouch for (FR-3).
+    const legacy = createEmptyProject() as unknown as Record<string, unknown>
+    legacy.layers = [
+      {
+        id: 'l1',
+        name: 'photo',
+        assetId: 'a1',
+        naturalWidthPx: 100,
+        naturalHeightPx: 100,
+        srcQuad: [vec2(0, 0), vec2(100, 0), vec2(100, 100), vec2(0, 100)],
+        dstQuad: [vec2(0, 0), vec2(300, 0), vec2(300, 300), vec2(0, 300)],
+        opacity: 0.6,
+        desaturate: false,
+        visible: true,
+        locked: false,
+        rectified: false,
+      },
+    ]
+    const project = deserialize(JSON.stringify({ schemaVersion: 16, project: legacy }))
+    expect(project.layers[0]!.calibrated).toBe(false)
+    // Everything else about the layer survives untouched.
+    expect(project.layers[0]!.name).toBe('photo')
+    expect(project.layers[0]!.opacity).toBe(0.6)
+
+    // A pre-release v16 file that already carries the flag keeps it.
+    const already = createEmptyProject() as unknown as Record<string, unknown>
+    already.layers = [{ ...(legacy.layers as unknown[])[0]!, calibrated: true }]
+    const kept = deserialize(JSON.stringify({ schemaVersion: 16, project: already }))
+    expect(kept.layers[0]!.calibrated).toBe(true)
   })
 
   it('throws when no migration path exists for an older version', () => {

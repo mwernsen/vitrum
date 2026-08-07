@@ -83,6 +83,8 @@
     light?: LightController
     /** Open the export hub on the 1:1 tiled template (F-041), from the cartoon view. */
     onPrintTemplate?: () => void
+    /** Open the autotrace dialog on the selected reference layer (F-059). */
+    onAutotrace?: () => void
   }
 
   let {
@@ -106,6 +108,7 @@
     onQuickFix,
     light,
     onPrintTemplate,
+    onAutotrace,
   }: Props = $props()
 
   // Reference-image layer editing (F-051): calibration and perspective scratch fields.
@@ -404,6 +407,24 @@
               </Button>
             {/if}
           </div>
+        {/if}
+
+        <h3>Autotrace</h3>
+        {#if refLayer.calibrated}
+          <p class="hint">
+            Turn the drawn lines into an editable lead-line network. Bold marker traces; pencil
+            annotations do not.
+          </p>
+          <div class="actions">
+            <Button size="sm" variant="secondary" onclick={() => onAutotrace?.()}>
+              Trace to lead lines…
+            </Button>
+          </div>
+        {:else}
+          <p class="hint">
+            Calibrate the image first — until its size is measured, a trace would land at a
+            placeholder scale.
+          </p>
         {/if}
 
         <div class="actions">

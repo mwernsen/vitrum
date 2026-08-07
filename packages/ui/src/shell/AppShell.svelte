@@ -58,6 +58,8 @@
   import { buildExportScene } from '../export/scene'
   import { ImportController } from '../import/controller.svelte'
   import ImportDialog from '../import/ImportDialog.svelte'
+  import { TraceController } from '../trace/controller.svelte'
+  import TraceDialog from '../trace/TraceDialog.svelte'
   import { ReferenceController } from '../reference/controller.svelte'
   import { PrintController } from '../print/controller.svelte'
   import { buildPrintScene } from '../print/scene'
@@ -455,6 +457,34 @@
     const segments = segmentsFromDrafts(toDrafts(p.segments), controller.doc.nodes)
     controller.execute(addSegments(segments))
     importer.close()
+  }
+
+  // --- Raster autotrace (F-059) ----------------------------------------------
+
+  // The pipeline runs on a worker so a slider drag never blocks the canvas (FR-7); the controller
+  // falls back to running it inline where workers are unavailable.
+  const tracer = new TraceController()
+  $effect(() => () => tracer.dispose())
+
+  /** Open the autotrace dialog on the selected reference layer (F-059). */
+  function openTrace(): void {
+    const layer = reference.selected
+    if (!layer) return
+    void tracer.load(layer, reference.assets.get(layer.assetId))
+  }
+
+  /**
+   * Merge the traced network into the active document as one undo step (FR-5), by exactly the same
+   * route as the SVG import (F-050): the traced drafts carry no ids, `segmentsFromDrafts` welds
+   * coincident endpoints onto shared nodes (F-013), and one `addSegments` command lands the lot — so
+   * one undo removes the whole trace and redo reproduces it identically.
+   */
+  function runTrace(): void {
+    const p = tracer.preview
+    if (!controller || !p || p.segments.length === 0) return
+    const traced = segmentsFromDrafts(p.segments, controller.doc.nodes)
+    controller.execute(addSegments(traced))
+    tracer.close()
   }
 
   /** Open the export dialog, seeding technique-aware defaults (F-043). */
@@ -1252,6 +1282,7 @@
         onQuickFix={(v) => drc.applyQuickFix(v)}
         light={controller ? light : undefined}
         onPrintTemplate={exportAvailable && exportPdf ? openTemplate : undefined}
+        onAutotrace={openTrace}
       />
     {/if}
   </div>
@@ -1286,6 +1317,8 @@
 />
 
 <ImportDialog controller={importer} onImport={runImport} />
+
+<TraceDialog controller={tracer} onTrace={runTrace} />
 
 <style>
   /* Cockpit v2: the 44px readiness strip is gone — readiness is one meter in the top bar — so the

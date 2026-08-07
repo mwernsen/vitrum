@@ -165,6 +165,17 @@ export interface ReferenceLayer {
   readonly locked: boolean
   /** Whether perspective correction is active (drives which handles the UI shows). */
   readonly rectified: boolean
+  /**
+   * Whether the layer's world size has been **measured** rather than guessed (F-059 FR-3).
+   *
+   * A freshly placed layer is scaled to an arbitrary 300 mm on its longest edge, purely so it is
+   * visible; its millimetres mean nothing. Either of F-051's two calibrating acts — the two-point
+   * ruler, or the perspective correction, which asks for the window's real width and height — makes
+   * them real, and sets this. Autotrace refuses an uncalibrated layer rather than emitting geometry
+   * at a made-up scale, so this cannot be inferred from the quads: a user may legitimately calibrate
+   * a sheet to exactly the default 300 mm.
+   */
+  readonly calibrated: boolean
 }
 
 /** A stable, never-reused id for a reinforcement bar (F-032). */

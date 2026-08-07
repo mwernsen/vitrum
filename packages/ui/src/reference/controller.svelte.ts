@@ -242,7 +242,9 @@ export class ReferenceController {
       x: c.x + (p.x - c.x) * s,
       y: c.y + (p.y - c.y) * s,
     })) as unknown as Quad
-    this.#patch(layer.id, { dstQuad })
+    // Measured, not guessed: the layer's millimetres now mean something, so autotrace will run on
+    // it (F-059 FR-3).
+    this.#patch(layer.id, { dstQuad, calibrated: true })
     this.calibrationPoints = []
     this.mode = 'place'
   }
@@ -274,7 +276,8 @@ export class ReferenceController {
       { x: tl.x + realWmm, y: tl.y + realHmm },
       { x: tl.x, y: tl.y + realHmm },
     ]
-    this.#patch(layer.id, { srcQuad, dstQuad, rectified: true })
+    // Rectifying asks for the window's real width and height, so it calibrates too (F-059 FR-3).
+    this.#patch(layer.id, { srcQuad, dstQuad, rectified: true, calibrated: true })
     this.rectifyMarkers = null
     this.mode = 'place'
   }
@@ -378,6 +381,8 @@ function defaultLayer(
     visible: true,
     locked: false,
     rectified: false,
+    // The 300 mm above is arbitrary — enough to see the image, not a measurement.
+    calibrated: false,
   }
 }
 

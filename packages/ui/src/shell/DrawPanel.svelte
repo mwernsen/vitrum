@@ -306,7 +306,9 @@
                   <span class="ref-text">
                     <span class="name">{layer.name}</span>
                     <span class="meta">
-                      {Math.round(layer.opacity * 100)}%{layer.rectified ? ' · rectified' : ''}
+                      {Math.round(layer.opacity * 100)}%{layer.rectified
+                        ? ' · rectified'
+                        : ''}{layer.calibrated ? ' · calibrated' : ''}
                     </span>
                   </span>
                 </button>
