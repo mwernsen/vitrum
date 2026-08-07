@@ -117,6 +117,15 @@
     importImage?: () => Promise<OpenedImage | null>
     /** Leave the editor for the panel library (F-058 FR-5). Absent ⇒ the back button stays inert. */
     onLibrary?: () => void
+    /**
+     * Set when the panel was just created "from a photo" (F-058 FR-12): the shell runs F-051's
+     * reference-image import once and calls {@link onPhotoImported}. Cancelling the file dialog is a
+     * no-op inside the import, so the panel is simply left blank — never half-created.
+     */
+    photoRequested?: boolean
+    onPhotoImported?: () => void
+    /** Open the dock on a section — used to land on History from the library's hero (FR-9). */
+    initialSection?: DockSection
   }
 
   let {
@@ -131,6 +140,9 @@
     importSvg,
     importImage,
     onLibrary,
+    photoRequested = false,
+    onPhotoImported,
+    initialSection,
   }: Props = $props()
 
   // The viewport (F-003) is independent of the document controller, so the shell always
@@ -722,6 +734,36 @@
       }
   })
 
+  /**
+   * Hand the document layer this panel's derived figures for the library index (F-058 FR-10). Read on
+   * the save path only — everything here is already computed for the editor, so indexing costs nothing
+   * extra, which is exactly why the index is written at save rather than at browse time.
+   *
+   * The three judgements mirror the readiness meter (geometry closes / every piece has glass / checks
+   * are clear) so the library and the cockpit never disagree about whether a panel is ready.
+   */
+  $effect(() => {
+    if (!controller) return
+    controller.indexFacts = () => ({
+      panes: pieces.length,
+      paintedPanes: Math.max(0, pieces.length - unassignedCount),
+      leadLengthMm: bomReport
+        ? technique?.kind === 'foil'
+          ? (bomReport.foil?.netSeamLengthMm ?? 0)
+          : bomReport.came.reduce((sum, c) => sum + c.netLengthMm, 0)
+        : 0,
+      checksOutstanding: drc.result.counts.error + drc.result.counts.warning,
+      checksRun: drc.hasRun,
+    })
+  })
+
+  // "Start a panel → from a photo" (FR-12): run F-051's import once for a just-created panel.
+  $effect(() => {
+    if (!photoRequested) return
+    onPhotoImported?.()
+    if (importImage) void reference.importImage(importImage)
+  })
+
   // Version history (F-055). Point the controller at the open document's history (keyed by path,
   // Decision §1), and feed it every document change so it can take automatic snapshots (FR-1).
   $effect(() => {
@@ -828,7 +870,12 @@
   // Cockpit v2 shell state. The dock opens on "draw" — a new panel starts as geometry, and the
   // drawing tools are what the first click needs.
   let viewMode = $state<ViewMode>('design')
-  let dockSection = $state<DockSection>('draw')
+  // svelte-ignore state_referenced_locally
+  let dockSection = $state<DockSection>(initialSection ?? 'draw')
+  // A later request from the library (e.g. the hero's "Version history") switches the dock.
+  $effect(() => {
+    if (initialSection) dockSection = initialSection
+  })
   // The bench-outputs drawer under the stage (cutting list / BOM / quote). Closed until asked for,
   // because it costs the canvas 266px.
   let drawerOpen = $state(false)

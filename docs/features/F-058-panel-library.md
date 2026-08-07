@@ -3,7 +3,7 @@
 |                |                    |
 | -------------- | ------------------ |
 | **Phase**      | 5 — Power features |
-| **Status**     | in-progress        |
+| **Status**     | done               |
 | **Depends on** | F-002, F-055       |
 | **Complexity** | M                  |
 
@@ -243,49 +243,158 @@ proposal** — the implementer could not reach the design (`DesignSync` is unava
 subagents; fixed by vendoring it, see [docs/design](../design/README.md)) and correctly
 declined to invent one. Component and E2E tests were deferred with them.
 
-**Round 2** builds the real `#2a` surface against the vendored design, per the
-decisions above, and adds the deferred tests.
+**Round 2 (2026-08-06) — delivered.** Built the real `#2a` surface against the vendored
+design and added the deferred tests. Status → `done` pending Mathieu's visual sign-off and
+the two manual OS checks below.
 
-**Blocker.** Portal panel "2a" is materially wider than this spec's Scope/FR list. Three
-of its elements are new domain concepts rather than layout, so they cannot be absorbed
-silently: (1) a panel lifecycle taxonomy (Active / Fired / Archived, plus "Awaiting
-glass" / "Breakage" states) — a new persisted concept absent from the whole roadmap;
-(2) per-panel readiness and metadata (pane count, came metres, glass %, checks
-outstanding) shown _without opening the file_ — derived from F-020/F-023/F-030/F-042 and
-requiring a cached library index refreshed on save; (3) templates and "from a photo" as
-creation paths — explicitly a non-goal above. The rest of 2a (portal left-nav with
-cross-document destinations, search, a "Continue" hero card, segmented filters, the
-4-column grid, a "Start a panel" cell) is layout and can be built once scope is agreed.
+### What shipped
 
-**Also recorded:** this session had no `DesignSync` access, so the implementing agent
-could not read "2a" itself; the summary above came from the coordinating agent. Any
-launch-screen work still needs a read of the canonical file before it is trustworthy.
+**`@vitrum/model` — `library.ts`** (pure, no DOM/Svelte/Electron):
 
-Built so far, and independent of how 2a's scope lands:
+- Recents store: `PanelEntry` / `PanelLibrary`, `recordPanelOpened` (front-insert, dedupe
+  by path, cap at 50 with oldest-evicted), `forgetPanel`, `relocatePanel` (absorbs a
+  duplicate at the destination so "locate" can never leave two), `panelThumbnailKey(path,
+mtime)`, and a deliberately tolerant `deserializePanelLibrary` — malformed JSON or a bad
+  entry yields an empty library / drops that entry, because the library must never block
+  startup (FR-7).
+- **Save-time index** (FR-10): `PanelFacts` = `{ panes, paintedPanes, leadLengthMm,
+checksOutstanding, checksRun }`. Raw counts, not percentages, so the surface derives
+  "Glass 86%" and "geometry complete" and the presentation can change without a migration.
+  `panelEntryFor(path, project, at, facts?)` stamps `lastSavedAt` **only** when facts are
+  passed, so merely opening a panel never claims it was edited. `recordPanelOpened` merges
+  over the previous entry, so re-opening keeps the figures from the last save.
+  Back-compat is explicit: a half-written `facts` block is dropped **wholesale** rather
+  than half-trusted, and an entry from a pre-index build renders without figures.
+- `panelMatches(entry, query)` for search (FR-11): name plus file name, case-insensitive.
+  Not the rest of the path, which would match far too much.
+- `LibraryPort` (load/save/stat/loadThumbnail/saveThumbnail) — the F-022 / F-055 pattern.
+  `stat` returns `mtimeMs | null` per path: one call yields both the missing state (FR-2)
+  and the thumbnail cache key (FR-6).
+- `StoragePort` gained optional `readFile(path)`. Dialog-only file access cannot serve a
+  library that opens by path, a launch argument, or a drop.
 
-- `@vitrum/model` `library.ts` — the pure recents store (`PanelEntry` / `PanelLibrary`,
-  `recordPanelOpened` with cap + eviction, `forgetPanel`, `relocatePanel`,
-  tolerant (de)serialization, `panelThumbnailKey(path, mtime)`, `createPanelProject`) and
-  the `LibraryPort` interface. `StoragePort` gained `readFile(path)`.
-- `@vitrum/core` `newPanel.ts` — `validateNewPanel`, unit-aware and pure.
-- `packages/ui` — `LibraryController` (runes bridge, missing-state via `stat`, lazy
-  thumbnails split `requestThumbnail` / `thumbnailUrl`), the shared
-  `renderThumbnail` moved to `src/thumbnail.ts` and consumed by both F-055 and F-058,
-  `DocumentController.{openPath,openBytes,newPanel,confirmDiscardIfDirty,onNewPanel,onSaved}`,
-  the `library | editor` top-level state in `App.svelte` with FR-1 precedence
-  (recovery → launch argument → launch screen), and a live "back to library" button
-  replacing the inert TopBar placeholder.
-- Hosts — `LibraryPort` + `launchScreen` / `initialFile` / `onOpenFile` / `filePathFor`
-  on `AppHost`, implemented in `browserHost` (localStorage, plus a virtual disk so
-  `pnpm dev:ui` can exercise the grid), `fakeHost`, and desktop main/preload
-  (`userData/library/`, `VITRUM_LIBRARY_PATH` override, `open-file` + argv routing,
-  `webUtils.getPathForFile` for drops, `.vitrum` file association).
-- The shell now reads the _document's_ name and panel size instead of the hardcoded
-  "Sample panel" placeholder, so what the new-panel dialog sets is what the cockpit shows.
+**`@vitrum/core` — `newPanel.ts`**: `validateNewPanel`, unit-aware, comma decimals
+accepted, per-field messages, `MAX_PANEL_MM` sanity ceiling. In `core` not `model` because
+it is unit conversion; the `NewPanelSpec` the caller assembles is the model's own type.
 
-`LibraryScreen.svelte` and `NewPanelDialog.svelte` exist as a **provisional** pass built
-from this spec's prose before "2a" was read. Treat them as scaffolding, not as the design.
+**`packages/ui/src/library/`**:
 
-Gates: `pnpm lint`, `format:check`, `check` green; 1 210 unit tests pass (16 new model,
-11 new core). Component tests and the two E2E flows are deliberately **not yet written** —
-they would encode copy and roles that the scope decision may change.
+- `LibraryScreen.svelte` — the real `#2a`: 56px header (logo, wordmark, "Studio", 220px
+  search field, 30px avatar), 210px `--paper-50` rail, the Continue hero (80×104
+  thumbnail, mono figure line, readiness pills including the conic-gradient glass dial,
+  "Resume editing" / "Version history"), "All panels" + the inert filter row + the
+  `--cobalt-600` "New panel" pill, the 4-column grid, and the "Start a panel" cell. Tokens
+  only; the design's raw `#fff` became `--paper-0`, its `-0.02em` wordmark tracking became
+  `--tracking-tight` (matching the cockpit's own wordmark), and its 3px dial radius became
+  `--radius-xs`.
+- `rail.ts` — the nav destinations, mirroring `shell/dock.ts` / `viewmode.ts`. "Panels"
+  live; the other four disabled with a tooltip. **See the follow-up on their tags below.**
+- `format.ts` — `relativeTime` in the design's own vocabulary ("12 min ago", "5d ago",
+  "2w ago"), `panelFigures` ("36 panes · 8.2 m came", and "seam" for a foil panel, where
+  "came" would simply be wrong), `readinessPills`, `editedAt` (prefers the last save).
+  Plain TS so the `Date` arithmetic stays out of a Svelte module, where
+  `svelte/prefer-svelte-reactivity` rightly objects to raw `Date` instances.
+- `controller.svelte.ts` — `LibraryController`: `hero` (most recently edited, **skipping a
+  missing file**), `gridRows` (everything but the hero, narrowed by the query — the design
+  shows the in-flight panel once), `noMatches` as a state distinct from an empty library,
+  `recordSaved`, and lazy thumbnails via the F-055 `requestThumbnail` / `thumbnailUrl`
+  split. Search deliberately does **not** touch the hero: filtering the grid must not move
+  the thing you were working on out from under you.
+- `NewPanelDialog.svelte` — name / width × height / units / technique, errors held back
+  until first submit, mono numerals, plus the "A photo or scan to trace" checkbox (FR-12),
+  hidden on a host that cannot import images.
+
+**Wiring.** `DocumentController` gained `indexFacts` (set by the shell, read on the save
+path only — mirroring `onBeforeSave` / `collectAssets`), `onSaved`, `openPath`,
+`openBytes`, `newPanel`, `confirmDiscardIfDirty`, `onNewPanel`; `open()` now reports
+cancellation. `AppShell` supplies `indexFacts` from data it already computes for the
+editor — which is the whole argument for indexing at save rather than at browse — using the
+same three judgements as `ReadinessMeter`, so the library and the cockpit can never
+disagree about whether a panel is ready. `App.svelte` owns the `library | editor` state and
+FR-1 precedence (recovery → launch argument → launch screen).
+
+**Hosts.** `library` / `launchScreen` / `initialFile` / `onOpenFile` / `filePathFor` on
+`AppHost`; desktop main writes `userData/library/` (`VITRUM_LIBRARY_PATH`), routes
+`open-file` + argv, and `webUtils.getPathForFile` resolves drops (`File.path` is gone in
+Electron 43). `browserHost` adds a small localStorage virtual disk so `pnpm dev:ui` can
+exercise the grid end to end; it opens on the **editor** by default so component work needs
+no click-through, with `?library` to opt in.
+
+### Deviations from the design, and why
+
+1. **Lifecycle badges and filters are absent** — deferred to `F-061` per Open question 5.
+   The card and filter-row geometry are built; the filter row is disabled with a tooltip
+   naming F-061, and the card's badge slot carries technique · dimensions instead. The
+   design's layout is not re-flowed.
+2. **Search reads "Search panels", not "Search panels & glass"** — glass search is out
+   (Open question 7), and a placeholder promising it would be a lie.
+3. **"Start a panel" reads "blank or photo"**, not "blank, template or photo" — templates
+   are `F-060`. The two paths are offered inside the new-panel dialog rather than as two
+   cards, which keeps `#2a`'s single-cell geometry.
+4. **Nav-rail counts are real** (recents count, glass-catalog size) rather than the
+   design's sample 6 / 42.
+5. **The card's figure line is omitted, not zeroed**, for an entry with no indexed facts.
+
+### Net-new for back-port
+
+`LibraryScreen` is a faithful build of `#2a` rather than a new screen, but three details
+were designed in code and should be back-ported: the **missing-file card state**
+(`File not found` + locate / remove — `#2a` never shows one), the **"no panels match"**
+search state, and the **disabled-with-tooltip treatment** of the four rail placeholders.
+
+### Verification
+
+All five gates green from the repo root: `pnpm lint`, `format:check`, `check`, `test`
+(**1 264 unit tests**, 161 files), `test:e2e` (**32 Playwright tests**).
+
+New tests: 25 model (`library.test.ts` — store, index, back-compat, search), 11 core
+(`newPanel.test.ts`), 24 `format.test.ts`, 14 `LibraryScreen.test.ts` (chrome, grid, hero,
+search — every state the acceptance criteria name), 7 `NewPanelDialog.test.ts`. New E2E
+`library.spec.ts`: the full round trip (launch screen → new panel → draw a closed border →
+save → back to library → the hero shows **"1 pane"**, which is the assertion that proves
+FR-10 end to end, since the figure comes from the library entry and not the open document →
+reopen → 4 segments intact), plus the file-argument bypass (which really launches Electron
+with the path in `argv`).
+
+**Pending Mathieu:** visual sign-off against `#2a` (lines 245–336); macOS double-click a
+`.vitrum` file; drag-and-drop onto the launch screen. The last two need a packaged,
+file-associated install and a real OS drag, neither of which Playwright can drive.
+
+### Follow-ups (out of scope)
+
+- **The four rail placeholders have no roadmap ids.** They are cross-document _destinations_
+  (Glass library, Cut lists, Versions, Settings) and nothing on the roadmap owns them, so
+  each is tagged with the feature that owns the capability _inside the editor_ today
+  (F-022 / F-042 / F-055) and Settings says only "Not built yet". If `#2a`'s portal is the
+  intended direction, these want specs of their own — flagged rather than invented.
+- Opening a second instance with a file (Windows/Linux double-click while running) creates a
+  second window; `requestSingleInstanceLock` + `second-instance` routing is unimplemented.
+  macOS is handled via `open-file`.
+- The Continue hero reads indexed facts, so a panel edited-but-not-saved shows its
+  last-saved figures. Correct, but a "unsaved changes" hint on the hero would be kinder.
+- A pruned thumbnail leaves its cached PNG on disk (the same orphan issue F-055 noted).
+
+### Incidental fixes (disclose — unrelated to F-058, drop from the PR if preferred)
+
+- **`pnpm check` was red on `main`.** Commit `b9423cc` added `process.env.VITEST_COVERAGE`
+  to `packages/geometry/src/intersect.test.ts`, a package that deliberately ships no
+  `@types/node`. Narrowed off `globalThis` in a local helper. _(Isolated as its own commit
+  for cherry-picking.)_
+- **`e2e/nesting.spec.ts` was red on `main`** — verified by running it on `f192c84~1`. It
+  asserted the nest controls live in the Inspector, which nest view hides; they are in the
+  dock's widened `wide` mode, and its "Reshuffle" button is called "Try another layout".
+  Re-pointed the locators. **Note for F-001:** its cockpit-v2 table still says "F-057 nest
+  controls → the inspector"; the code disagrees and the code is right (the sheet table needs
+  the column width). That line is stale.
+- **E2E app-data isolation.** The launch screen made every spec read the panel library at
+  boot, which would have read and written the developer's real `userData/library` and made
+  startup order-dependent between specs. Added `e2e/appdata.ts` `isolatedAppData()` — a
+  fresh `mkdtemp` root per launch — spread into all 25 launching specs, plus a run-wide
+  backstop in `playwright.config.ts` for the next spec that forgets. Verified: no
+  `userData/Vitrum` directory is created by a full run.
+- `e2e/editor.ts` `editorWindow(app)`: the 24 editor specs now step past the launch screen
+  via the new-panel dialog, whose defaults (300 × 400 mm, lead) match the panel the editor
+  used to boot with. `VITRUM_SAVE_AS_PATH` added to main so an E2E can save a `.vitrum`
+  without the native dialog — the same override idiom the export handlers use.
+- `App.test.ts` / `app.spec.ts` expectations moved from `Sample panel` to the document's
+  real name: the shell reads `Project.settings` now, which is FR-3 working.

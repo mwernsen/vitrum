@@ -3,6 +3,10 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 
@@ -13,8 +17,10 @@ test.beforeEach(async () => {
   const autosavePath = join(tmpdir(), `vitrum-e2e-app-${process.pid}-${runId++}.vitrum`)
   app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath },
+    env: { ...process.env, ...isolatedAppData(), VITRUM_AUTOSAVE_PATH: autosavePath },
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {
@@ -42,11 +48,12 @@ test('renders the cockpit shell regions', async () => {
   await expect(window.getByRole('complementary', { name: 'Inspector' })).toBeVisible()
 })
 
-test('opens the sample panel on an empty document', async () => {
+test('names the new panel on an empty document', async () => {
   const window = await app.firstWindow()
-  // Panel name in the top-bar document chip; the readiness meter reflects real F-020 detection, so
-  // an empty document has not cleared the geometry step.
-  await expect(window.getByTestId('document-chip')).toContainText('Sample panel')
+  // The chip reads the document's own name, which the new-panel dialog set (F-058 FR-3) — the
+  // hardcoded "Sample panel" placeholder is gone. The readiness meter reflects real F-020 detection,
+  // so an empty document has not cleared the geometry step.
+  await expect(window.getByTestId('document-chip')).toContainText('Untitled panel')
   await expect(window.getByTestId('readiness-meter')).toContainText('/ 4')
   await window.getByTestId('readiness-meter').click()
   await expect(

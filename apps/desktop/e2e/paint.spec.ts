@@ -5,6 +5,10 @@ import { _electron as electron, expect, test, type ElectronApplication } from '@
 
 import { closeReadiness, readinessRow } from './readiness'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath: string
@@ -20,6 +24,7 @@ test.beforeEach(async () => {
     args: ['.'],
     env: {
       ...process.env,
+      ...isolatedAppData(),
       VITRUM_AUTOSAVE_PATH: autosavePath,
       VITRUM_GLASS_LIBRARY_PATH: glassLibraryPath,
     },
@@ -32,6 +37,8 @@ test.beforeEach(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dialog.showMessageBox = (async () => ({ response: 0 })) as any
   }, documentPath)
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {

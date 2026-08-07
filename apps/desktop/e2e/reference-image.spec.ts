@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath = ''
@@ -18,10 +22,13 @@ test.beforeEach(async () => {
     // VITRUM_IMPORT_IMAGE_PATH routes the image open dialog to the committed fixture (no prompt).
     env: {
       ...process.env,
+      ...isolatedAppData(),
       VITRUM_AUTOSAVE_PATH: autosavePath,
       VITRUM_IMPORT_IMAGE_PATH: FIXTURE,
     },
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {

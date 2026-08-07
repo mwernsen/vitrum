@@ -339,7 +339,14 @@ function registerIpc(): void {
     return { path, mime: mimeForImage(path), bytes: new Uint8Array(await readFile(path)) }
   })
 
+  // `VITRUM_SAVE_AS_PATH` bypasses the native save dialog so an E2E run can save a panel to a temp
+  // file it controls — the same override idiom the export handlers use.
   ipcMain.handle('storage:saveAs', async (_event, suggestedName: string, contents: Uint8Array) => {
+    const forced = process.env['VITRUM_SAVE_AS_PATH']
+    if (forced) {
+      await writeFile(forced, Buffer.from(contents))
+      return forced
+    }
     const result = await dialog.showSaveDialog({
       defaultPath: suggestedName,
       filters: FILE_FILTERS,

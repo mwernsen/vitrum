@@ -3,6 +3,10 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 
@@ -12,10 +16,13 @@ test.beforeEach(async () => {
     args: ['.'],
     env: {
       ...process.env,
+      ...isolatedAppData(),
       VITRUM_AUTOSAVE_PATH: join(tmpdir(), `vitrum-e2e-nest-auto-${id}.vitrum`),
       VITRUM_GLASS_LIBRARY_PATH: join(tmpdir(), `vitrum-e2e-nest-lib-${id}.json`),
     },
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {
@@ -45,11 +52,13 @@ test('nest view: assign a piece, nest it onto a sheet, reshuffle', async () => {
   await paletteRegion.locator('button.glass').first().click()
   await window.mouse.click(...at(240, 210))
 
-  // Switch to the Nest view: the nesting controls appear in the inspector (Cockpit v2 folded the
-  // floating card into the column beside the view, mirroring the light view).
+  // Switch to the Nest view. The nesting controls take over the dock, widened for them
+  // (`DockPanel`'s `wide` mode) rather than the inspector, which nest view hides — the sheet table
+  // needs the column width. (F-001's cockpit-v2 table still says "inspector"; the code is the truth.)
   await window.getByRole('tab', { name: 'Nest', exact: true }).click()
-  const controls = window.getByRole('complementary', { name: 'Inspector' })
-  await expect(controls).toContainText('Sheets')
+  const controls = window.getByRole('region', { name: 'Nesting' })
+  await expect(controls).toContainText('Arrangement')
+  await expect(controls).toContainText('Sheet stock per glass')
 
   // Auto-nest runs on entry: a computed sheet with a utilisation caption appears where the empty
   // state was. The sheet is labelled with its 1-based index and percentage used.
@@ -57,7 +66,7 @@ test('nest view: assign a piece, nest it onto a sheet, reshuffle', async () => {
   await expect(sheet).toBeVisible({ timeout: 15_000 })
   await expect(window.getByText('Sheet 1', { exact: true })).toBeVisible()
 
-  // Reshuffle recomputes the layout (still one sheet for a single piece) without error.
-  await controls.getByRole('button', { name: 'Reshuffle' }).click()
+  // "Try another layout" recomputes with a fresh seed (still one sheet for a single piece).
+  await controls.getByRole('button', { name: 'Try another layout' }).click()
   await expect(sheet).toBeVisible({ timeout: 15_000 })
 })

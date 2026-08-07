@@ -3,6 +3,7 @@ import {
   emptyPanelLibrary,
   forgetPanel,
   panelEntryFor,
+  panelMatches,
   panelThumbnailKey,
   recordPanelOpened,
   relocatePanel,
@@ -10,6 +11,7 @@ import {
   unpackDocument,
   type LibraryPort,
   type PanelEntry,
+  type PanelFacts,
   type PanelLibrary,
   type Project,
   type StoragePort,
@@ -54,12 +56,48 @@ export class LibraryController {
 
   #library: PanelLibrary = emptyPanelLibrary()
 
-  /** The grid's rows, newest-opened first (FR-2). */
+  /** Every known row, newest-opened first (FR-2). */
   rows = $state<LibraryRow[]>([])
   /** True once the persisted library has been read. */
   loaded = $state(false)
   /** A non-blocking message for the launch screen (e.g. a dropped file that was not a panel, FR-4). */
   error = $state<string | null>(null)
+  /** The search box's contents (FR-11). Filters the grid; the Continue hero stays put. */
+  query = $state('')
+
+  /**
+   * The panel the "Continue" hero resumes (FR-9): the most recently *edited* one that is still on
+   * disk. Null when the library is empty or every entry has gone missing, in which case the surface
+   * shows its empty state rather than a blank hero.
+   *
+   * Deliberately independent of {@link query} — searching the grid must not move the thing you were
+   * working on out from under you.
+   */
+  hero = $derived.by<LibraryRow | null>(() => {
+    let best: LibraryRow | null = null
+    for (const row of this.rows) {
+      if (row.missing) continue
+      const at = row.entry.lastSavedAt ?? row.entry.lastOpenedAt
+      const bestAt = best ? (best.entry.lastSavedAt ?? best.entry.lastOpenedAt) : -1
+      if (at > bestAt) best = row
+    }
+    return best
+  })
+
+  /**
+   * The rows the grid lists: everything except the hero's panel (the design shows the in-flight panel
+   * once, in the hero), narrowed by the search query (FR-11).
+   */
+  gridRows = $derived(
+    this.rows.filter(
+      (row) => row.entry.path !== this.hero?.entry.path && panelMatches(row.entry, this.query),
+    ),
+  )
+
+  /** True when a non-blank query hides everything — a distinct state from an empty library (FR-11). */
+  noMatches = $derived(
+    this.query.trim() !== '' && this.gridRows.length === 0 && this.rows.length > 0,
+  )
 
   /** Cache of thumbnail key → data URL (null = requested but unavailable → placeholder). */
   #thumbs = new SvelteMap<string, string | null>()
@@ -114,6 +152,21 @@ export class LibraryController {
    */
   recordOpened = async (path: string, project: Project): Promise<void> => {
     this.#library = recordPanelOpened(this.#library, panelEntryFor(path, project, this.#now()))
+    await this.#persist()
+    await this.refresh()
+  }
+
+  /**
+   * Record a **save** (FR-10): the same as {@link recordOpened} plus the panel's derived figures, which
+   * the editor has already computed at that moment. This is the whole reason grid cards can show real
+   * panes/came without opening files, and why nothing is indexed at browse time. `facts` may be absent
+   * (a host or test with no shell attached), in which case the entry keeps whatever it last knew.
+   */
+  recordSaved = async (path: string, project: Project, facts?: PanelFacts): Promise<void> => {
+    this.#library = recordPanelOpened(
+      this.#library,
+      panelEntryFor(path, project, this.#now(), facts),
+    )
     await this.#persist()
     await this.refresh()
   }

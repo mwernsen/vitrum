@@ -3,19 +3,28 @@
   import type { NewPanelSpec, TechniqueKind } from '@vitrum/model'
 
   import Button from '../components/Button.svelte'
+  import Checkbox from '../components/Checkbox.svelte'
   import Dialog from '../components/Dialog.svelte'
   import Input from '../components/Input.svelte'
   import Radio from '../components/Radio.svelte'
   import Select from '../components/Select.svelte'
 
+  /** How the panel is being started (FR-12). Templates are deferred to F-060. */
+  export interface NewPanelChoice {
+    /** Run F-051's reference-image import straight after creating the panel — the tracing on-ramp. */
+    readonly fromPhoto: boolean
+  }
+
   interface Props {
     open?: boolean
     /** Create the panel. The spec's dimensions are already validated and in millimetres. */
-    onCreate: (spec: NewPanelSpec) => void
+    onCreate: (spec: NewPanelSpec, choice: NewPanelChoice) => void
     onClose: () => void
+    /** Whether tracing a photo is available (needs the host's image import). Absent ⇒ hidden. */
+    photoAvailable?: boolean
   }
 
-  let { open = $bindable(false), onCreate, onClose }: Props = $props()
+  let { open = $bindable(false), onCreate, onClose, photoAvailable = false }: Props = $props()
 
   // The dimensions are held as typed text so a half-entered value is not an error yet; the pure
   // `validateNewPanel` (F-058 FR-3) owns parsing, unit conversion and the per-field messages.
@@ -24,6 +33,7 @@
   let height = $state('400')
   let units = $state<LengthUnit>('mm')
   let technique = $state<TechniqueKind>('lead')
+  let fromPhoto = $state(false)
   // Errors stay hidden until the first submit, so the dialog does not scold a user mid-keystroke.
   let submitted = $state(false)
 
@@ -38,6 +48,7 @@
       height = '400'
       units = 'mm'
       technique = 'lead'
+      fromPhoto = false
       submitted = false
     }
   })
@@ -46,13 +57,16 @@
     event?.preventDefault()
     submitted = true
     if (!result.ok) return
-    onCreate({
-      name: result.name,
-      units,
-      widthMm: result.widthMm,
-      heightMm: result.heightMm,
-      technique,
-    })
+    onCreate(
+      {
+        name: result.name,
+        units,
+        widthMm: result.widthMm,
+        heightMm: result.heightMm,
+        technique,
+      },
+      { fromPhoto: fromPhoto && photoAvailable },
+    )
   }
 </script>
 
@@ -101,8 +115,23 @@
       <p class="note">You can change this later from the top bar.</p>
     </fieldset>
 
-    <!-- Room for the pattern-templates gallery (backlog F-059); a blank cartoon is the only start today. -->
-    <p class="templates">Starting from a blank cartoon. Pattern templates arrive later.</p>
+    <!-- "Start from" — the design offers blank, template or photo; templates are deferred to F-060. -->
+    <fieldset class="start">
+      <legend>Start from</legend>
+      {#if photoAvailable}
+        <Checkbox
+          label="A photo or scan to trace"
+          checked={fromPhoto}
+          onchange={(checked) => (fromPhoto = checked)}
+        />
+        <p class="note">
+          Adds the image as a tracing underlay once the panel is created. Cancelling the file dialog
+          leaves the blank panel.
+        </p>
+      {:else}
+        <p class="note">A blank cartoon. Pattern templates arrive with F-060.</p>
+      {/if}
+    </fieldset>
 
     <!-- A submit button inside the form so Enter creates the panel; the footer holds the visible one. -->
     <button class="submit-shim" type="submit" tabindex="-1" aria-hidden="true"></button>
@@ -164,15 +193,14 @@
     gap: var(--space-5);
   }
 
-  .note,
-  .templates {
+  .note {
     margin: 0;
     font: var(--text-caption);
     color: var(--ink-500);
   }
 
-  .templates {
-    padding-top: var(--space-2);
+  .start {
+    padding-top: var(--space-3);
     border-top: 1px solid var(--border-subtle);
   }
 

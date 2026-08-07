@@ -3,16 +3,28 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath: string
 let glassLibraryPath: string
+/**
+ * One isolated app-data root for the whole test, not per `launch()`: this spec relaunches the app to
+ * prove the glass library persists, and both launches must see the same app-data directory.
+ */
+let appData: Record<string, string>
 
 test.beforeEach(async () => {
   const id = `${process.pid}-${runId++}`
+  appData = isolatedAppData()
   autosavePath = join(tmpdir(), `vitrum-e2e-glass-auto-${id}.vitrum`)
   glassLibraryPath = join(tmpdir(), `vitrum-e2e-glass-lib-${id}.json`)
   app = await launch()
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {
@@ -24,6 +36,7 @@ function launch(): Promise<ElectronApplication> {
     args: ['.'],
     env: {
       ...process.env,
+      ...appData,
       VITRUM_AUTOSAVE_PATH: autosavePath,
       VITRUM_GLASS_LIBRARY_PATH: glassLibraryPath,
     },
@@ -64,7 +77,8 @@ test('glass catalog: starter loads, search filters, new glass persists across re
   // global library persisted in userData).
   await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
   app = await launch()
-  window = await app.firstWindow()
+  // F-058: the relaunched app opens on the launch screen too, so step into the editor again.
+  window = await editorWindow(app)
   await window.getByRole('button', { name: 'Glass', exact: true }).click()
   const palette2 = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette2.getByText('My studio blue')).toBeVisible()

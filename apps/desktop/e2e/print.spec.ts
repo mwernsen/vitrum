@@ -4,6 +4,10 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath: string
@@ -16,12 +20,19 @@ test.beforeEach(async () => {
   app = await electron.launch({
     args: ['.'],
     // VITRUM_EXPORT_PATH makes the PDF export write to a temp file instead of a native dialog.
-    env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath, VITRUM_EXPORT_PATH: exportPath },
+    env: {
+      ...process.env,
+      ...isolatedAppData(),
+      VITRUM_AUTOSAVE_PATH: autosavePath,
+      VITRUM_EXPORT_PATH: exportPath,
+    },
   })
   await app.evaluate(({ dialog }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dialog.showMessageBox = (async () => ({ response: 0 })) as any
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {

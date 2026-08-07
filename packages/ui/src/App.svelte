@@ -10,7 +10,8 @@
   import { GlassLibraryController } from './glass/library.svelte'
   import { LibraryController } from './library/controller.svelte'
   import LibraryScreen from './library/LibraryScreen.svelte'
-  import NewPanelDialog from './library/NewPanelDialog.svelte'
+  import NewPanelDialog, { type NewPanelChoice } from './library/NewPanelDialog.svelte'
+  import type { DockSection } from './shell/dock'
   import { PriceBookController } from './quote/priceBook.svelte'
   import AppShell from './shell/AppShell.svelte'
   import { VersionController } from './versions/controller.svelte'
@@ -58,6 +59,10 @@
   // svelte-ignore state_referenced_locally
   let screen = $state<'library' | 'editor'>(host.launchScreen ? 'library' : 'editor')
   let newPanelOpen = $state(false)
+  /** Set when a panel was started "from a photo" — the shell runs F-051's import once (FR-12). */
+  let photoRequested = $state(false)
+  /** Which dock section to land on when entering the editor (the hero's "Version history", FR-9). */
+  let entrySection = $state<DockSection | undefined>(undefined)
 
   // The panel the shell describes: the open document's own name, size and technique — the
   // `Project.settings` the new-panel dialog finally gives a creation-time UI (F-058 FR-3).
@@ -106,8 +111,10 @@
   onMount(() => {
     // The native File ▸ New and Cmd-N both ask for a name, size and technique now (FR-3).
     controller.onNewPanel = () => (newPanelOpen = true)
-    // A saved document belongs in the library, with a preview keyed to its new mtime (FR-2/FR-6).
-    controller.onSaved = (path) => void library.recordOpened(path, controller.doc)
+    // A saved document belongs in the library, with a preview keyed to its new mtime (FR-2/FR-6) and
+    // its derived figures indexed for the grid and hero (FR-10).
+    controller.onSaved = (path) =>
+      void library.recordSaved(path, controller.doc, controller.indexFacts?.())
     const offOpenFile = host.onOpenFile?.((path) => void openPath(path))
     void boot()
     void glassLibrary.init()
@@ -149,13 +156,14 @@
   }
 
   /** Open a `.vitrum` path and enter the editor, recording it in the library (FR-1/FR-2). */
-  async function openPath(path: string): Promise<void> {
+  async function openPath(path: string, section?: DockSection): Promise<void> {
     if (!(await controller.openPath(path))) {
       library.fail('That panel could not be opened. It may have moved, or it is not a Vitrum file.')
       await library.refresh()
       return
     }
     await library.recordOpened(path, controller.doc)
+    entrySection = section
     screen = 'editor'
   }
 
@@ -188,10 +196,16 @@
     screen = 'editor'
   }
 
-  /** Create the panel the dialog described and enter the editor (FR-3). Unsaved until Save-As. */
-  async function createPanel(spec: NewPanelSpec): Promise<void> {
+  /**
+   * Create the panel the dialog described and enter the editor (FR-3). Unsaved until Save-As. When the
+   * user chose "from a photo", the shell then runs F-051's reference import against the new panel
+   * (FR-12) — a cancelled file dialog leaves the blank panel, not a half-created document.
+   */
+  async function createPanel(spec: NewPanelSpec, choice: NewPanelChoice): Promise<void> {
     if (!(await controller.newPanel(spec))) return
     newPanelOpen = false
+    entrySection = choice.fromPhoto ? 'draw' : undefined
+    photoRequested = choice.fromPhoto
     screen = 'editor'
   }
 
@@ -216,11 +230,9 @@
     onNew={() => (newPanelOpen = true)}
     onOpenFile={openFromDialog}
     onOpenEntry={(path) => void openPath(path)}
+    onOpenHistory={(path) => void openPath(path, 'history')}
     onDropFile={(file) => void openDropped(file)}
-    onResume={controller.segmentCount > 0 || controller.currentPath
-      ? () => (screen = 'editor')
-      : undefined}
-    resumeName={panel.name}
+    glassCount={glassLibrary.glasses.length}
   />
 {:else}
   <AppShell
@@ -230,6 +242,9 @@
     {versions}
     {priceBook}
     onLibrary={goToLibrary}
+    {photoRequested}
+    onPhotoImported={() => (photoRequested = false)}
+    initialSection={entrySection}
     exportPdf={host.export ? (name, bytes) => host.export!.savePdf(name, bytes) : undefined}
     exportText={host.export ? (name, text) => host.export!.saveText(name, text) : undefined}
     exportPng={host.export ? (name, bytes) => host.export!.savePng(name, bytes) : undefined}
@@ -241,8 +256,9 @@
 
 <NewPanelDialog
   open={newPanelOpen}
-  onCreate={(spec) => void createPanel(spec)}
+  onCreate={(spec, choice) => void createPanel(spec, choice)}
   onClose={() => (newPanelOpen = false)}
+  photoAvailable={!!host.import?.openImage}
 />
 
 <style>

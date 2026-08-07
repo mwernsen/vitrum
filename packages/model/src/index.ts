@@ -275,6 +275,7 @@ export {
   MAX_LIBRARY_ENTRIES,
   PANEL_LIBRARY_VERSION,
   panelEntryFor,
+  panelMatches,
   panelThumbnailKey,
   recordPanelOpened,
   relocatePanel,
@@ -282,6 +283,7 @@ export {
   type LibraryPort,
   type NewPanelSpec,
   type PanelEntry,
+  type PanelFacts,
   type PanelLibrary,
 } from './library'
 

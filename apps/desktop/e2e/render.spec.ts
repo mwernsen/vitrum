@@ -4,6 +4,10 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let pngPath: string
@@ -15,11 +19,14 @@ test.beforeEach(async () => {
     args: ['.'],
     env: {
       ...process.env,
+      ...isolatedAppData(),
       VITRUM_AUTOSAVE_PATH: join(tmpdir(), `vitrum-e2e-render-auto-${id}.vitrum`),
       VITRUM_GLASS_LIBRARY_PATH: join(tmpdir(), `vitrum-e2e-render-lib-${id}.json`),
       VITRUM_EXPORT_PNG_PATH: pngPath,
     },
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {

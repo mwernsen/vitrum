@@ -31,6 +31,7 @@ import type {
   Command,
   ExecuteOptions,
   NewPanelSpec,
+  PanelFacts,
   Project,
   ReferenceAsset,
   Segment,
@@ -99,6 +100,14 @@ export class DocumentController {
    * modification time (FR-2/FR-6).
    */
   onSaved: ((path: string) => void) | undefined
+
+  /**
+   * The open panel's derived figures for the library index (F-058 FR-10), supplied by the shell —
+   * which is where piece detection, glass assignment, DRC and the BOM are already computed. Read on the
+   * save path only, so nothing extra runs while editing. Mirrors {@link onBeforeSave} /
+   * {@link collectAssets}: the document layer asks, the shell answers.
+   */
+  indexFacts: (() => PanelFacts) | undefined
 
   segmentCount = $derived(Object.keys(this.doc.segments).length)
 

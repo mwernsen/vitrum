@@ -5,6 +5,10 @@ import { _electron as electron, expect, test, type ElectronApplication } from '@
 
 import { closeReadiness, readinessRow } from './readiness'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 let autosavePath: string
@@ -16,7 +20,7 @@ test.beforeEach(async () => {
   documentPath = join(tmpdir(), `vitrum-e2e-numbering-doc-${id}.vitrum`)
   app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath },
+    env: { ...process.env, ...isolatedAppData(), VITRUM_AUTOSAVE_PATH: autosavePath },
   })
   // Stub native dialogs so save + open run headless (repo E2E convention).
   await app.evaluate(({ dialog }, file) => {
@@ -25,6 +29,8 @@ test.beforeEach(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dialog.showMessageBox = (async () => ({ response: 0 })) as any
   }, documentPath)
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {

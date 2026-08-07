@@ -3,6 +3,10 @@ import { join } from 'node:path'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
+import { editorWindow } from './editor'
+
+import { isolatedAppData } from './appdata'
+
 let app: ElectronApplication
 let runId = 0
 
@@ -10,8 +14,10 @@ test.beforeEach(async () => {
   const autosavePath = join(tmpdir(), `vitrum-e2e-draw-${process.pid}-${runId++}.vitrum`)
   app = await electron.launch({
     args: ['.'],
-    env: { ...process.env, VITRUM_AUTOSAVE_PATH: autosavePath },
+    env: { ...process.env, ...isolatedAppData(), VITRUM_AUTOSAVE_PATH: autosavePath },
   })
+  // F-058: the app now opens on the launch screen; step into the editor.
+  await editorWindow(app)
 })
 
 test.afterEach(async () => {
