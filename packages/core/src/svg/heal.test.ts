@@ -115,6 +115,13 @@ describe('healNetwork — idempotence on curved fixtures (FR-4)', () => {
     )
     expect(twice.summary).toEqual({ snapped: 0, split: 0, dropped: 0 })
     expect(twice.segments).toHaveLength(once.segments.length)
+    // A settled network reports nothing changed. `changedIds` compares by id, so it only settles if
+    // ids are unique — duplicates leave a twin permanently "changed" (see the regression below).
+    expect(twice.changedIds.size).toBe(0)
+    for (const result of [once, twice]) {
+      const ids = result.segments.map((s) => s.id)
+      expect(new Set(ids).size).toBe(ids.length)
+    }
   }
 
   it('a full circle inside a square is a fixed point', () => {
@@ -162,5 +169,40 @@ describe('healNetwork — messy fixture (FR-2)', () => {
     const healed = healNetwork(input, 0.5)
     expect(healed.summary.dropped).toBeGreaterThan(0)
     expect(countPieces(healed.segments)).toBe(2)
+  })
+})
+
+describe('healNetwork — offcut ids stay unique across passes (FR-4 regression)', () => {
+  /**
+   * Found by the FR-4 property test, which failed on roughly one run in three until this was fixed.
+   *
+   * These three crossing lines plus a degenerate one need several passes to settle. The first piece
+   * of a split keeps its parent's id, so a segment that already survived one split gets split again
+   * on a later pass — and naming its offcut positionally (`${id}~1`) reissued an id an earlier pass
+   * had already given to a different, still-present segment. `changedIds` compares by id, so the
+   * mismatched twin was reported as changed on every subsequent pass and the network never read as
+   * settled, even though its geometry had stopped moving.
+   */
+  const counterexample = (): HealSegment[] => {
+    counter = 0
+    return [
+      seg(line(vec2(40, 0), vec2(0, -80))),
+      seg(line(vec2(-10, -90), vec2(100, 30))),
+      seg(line(vec2(50, -10), vec2(-20, -110))),
+      seg(line(vec2(0, 0), vec2(0, 0))), // degenerate — dropped, but it shifts the pass sequence
+    ]
+  }
+
+  it('issues no duplicate ids and settles on the second pass', () => {
+    const once = healNetwork(counterexample(), 2)
+    const ids = once.segments.map((s) => s.id)
+    expect(new Set(ids).size).toBe(ids.length)
+
+    const twice = healNetwork(
+      once.segments.map((s) => ({ id: s.id, geometry: s.geometry, role: s.role })),
+      2,
+    )
+    expect(twice.summary).toEqual({ snapped: 0, split: 0, dropped: 0 })
+    expect(twice.changedIds.size).toBe(0)
   })
 })

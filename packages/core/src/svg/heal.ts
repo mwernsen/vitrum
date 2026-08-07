@@ -269,13 +269,33 @@ function healOnce(input: readonly HealSegment[], tol: number): HealResult {
   }
   const working: Working[] = []
   let splitCount = 0
+
+  // Offcut ids must be unique across *passes*, not just within one. The first piece keeps its
+  // parent's id, so a segment that already survived a split can be split again on a later pass —
+  // and naming its offcut `${id}~1` positionally would reissue the id an earlier pass already gave
+  // to a different, still-present segment. Two segments then share an id, and the "what changed"
+  // highlight (`changedIds`) can never settle: it compares by id, so the mismatched twin is
+  // reported as changed on every pass, which is what broke FR-4 idempotence. Seeding from the input
+  // ids and skipping anything taken keeps names collision-free while staying deterministic in input
+  // order (FR-3 redo reproduces the import).
+  const takenIds = new Set(input.map((s) => s.id))
+  const offcutId = (parent: string): string => {
+    for (let n = 1; ; n++) {
+      const candidate = `${parent}~${n}`
+      if (!takenIds.has(candidate)) {
+        takenIds.add(candidate)
+        return candidate
+      }
+    }
+  }
+
   for (let i = 0; i < input.length; i++) {
     const seg = input[i]!
     const pieces = splitAtParams(seg.geometry, dedupeParams(seg.geometry, splitParams[i]!, tol))
     if (pieces.length > 1) splitCount++
     pieces.forEach((geometry, k) => {
       working.push({
-        id: k === 0 ? seg.id : `${seg.id}~${k}`,
+        id: k === 0 ? seg.id : offcutId(seg.id),
         geometry,
         role: seg.role,
         fromId: seg.id,

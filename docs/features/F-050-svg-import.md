@@ -181,3 +181,29 @@ _Delivered 2026-07-21. All five gates green (lint, format:check, check, test —
 
 **Follow-ups (out of scope):** raster autotrace → backlog `F-059`; a staged healing-review wizard
 if the single slider proves insufficient on real messy files (decision #1 left the door open).
+
+### Correction (2026-08-07): FR-4 idempotence was not actually holding
+
+The note above claimed FR-4 verified. It was not. `heal.property.test.ts` failed on roughly
+**one run in three** — fast-check draws a fresh seed each run, so the original green run was
+luck, and the failure went unnoticed until a full-suite run during F-058 caught it.
+
+The bug was in offcut naming, not in the geometry. The first piece of a split keeps its
+parent's id, so a segment that already survived one split can be split again on a later pass;
+naming its offcut positionally (`${id}~1`) reissued an id an earlier pass had already given to
+a different, still-present segment. Two segments then shared an id, and because `changedIds`
+compares by id, the mismatched twin was reported as changed on every subsequent pass — so the
+network never read as settled even though its geometry had stopped moving. `healOnce` now seeds
+a taken-id set from its input and skips anything already used, which stays deterministic in
+input order (FR-3 redo still reproduces an import).
+
+Scope of the impact was limited to the "what changed" highlight: `toDrafts` drops ids, so the
+document assigns its own on merge and no imported segment was ever lost.
+
+Verification: the shrunk counterexample is now a named regression test in `heal.test.ts`, the
+shared `assertIdempotent` helper additionally asserts unique ids and an empty `changedIds`, and
+the property test was run 25 times consecutively with no failure (~1-in-3 before the fix).
+
+Standing lesson: a property test with an unpinned seed that runs once per CI run is a
+**sampling** check, not a guarantee — treat a first green as weak evidence until it has survived
+many runs.
