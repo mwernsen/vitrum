@@ -22,6 +22,20 @@ function nodePos(project: Project, id: NodeId): Vec2 | undefined {
   return project.nodes[id]?.pos
 }
 
+/**
+ * A rounded-position identity token (0.1 mm), matching the cuttability pack's `key`.
+ *
+ * The three diagnostic-derived rules need this because a diagnostic is *located*: the same segments
+ * can produce several of the same kind at different places, and segment ids alone cannot tell them
+ * apart. A traced cartoon (F-059) is full of fragments dangling at **both** ends, which is one
+ * segment and two diagnostics — keyed on the segment alone they collapsed to a single key, so the
+ * violation list carried duplicate keys and the panel that renders it threw before painting a row.
+ * Waivers shared the collision too: excluding one end silently excluded the other.
+ */
+function posKey(p: Vec2): string {
+  return `${Math.round(p.x * 10)},${Math.round(p.y * 10)}`
+}
+
 /* -------------------------------------------------------------------------- */
 /* dangling-line — a lead segment end that connects to nothing (error)         */
 /* -------------------------------------------------------------------------- */
@@ -39,7 +53,8 @@ const danglingLine: Rule = {
       .map((d) => ({
         at: d.at,
         message: 'segment end is not connected to the network',
-        identity: [...d.segmentIds],
+        // The position distinguishes the two ends of a segment that dangles at both.
+        identity: [...d.segmentIds, posKey(d.at)],
         segmentIds: [...d.segmentIds],
       })),
 }
@@ -107,7 +122,7 @@ const nearMissJoint: Rule = {
         return {
           at: d.at,
           message: `two endpoints are not welded${gap}`,
-          identity: [...d.segmentIds],
+          identity: [...d.segmentIds, posKey(d.at)],
           segmentIds: [...d.segmentIds],
           ...(d.distance !== undefined ? { distance: d.distance } : {}),
           ...(quickFix ? { quickFix } : {}),
@@ -132,7 +147,7 @@ const duplicateSegment: Rule = {
       .map((d) => ({
         at: d.at,
         message: 'segment overlaps another segment',
-        identity: [...d.segmentIds],
+        identity: [...d.segmentIds, posKey(d.at)],
         segmentIds: [...d.segmentIds],
       })),
 }

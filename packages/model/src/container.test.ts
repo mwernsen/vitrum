@@ -20,6 +20,7 @@ const layer = (id: string, assetId: string): ReferenceLayer => ({
   visible: true,
   locked: false,
   rectified: false,
+  calibrated: true,
 })
 
 const asset = (bytes: number[], mime = 'image/png'): ReferenceAsset => ({

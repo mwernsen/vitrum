@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "fast-check": "^3.23.2",
+    "fflate": "^0.8.3",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   }

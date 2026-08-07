@@ -24,6 +24,7 @@ const layer = (id: string, over: Partial<ReferenceLayer> = {}): ReferenceLayer =
   visible: true,
   locked: false,
   rectified: false,
+  calibrated: true,
   ...over,
 })
 

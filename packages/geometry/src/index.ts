@@ -135,6 +135,9 @@ export {
 // Simplification
 export { douglasPeucker, removeCollinear, simplifyPolyline } from './simplify'
 
+// Curve fitting (the inverse of evaluation — F-059 autotrace fits skeleton runs)
+export { fitCubics, isNearlyStraight } from './fit'
+
 // Projective transforms (homography — F-051 perspective correction)
 export {
   IDENTITY_MAT3,

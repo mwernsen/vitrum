@@ -16,6 +16,7 @@ import {
   type NumberingState,
   type Project,
   type QuoteSettings,
+  type ReferenceLayer,
   type RenderSettings,
   type ReinforcementBar,
   type Segment,
@@ -32,7 +33,7 @@ import {
  * a clear, actionable error rather than importing a shape we don't understand; a file
  * from an older schema is upgraded by running the registered forward migrations in order.
  */
-export const CURRENT_SCHEMA_VERSION = 16
+export const CURRENT_SCHEMA_VERSION = 17
 
 /** On-disk envelope. `project` is the plain-JSON form of a `Project`. */
 export interface VitrumFile {
@@ -380,6 +381,27 @@ const migrateV15ToV16: Migration = {
   },
 }
 
+/**
+ * v16 → v17 (F-059): reference layers gained `calibrated`, recording whether their world size was
+ * measured rather than guessed. v16 layers were placed at an arbitrary 300 mm on the longest edge and
+ * may or may not have been calibrated since — nothing in the file distinguishes the two — so they
+ * default to `false`. Autotrace then asks for a calibration instead of tracing at a scale it cannot
+ * vouch for, which is the conservative direction: the user re-measures once, and nothing traces wrong.
+ */
+const migrateV16ToV17: Migration = {
+  from: 16,
+  migrate: (file) => {
+    const project = file.project as Project & {
+      layers: readonly (ReferenceLayer & { calibrated?: boolean })[]
+    }
+    const layers = project.layers.map((layer) => ({
+      ...layer,
+      calibrated: layer.calibrated ?? false,
+    }))
+    return { schemaVersion: 17, project: { ...project, layers } }
+  },
+}
+
 export const MIGRATIONS: readonly Migration[] = [
   migrateV1ToV2,
   migrateV2ToV3,
@@ -396,6 +418,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migrateV13ToV14,
   migrateV14ToV15,
   migrateV15ToV16,
+  migrateV16ToV17,
 ]
 
 /** Thrown when a file was written by a newer Vitrum than this build can read (FR-4). */
