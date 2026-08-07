@@ -110,6 +110,8 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-056](docs/features/F-056-cost-estimation.md)    | Cost estimation & quoting                         | F-042        |
 | [F-057](docs/features/F-057-nesting.md)            | Sheet nesting & yield optimization                | F-042        |
 | [F-058](docs/features/F-058-panel-library.md)      | Panel library & launch screen                     | F-002, F-055 |
+| [F-059](docs/features/F-059-autotrace.md)          | Raster autotrace — scanned cartoons to lead lines | F-050, F-051 |
+| [F-060](docs/features/F-060-pattern-templates.md)  | Pattern templates (parametric generators)         | F-058        |
 | [F-061](docs/features/F-061-panel-lifecycle.md)    | Panel lifecycle & workshop status                 | F-058        |
 
 ## Backlog — ids reserved, not yet scoped
@@ -121,8 +123,6 @@ a spec from [TEMPLATE.md](docs/features/TEMPLATE.md) first, then a ROADMAP row a
 
 | ID    | Idea                                                                                          | Referenced by |
 | ----- | --------------------------------------------------------------------------------------------- | ------------- |
-| F-059 | Raster autotrace — bitmap → lead lines; pairs with the F-051 underlay                         | F-050         |
-| F-060 | Pattern templates / starter designs (Glass Eye ships 400+); needs content design              | F-058         |
 | F-062 | Manufacturer glass catalogs (Bullseye, Wissmach, Oceanside, …); needs data/licensing research | F-022         |
 
 **Allocating an id**: add the row here the moment a spec first cites the number, and

@@ -43,8 +43,8 @@ of redrawing it, and have piece detection find the regions I drew.
 ### Non-goals
 
 - Raster autotrace (bitmap → vectors). Glass Eye Pro Plus has it; genuinely useful
-  with F-051, but a separate hard feature → backlog **F-059** (see ROADMAP's backlog
-  table).
+  with F-051, but a separate hard feature → [F-059](F-059-autotrace.md), now specced
+  (centreline tracing of scanned cartoons).
 - Text-to-path, gradients, clip paths (drop with a notice listing what was ignored).
 
 ## Design

@@ -12,6 +12,19 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:site", "--strictPort"],
       "port": 5180
+    },
+    {
+      "name": "dl-site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "-C",
+        "/private/tmp/claude-501/-Users-mathieuwernsen-Documents-Personal-repository-vitrum/3ce07934-4c62-4c6b-be0f-8a64a3e1c7fc/scratchpad/dl",
+        "dev:site",
+        "--port",
+        "5183",
+        "--strictPort"
+      ],
+      "port": 5183
     }
   ]
 }
