@@ -45,7 +45,7 @@ That gap is documented and tested in `fixtures.test.ts`; in short, most of the m
 regions are never closed _on the sheet_ (their outer edge is the panel border, and the
 panel border is not drawn), and the sun is closed on the sheet but not in the photograph —
 the paper is folded and the circle's right-hand arc survives only as a faint grey imprint,
-at exactly the luminance of the pencil annotations. Needs Mathieu's sign-off.
+at exactly the luminance of the pencil annotations. **6 is the accepted answer** (Mathieu, v0.2.0): a trace cannot close a region whose boundary was never drawn.
 
 ## `cartoon-rectified.png`
 

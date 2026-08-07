@@ -1,11 +1,11 @@
 # F-059: Raster autotrace — scanned cartoons to lead lines
 
-|                |                                                                 |
-| -------------- | --------------------------------------------------------------- |
-| **Phase**      | 5 — Power features                                              |
-| **Status**     | in-progress — implementation complete, pending Mathieu's review |
-| **Depends on** | F-050, F-051                                                    |
-| **Complexity** | L                                                               |
+|                |                           |
+| -------------- | ------------------------- |
+| **Phase**      | 5 — Power features        |
+| **Status**     | done — released in v0.2.0 |
+| **Depends on** | F-050, F-051              |
+| **Complexity** | L                         |
 
 ## Summary
 
@@ -89,9 +89,16 @@ Note the dialog as a net-new screen for back-port, as F-050 did.
   measured dimensions match the calibration within 1%. An uncalibrated layer is refused
   with a message pointing at F-051's calibration, rather than silently guessing a DPI.
 - FR-4 — **Regions come out.** On the committed cartoon fixtures, piece detection finds
-  the visually apparent regions (exact counts asserted per fixture). For
-  `cartoon-photo-workbench.jpg` the target is the count Mathieu's own hand numbering
-  implies — confirm it with him rather than fitting the test to whatever the code returns.
+  the regions that are actually **closed on the sheet** (exact counts asserted per fixture).
+  For `cartoon-photo-workbench.jpg` that is **6**, not the 11 the hand numbering implies —
+  accepted with the v0.2.0 release. The gap is a property of the drawing, not a defect:
+  most of the missing regions use the paper's edge as their outer boundary and the panel
+  border is never drawn, and the sun is closed on the sheet but not in the photograph (the
+  paper is folded, so its right-hand arc survives only as a grey imprint at pencil
+  luminance — the same luminance the threshold must exclude to satisfy FR-8). A threshold
+  sweep only ever adds slivers of 0–25 mm² against real regions of 3,500–8,000 mm².
+  **The original wording asked for the hand-numbering count; that was the wrong target** —
+  a trace cannot close a region whose boundary was never drawn.
 - FR-8 — **Annotations stay out.** On the reference fixture, no traced segment comes from a
   pencil number, a colour note, a stray construction line or a smudge, at the recommended
   threshold. Verified by asserting the traced segment count and that no segment lies inside
@@ -335,3 +342,29 @@ nothing traces at a scale Vitrum cannot vouch for. `rasteriseLayer` throws
   `ImportDialog` language (same layout, same `Slider`, same live-count affordance) and should be
   back-ported to the Claude Design project (`3c259295-607a-4eba-8cad-3890f7e80063`), along with the
   Inspector's "Autotrace" section.
+
+## Released
+
+Shipped in **v0.2.0** (tag `v0.2.0`, merge `1d3e646`), and marked `done` on Mathieu's
+sign-off 2026-08-07. The manual acceptance criterion — is a traced cartoon worth editing
+rather than redrawing? — was accepted by shipping it rather than answered in writing.
+
+Two things the release deliberately leaves open, because they are real and should not be
+lost behind a `done`:
+
+1. **Trace quality on a real cartoon.** Mathieu's own traced document (`bug.vitrum`) came
+   out as 23 segments with 22 dangling ends and a single closed piece: the strokes did not
+   weld into a network. That may be a heal-tolerance default rather than a pipeline fault —
+   the dialog's tolerance was not swept — but until someone sweeps it, "6 regions" is the
+   best case and the fragmenting is the common one. Worth a follow-up with the tolerance
+   controls in hand.
+2. **Say the border out loud.** Since a cartoon that uses the paper edge as its boundary
+   cannot close, the dialog should report it ("6 regions closed; add a panel border to close
+   the rest") instead of quietly returning 6. Cheap, and it turns a puzzling result into an
+   instruction.
+
+Fallout found and fixed while reviewing this feature, both released in the same version:
+DRC violation keys were not unique per _located_ diagnostic, so a traced network broke the
+Check panel outright (and would have collapsed two waivers into one); and the E2E helper
+identified the editor with an ambiguous `banner` role, which under Playwright's strict mode
+turned a slow click into a hard failure.
