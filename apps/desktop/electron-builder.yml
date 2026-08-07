@@ -36,6 +36,11 @@ linux:
   # electron-builder derives the executable name from the package name
   # (@vitrum/desktop → "@vitrumdesktop"), which AppImage rejects.
   executableName: vitrum
+  # deb's default artifactName is ${name}_${version}_${arch}.${ext}, and ${name} is
+  # the scoped package name — the slash in "@vitrum/desktop" made fpm write to
+  # dist/@vitrum/desktop_0.1.0_amd64.deb, a directory that does not exist, so the
+  # deb target failed while AppImage (which does not use ${name}) succeeded.
+  artifactName: ${productName}-${version}-${arch}.${ext}
   category: Graphics
   maintainer: mwn@synadia.nl
   target:
