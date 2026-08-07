@@ -36,6 +36,14 @@ into lead lines I can edit, so I don't redraw by hand what I already drew on pap
   endpoints so branches break at junctions rather than running through them. Simplify
   (Douglas–Peucker), then fit cubic béziers to the smooth runs with a tolerance control,
   keeping straight runs as lines.
+- **Exclude annotations, don't recognise them.** A real cartoon carries pencil piece
+  numbers and colour notes written on the artwork (see the reference fixture). They must
+  not become lead lines. The mechanism is **luminance separation**, not size: a hand-written
+  "10" is about as large as a short lead segment, so a minimum-blob or minimum-length
+  filter alone either keeps the numbers or deletes real geometry. Bold marker is near-black
+  and pencil is mid-grey, so the binarisation threshold is what does the work — which makes
+  the threshold control the most important one in the dialog, and worth previewing as a
+  binarised image rather than only as a piece count.
 - **Heal**: hand the traced network straight to F-050's `healNetwork` — near-miss
   junctions, crossings, degenerate and duplicate segments are exactly what a traced
   scan produces. Do not write a second healing implementation.
@@ -81,7 +89,13 @@ Note the dialog as a net-new screen for back-port, as F-050 did.
   measured dimensions match the calibration within 1%. An uncalibrated layer is refused
   with a message pointing at F-051's calibration, rather than silently guessing a DPI.
 - FR-4 — **Regions come out.** On the committed cartoon fixtures, piece detection finds
-  the visually apparent regions (exact counts asserted per fixture).
+  the visually apparent regions (exact counts asserted per fixture). For
+  `cartoon-photo-workbench.jpg` the target is the count Mathieu's own hand numbering
+  implies — confirm it with him rather than fitting the test to whatever the code returns.
+- FR-8 — **Annotations stay out.** On the reference fixture, no traced segment comes from a
+  pencil number, a colour note, a stray construction line or a smudge, at the recommended
+  threshold. Verified by asserting the traced segment count and that no segment lies inside
+  the annotation regions (a small set of hand-listed boxes is fine).
 - FR-5 — **One undo step.** A completed trace is a single history entry; undo removes all
   traced geometry and restores the prior document; redo reproduces it identically.
 - FR-6 — **Deterministic.** Same image + same settings → identical output, so redo and
@@ -103,9 +117,15 @@ Note the dialog as a net-new screen for back-port, as F-050 did.
 - Reuse: F-010 for curve fitting, F-050's `healNetwork` for healing, F-050's
   `patchNetwork` merge for FR-5. The pipeline is preprocess → skeletonise → walk →
   simplify → fit → **heal**, with healing owned by F-050.
-- Commit fixtures as small PNGs: a synthetic thick-stroke line (FR-1), a synthetic T and
-  X (FR-2), and at least one real scanned cartoon (FR-4) — ideally one of Mathieu's, so
-  the fixture reflects real pencil, real paper and a real scanner.
+- **The real fixture is already committed**: `packages/core/src/trace/fixtures/`
+  `cartoon-photo-workbench.jpg` — Mathieu's own cartoon, photographed on his bench. Read
+  that directory's README before starting: it documents the perspective, the annotations,
+  the graphite smudging, the EXIF-orientation trap, and the fact that the drawing's own
+  hand numbering (to at least 11) is the expected region count. Add the synthetic
+  stroke/T/X fixtures for FR-1 and FR-2 alongside it.
+- **Honour EXIF orientation** when rasterising an F-051 layer. Phone photos routinely carry
+  it; ignoring it traces the panel sideways. (The committed fixture has the rotation baked
+  in and no tag, so it cannot mask this bug — test it separately.)
 
 ## Acceptance criteria
 
@@ -116,8 +136,9 @@ Note the dialog as a net-new screen for back-port, as F-050 did.
   layer shows the calibration message (FR-3).
 - E2E (Playwright): place a reference image, run autotrace, confirm pieces are detected,
   then undo restores the prior document in one step (FR-5).
-- Manual (Mathieu): trace a real cartoon of his and judge whether the result is worth
-  editing versus redrawing — the only test that decides if this feature earns its place.
+- Manual (Mathieu): judge whether the traced reference cartoon is worth editing versus
+  redrawing — the only test that decides if this feature earns its place. He supplied the
+  fixture on 2026-08-07, so this is checkable from the start rather than at the end.
 
 ## Open questions
 
