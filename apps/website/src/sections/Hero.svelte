@@ -4,6 +4,23 @@
   import editorDesign from '../assets/editor-design.webp'
   import Cta from '../lib/Cta.svelte'
   import { GITHUB_URL } from '../links'
+  import { initRelease, releaseState } from '../release.svelte'
+  import { downloadHref, PLATFORM_LABELS } from '../releases'
+
+  initRelease()
+
+  const platform = $derived(releaseState.platform)
+  const href = $derived(downloadHref(releaseState.release, platform))
+  // Until the lookup settles, or on a platform we ship nothing for, the button
+  // stays honest and sends people to the picker below rather than a guess.
+  const isDirect = $derived(
+    releaseState.settled && releaseState.release !== null && platform !== null,
+  )
+  // Only name the platform when the button really is that file; otherwise it just
+  // scrolls to the picker and a specific promise would be a lie.
+  const label = $derived(
+    isDirect && platform ? `Download for ${PLATFORM_LABELS[platform]}` : 'Download for free',
+  )
 </script>
 
 <section class="hero container">
@@ -19,12 +36,18 @@
       cartoons are derived from it and checked live against real manufacturability rules.
     </p>
     <div class="actions">
-      <Cta href="#download" variant="accent" size="lg">Download for free</Cta>
+      <Cta href={isDirect ? href : '#download'} variant="accent" size="lg">{label}</Cta>
       <Cta href={GITHUB_URL} variant="secondary" size="lg" target="_blank" rel="noreferrer">
         View on GitHub
       </Cta>
     </div>
-    <p class="fine">macOS, Windows and Linux. Local-first: your designs are files you own.</p>
+    <p class="fine">
+      {#if isDirect}
+        Version {releaseState.release?.version} · free · <a href="#download">other platforms</a>
+      {:else}
+        macOS, Windows and Linux. Local-first: your designs are files you own.
+      {/if}
+    </p>
   </div>
   <div class="visual">
     <img

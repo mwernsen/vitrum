@@ -3,24 +3,41 @@
 
   import Cta from '../lib/Cta.svelte'
   import { RELEASES_LATEST_URL, RELEASES_URL } from '../links'
+  import { initRelease, releaseState } from '../release.svelte'
+  import { pickDeb, pickInstaller, type PlatformId } from '../releases'
 
-  const platforms = [
+  initRelease()
+
+  const release = $derived(releaseState.release)
+
+  /** A direct asset link once the release is known, else the releases page. */
+  function link(platform: PlatformId): string {
+    const assets = release?.assets
+    return (assets && pickInstaller(assets, platform)?.url) || RELEASES_LATEST_URL
+  }
+
+  const debHref = $derived((release && pickDeb(release.assets)?.url) || RELEASES_LATEST_URL)
+
+  const cards = $derived([
     {
       name: 'macOS',
-      detail: 'Apple silicon and Intel · .dmg',
-      href: RELEASES_LATEST_URL,
+      detail: 'Apple silicon · .dmg',
+      href: link('mac-arm64'),
+      alt: { label: 'Intel Mac', href: link('mac-x64') },
     },
     {
       name: 'Windows',
       detail: '64-bit installer · .exe',
-      href: RELEASES_LATEST_URL,
+      href: link('windows'),
+      alt: null,
     },
     {
       name: 'Linux',
-      detail: 'AppImage and .deb',
-      href: RELEASES_LATEST_URL,
+      detail: 'AppImage · x86_64',
+      href: link('linux'),
+      alt: { label: 'Debian package', href: debHref },
     },
-  ]
+  ])
 </script>
 
 <section id="download">
@@ -39,13 +56,14 @@
       </p>
     </div>
     <div class="grid">
-      {#each platforms as platform (platform.name)}
+      {#each cards as card (card.name)}
         <div class="card">
-          <h3>{platform.name}</h3>
-          <p>{platform.detail}</p>
-          <Cta href={platform.href} variant="inverse" target="_blank" rel="noreferrer">
-            Download latest
-          </Cta>
+          <h3>{card.name}</h3>
+          <p>{card.detail}</p>
+          <Cta href={card.href} variant="inverse" rel="noreferrer">Download</Cta>
+          {#if card.alt}
+            <a class="alt" href={card.alt.href} rel="noreferrer">{card.alt.label}</a>
+          {/if}
         </div>
       {/each}
     </div>
@@ -130,6 +148,17 @@
     font: var(--text-small);
     font-family: var(--font-mono);
     color: var(--paper-400);
+  }
+
+  .alt {
+    font: var(--text-small);
+    color: var(--paper-400);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-dark);
+  }
+
+  .alt:hover {
+    color: var(--paper-0);
   }
 
   .all-releases {
