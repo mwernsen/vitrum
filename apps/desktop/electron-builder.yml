@@ -24,9 +24,17 @@ fileAssociations:
 
 mac:
   category: public.app-category.graphics-design
-  # Unsigned until an Apple Developer ID is provisioned; first launch needs
-  # right-click → Open. Add notarization alongside signing when available.
-  identity: null
+  # Ad-hoc signed ("-") until an Apple Developer ID is provisioned. This is not
+  # cosmetic: with signing skipped entirely the bundle shipped the raw Electron
+  # binary's linker-signed signature, with identifier "Electron" and no sealed
+  # resources, so `codesign --verify` failed and macOS refused to open it with
+  # "Vitrum is damaged" — not the usual unidentified-developer prompt. Ad-hoc
+  # signing seals the bundle under the real appId and it launches; Apple silicon
+  # requires a valid signature at all, so this is mandatory there rather than a
+  # nicety. Gatekeeper still warns on first launch (right-click → Open) because
+  # ad-hoc is not a Developer ID; swap in a real identity and notarization to
+  # remove that. See mac.notarize when the Developer ID lands.
+  identity: '-'
   target:
     - target: dmg
       arch: [arm64, x64]

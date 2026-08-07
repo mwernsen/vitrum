@@ -24,18 +24,21 @@
       detail: 'Apple silicon · .dmg',
       href: link('mac-arm64'),
       alt: { label: 'Intel Mac', href: link('mac-x64') },
+      note: 'First launch: right-click the app and choose Open. Vitrum is not yet signed with an Apple Developer ID, so macOS asks once.',
     },
     {
       name: 'Windows',
       detail: '64-bit installer · .exe',
       href: link('windows'),
       alt: null,
+      note: 'First launch: SmartScreen shows "more info" — the installer is not yet code-signed.',
     },
     {
       name: 'Linux',
       detail: 'AppImage · x86_64',
       href: link('linux'),
       alt: { label: 'Debian package', href: debHref },
+      note: 'Mark the AppImage executable with chmod +x before running it.',
     },
   ])
 </script>
@@ -64,6 +67,7 @@
           {#if card.alt}
             <a class="alt" href={card.alt.href} rel="noreferrer">{card.alt.label}</a>
           {/if}
+          <p class="note">{card.note}</p>
         </div>
       {/each}
     </div>
@@ -147,6 +151,12 @@
     margin: 0 0 var(--space-4);
     font: var(--text-small);
     font-family: var(--font-mono);
+    color: var(--paper-400);
+  }
+
+  .note {
+    margin: var(--space-2) 0 0;
+    font: var(--text-caption);
     color: var(--paper-400);
   }
 

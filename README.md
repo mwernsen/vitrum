@@ -21,6 +21,12 @@ write code, or both, you're in the right place.
 > are still landing and you may hit rough edges. Back up designs that matter, and please
 > report anything that breaks.
 
+> [!NOTE]
+> **First launch on macOS:** the builds are ad-hoc signed, not signed with an Apple
+> Developer ID, so Gatekeeper asks once. Right-click the app and choose **Open** (or
+> allow it under System Settings → Privacy & Security). If macOS ever calls a build
+> _damaged_, that is a signing fault on our side — please open an issue.
+
 ## A look inside
 
 ![Vitrum's design view: a stained-glass panel mid-cut, with a layers list, lead-came technique settings, and a live readiness strip up top](docs/screenshots/home.png)
