@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Badge } from '@vitrum/ui'
+  import { Badge } from '@vitrum/ui/components'
 
   import Cta from '../lib/Cta.svelte'
   import { RELEASES_LATEST_URL, RELEASES_URL } from '../links'

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Badge } from '@vitrum/ui'
+  import { Badge } from '@vitrum/ui/components'
 
-  import AppWindowMock from '../lib/AppWindowMock.svelte'
+  import editorDesign from '../assets/editor-design.webp'
   import Cta from '../lib/Cta.svelte'
   import { GITHUB_URL } from '../links'
 </script>
@@ -27,7 +27,14 @@
     <p class="fine">macOS, Windows and Linux. Local-first: your designs are files you own.</p>
   </div>
   <div class="visual">
-    <AppWindowMock />
+    <img
+      src={editorDesign}
+      width="1200"
+      height="750"
+      alt="The Vitrum editor in design view: a stained glass panel on a millimetre grid, with drawing
+           tools and snapping options at the left, and a panel inspector at the right reporting eight
+           pieces, 0.060 m² of glass, 2144.9 mm of lead came and a 702 g weight."
+    />
   </div>
 </section>
 
@@ -79,6 +86,17 @@
     margin: var(--space-5) 0 0;
     font: var(--text-small);
     color: var(--text-muted);
+  }
+
+  /* A real capture of the editor, so the frame is only a border and a lift off
+     the page — the app draws its own chrome. */
+  .visual img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-pop);
   }
 
   @media (max-width: 900px) {
