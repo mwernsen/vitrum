@@ -55,6 +55,7 @@
     color: '#c9c9c4',
     transparency: 'translucent' as const,
     texture: 'smooth' as const,
+    thicknessMm: 3,
   }
 
   const IDENTITY_TEXTURE: TextureTransform = {
@@ -95,6 +96,7 @@
         color: glass?.color ?? UNASSIGNED_GLASS.color,
         transparency: glass?.transparency ?? UNASSIGNED_GLASS.transparency,
         texture: glass?.texture ?? UNASSIGNED_GLASS.texture,
+        thicknessMm: glass?.thicknessMm ?? UNASSIGNED_GLASS.thicknessMm,
         textureTransform: textureTransformFor(piece) ?? IDENTITY_TEXTURE,
       }
     })

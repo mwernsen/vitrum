@@ -59,6 +59,7 @@
     color: '#c9c9c4',
     transparency: 'translucent' as const,
     texture: 'smooth' as const,
+    thicknessMm: 3,
   }
 
   /** Build the render scene from the current document derivations. */
@@ -74,6 +75,7 @@
         color: glass?.color ?? UNASSIGNED_GLASS.color,
         transparency: glass?.transparency ?? UNASSIGNED_GLASS.transparency,
         texture: glass?.texture ?? UNASSIGNED_GLASS.texture,
+        thicknessMm: glass?.thicknessMm ?? UNASSIGNED_GLASS.thicknessMm,
         ...(glass?.swatch ? { swatchKey: glass.id } : {}),
         textureTransform: textureTransformFor(piece),
       }

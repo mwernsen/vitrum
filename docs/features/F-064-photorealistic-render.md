@@ -3,7 +3,7 @@
 |                |                    |
 | -------------- | ------------------ |
 | **Phase**      | 5 — Power features |
-| **Status**     | in-progress        |
+| **Status**     | done               |
 | **Depends on** | F-053, F-054       |
 | **Complexity** | XL                 |
 
@@ -312,7 +312,57 @@ photo of one of his own leaded panels, which corrected two assumptions:
   invariant. `smooth` stays flat: kind 0 short-circuits in both, so an amplitude there would be inert —
   its faint unevenness is deferred to thrust A with the height-field branch.
 
-Remaining: A (glass material model — normals, relief lighting, thickness, hue variation, `smooth`
-unevenness, physical swatch tiling) and D-remaining (bloom + graded surround). Also noted during C:
-with the haze gone the panel is **darker** at some sun positions, because the old additive scatter was
-artificially brightening it — the `sunLit` gain curve wants tuning as part of A.
+**Phase 4 — Thrust A (glass material model) and the rest of D (2026-08-14).** The reframing that
+carries the feature: a texture tag is now a shape of **surface**, not a shape of brightness, and one
+height field drives everything downstream so the terms cannot disagree.
+
+New pure maths in `@vitrum/core/render/shading.ts`, each mirrored verbatim in both fragment shaders
+(28 unit tests in `surface.test.ts`):
+
+- `heightField(tag, x, y)` — the surface, 0..1, in world mm. Hammered is ridged noise (rounded
+  hollows, not hills), seedy is proud round bubbles, streaky is anisotropic bands, ripple is waves,
+  granite is fine grain, and **`smooth` finally gets its faint long roll** — the deferred item from
+  phase 3, now possible because the height branch exists in CPU and GLSL together.
+- `surfaceNormal(...)` — forward differences, three height evaluations rather than five, because the
+  field is multi-octave noise and this is per-fragment (FR-6).
+- `pathRatio` + `pathDepthFactor` — Beer–Lambert. A tilted surface lengthens the optical path, so
+  relief reads as varying colour **depth** rather than varying brightness, and thickness comes from
+  the existing `Glass.thicknessMm` with no model change. Applied _relative_ to a 3 mm reference so
+  `ratio === 1` reproduces `litColor` exactly and the F-053 reference stays the nominal case.
+- `fresnelSheen` — Schlick. Head-on the glass reflects ~4%; where relief tilts it away reflectance
+  climbs steeply, putting glints on dimple edges and ripple crests. The strongest single cue that a
+  surface is glass and not backlit paper.
+- `hueDriftMultiplier` — warm and cool pushed in _opposite_ directions by one low-frequency field, so
+  a piece drifts between two tints of its own colour instead of just dimming. Streaky drifts most.
+- `surfaceParams(tag, transparency)` — relief depth, gloss, hue drift and normal step. Gloss is
+  **derived** from the tag and the transparency class (denser glass scatters rather than reflects), so
+  open question 2 is settled without a `Glass` field.
+
+Thrust D completed alongside it, which required an architecture change: the render pass now draws into
+an **offscreen linear-HDR target** (RGBA16F + stencil, mirroring the light renderer) and composites in
+a second pass that adds **bloom** — ring taps at two radii above a highlight threshold, so bright glass
+blooms and dark lead does not — then tone-maps. The flat near-black wash became a **graded surround**
+centred on the panel. Swatch photos now tile at a **physical 240 mm** in world space rather than being
+stretched to each piece's bbox (the F-053 follow-up). `sunLit`'s sheen is scaled lower than the render
+pass's, since the light view then scatters it.
+
+**Deviations.**
+
+- **Edge refraction / rim is not implemented, and is dropped rather than deferred.** In a leaded panel
+  the came flange covers every cut edge — the same photo finding that killed the contact shadow in
+  phase 3 — so a rim on the glass would be hidden under the lead in all but pathological cases. Noted
+  here rather than left as a phantom follow-up.
+- **MSAA is lost on the render path** now that pass 1 draws into an FBO (multisample applies to the
+  default framebuffer only). Acceptable because every glass edge sits under a came ribbon, and the came
+  and joints feather their own edges through alpha. A multisample-resolve blit is the fix if it ever
+  shows.
+- **A feedback-loop bug worth remembering:** the composite leaves the scene texture bound to unit 0,
+  and pass 1 then draws _into_ that texture. Because the glass shader carries a sampler, the driver
+  detected a framebuffer/texture feedback loop and **silently dropped every glass draw** — the panel
+  rendered as bare came with no fill, and nothing threw. Only a `GL_INVALID_OPERATION` console warning
+  revealed it. Pass 1 now unbinds unit 0 first.
+
+**Still open (recorded, not blocking).** With the haze gone, the panel is darker at some sun positions
+because the old additive scatter was artificially brightening it; the `sunLit` gain curve is a
+candidate for tuning. And the gallery pass itself is Mathieu's call — this feature closes F-053's and
+F-054's pending sign-offs mechanically, but "believable" remains a human judgement.
