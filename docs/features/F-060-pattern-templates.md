@@ -3,7 +3,7 @@
 |                |                    |
 | -------------- | ------------------ |
 | **Phase**      | 5 — Power features |
-| **Status**     | agreed             |
+| **Status**     | Deleted            |
 | **Depends on** | F-058              |
 | **Complexity** | M                  |
 

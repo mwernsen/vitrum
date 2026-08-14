@@ -71,25 +71,19 @@ describe('LibraryScreen — #2a chrome (FR-8)', () => {
 
     const rail = screen.getByRole('navigation', { name: 'Library sections' })
     expect(rail).toHaveTextContent('Panels')
-    // The four unbuilt destinations are present and visibly disabled — never silently absent.
-    for (const label of ['Glass library', 'Cut lists', 'Versions', 'Settings']) {
-      expect(rail).toHaveTextContent(label)
-    }
+    // "Glass library" (F-063) is the only other destination, present and visibly disabled —
+    // never silently absent. The design's Cut lists / Versions / Settings rows were removed
+    // 2026-08-14: nothing on the roadmap owns them.
+    expect(rail).toHaveTextContent('Glass library')
+    expect(rail).not.toHaveTextContent('Cut lists')
+    expect(rail).not.toHaveTextContent('Versions')
+    expect(rail).not.toHaveTextContent('Settings')
     const disabled = rail.querySelectorAll('button:disabled')
-    expect(disabled).toHaveLength(4)
+    expect(disabled).toHaveLength(1)
     // Panels is the live one, and is not a button at all.
     expect(rail.querySelector('[aria-current="page"]')).toHaveTextContent('Panels')
     // Real counts, not the design's sample numbers.
     expect(rail).toHaveTextContent('42')
-  })
-
-  it('shows the lifecycle filters as inert, since the taxonomy is deferred to F-061', async () => {
-    const { controller } = controllerWith([])
-    await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
-    const filters = screen.getByRole('group', { name: 'Panel status filter' })
-    expect(filters).toHaveTextContent('Active')
-    expect(filters.querySelectorAll('button:disabled')).toHaveLength(3)
   })
 })
 

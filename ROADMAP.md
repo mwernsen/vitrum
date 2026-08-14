@@ -113,6 +113,7 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-059](docs/features/F-059-autotrace.md)          | Raster autotrace — scanned cartoons to lead lines | F-050, F-051 |
 | [F-060](docs/features/F-060-pattern-templates.md)  | Pattern templates (parametric generators)         | F-058        |
 | [F-061](docs/features/F-061-panel-lifecycle.md)    | Panel lifecycle & workshop status                 | F-058        |
+| [F-063](docs/features/F-063-glass-library-home.md) | Glass library home (launch-screen destination)    | F-022, F-058 |
 
 ## Backlog — ids reserved, not yet scoped
 

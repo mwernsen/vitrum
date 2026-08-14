@@ -1,11 +1,11 @@
 # F-061: Panel lifecycle & workshop status
 
-|                |                                      |
-| -------------- | ------------------------------------ |
-| **Phase**      | 5 — Power features                   |
-| **Status**     | draft (expand before implementation) |
-| **Depends on** | F-058                                |
-| **Complexity** | M                                    |
+|                |                    |
+| -------------- | ------------------ |
+| **Phase**      | 5 — Power features |
+| **Status**     | Deleted            |
+| **Depends on** | F-058              |
+| **Complexity** | M                  |
 
 ## Summary
 

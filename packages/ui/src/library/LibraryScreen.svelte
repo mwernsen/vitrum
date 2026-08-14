@@ -90,7 +90,7 @@
     <span class="studio">Studio</span>
     <span class="spacer"></span>
 
-    <!-- Search filters panels by name; glass search waits for a cross-document glass home (FR-11). -->
+    <!-- Search filters panels by name; glass search arrives with the glass library home (F-063). -->
     <label class="search">
       <Search size={15} aria-hidden="true" />
       <input
@@ -101,8 +101,6 @@
         oninput={(event) => (controller.query = event.currentTarget.value)}
       />
     </label>
-
-    <span class="avatar" aria-hidden="true">MK</span>
   </header>
 
   <div class="body">
@@ -196,15 +194,6 @@
 
       <div class="library-head">
         <h2>All panels</h2>
-
-        <!-- Lifecycle is deferred to F-061; the design's filter row is built but inert (spec §Design). -->
-        <Tooltip label="Panel status arrives with F-061" side="bottom">
-          <div class="filters" role="group" aria-label="Panel status filter">
-            <button type="button" class="filter active" disabled aria-pressed="true">Active</button>
-            <button type="button" class="filter" disabled aria-pressed="false">Fired</button>
-            <button type="button" class="filter" disabled aria-pressed="false">Archived</button>
-          </div>
-        </Tooltip>
 
         <button class="open" type="button" onclick={onOpenFile}>
           <FolderOpen size={16} />
@@ -375,19 +364,6 @@
     color: var(--ink-500);
   }
 
-  .avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    flex: none;
-    border-radius: var(--radius-full);
-    background: var(--violet-600);
-    color: var(--paper-0);
-    font: 600 12px/1 var(--font-sans);
-  }
-
   .body {
     flex: 1;
     display: flex;
@@ -436,11 +412,6 @@
     margin-left: auto;
     font: 500 11px/1 var(--font-mono);
     color: var(--ink-500);
-  }
-
-  /* Settings sits at the foot of the rail, per the design. */
-  .rail :global(> *:last-child) {
-    margin-top: auto;
   }
 
   /* --- content ---------------------------------------------------------- */
@@ -649,38 +620,6 @@
     font: var(--text-h2);
     letter-spacing: var(--tracking-tight);
     color: var(--text-strong);
-  }
-
-  .filters {
-    display: flex;
-    gap: 4px;
-    padding: 3px;
-    background: var(--paper-100);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-full);
-  }
-
-  .filter {
-    padding: 5px 12px;
-    border: none;
-    border-radius: var(--radius-full);
-    background: none;
-    color: var(--ink-600);
-    font: 600 12.5px/1 var(--font-sans);
-  }
-
-  .filter.active {
-    background: var(--paper-0);
-    color: var(--ink-950);
-    box-shadow: var(--shadow-xs);
-  }
-
-  .filter:disabled {
-    cursor: not-allowed;
-  }
-
-  .filters:has(:disabled) {
-    opacity: 0.6;
   }
 
   .open {

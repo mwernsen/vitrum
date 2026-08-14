@@ -360,13 +360,28 @@ with the path in `argv`).
 `.vitrum` file; drag-and-drop onto the launch screen. The last two need a packaged,
 file-associated install and a real OS drag, neither of which Playwright can drive.
 
+### Amendment (2026-08-14) — portal cleanup, at Mathieu's direction
+
+The launch screen was trimmed to what exists or is actively planned:
+
+- The rail now holds **Panels (live) and Glass library** only. Glass library got its
+  own spec, [F-063](F-063-glass-library-home.md), and stays a disabled placeholder
+  tagged with that id until it lands. The **Cut lists, Versions and Settings** rows
+  were removed — nothing on the roadmap owns a cross-document home for them, so a
+  permanent disabled placeholder is noise. They return when a spec claims them.
+- The **account avatar** (non-functional, `#2a` chrome only) was removed.
+- The **inert Active / Fired / Archived filter row** was removed; it returns with the
+  real taxonomy in F-061. This supersedes Deviation 1's "geometry without them" call.
+
+FR-8's "the other four destinations visibly disabled" is amended accordingly: the
+convention (never silently absent, never fake-clickable) still governs, but only
+destinations with an owning spec earn a placeholder.
+
 ### Follow-ups (out of scope)
 
-- **The four rail placeholders have no roadmap ids.** They are cross-document _destinations_
-  (Glass library, Cut lists, Versions, Settings) and nothing on the roadmap owns them, so
-  each is tagged with the feature that owns the capability _inside the editor_ today
-  (F-022 / F-042 / F-055) and Settings says only "Not built yet". If `#2a`'s portal is the
-  intended direction, these want specs of their own — flagged rather than invented.
+- **~~The four rail placeholders have no roadmap ids.~~** Resolved by the 2026-08-14
+  amendment above: Glass library became F-063; Cut lists, Versions and Settings were
+  removed until a spec claims them.
 - Opening a second instance with a file (Windows/Linux double-click while running) creates a
   second window; `requestSingleInstanceLock` + `second-instance` routing is unimplemented.
   macOS is handled via `open-file`.
