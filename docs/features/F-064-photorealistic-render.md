@@ -274,7 +274,45 @@ answer (it is not far enough) is what prompted this spec's rescope to a material
 - **Review outcome (Mathieu):** the chrome tube is gone, but the came now reads as uniform
   grey putty and the glass still reads as a flat fill — hence thrusts A and B, which replace
   the came shading model and the glass fill model outright rather than tuning them.
-- Not committed; awaiting agreement on this spec.
+  **Phase 2 — Thrust C, the Light recomposite (2026-08-14).** The scatter pass added a 64-tap blur
+  of the emission buffer at `3.4x` over the sharp panel plus a panel-wide halo, then tone-mapped the
+  sum, so the haze filled in the black lead lines and washed out the glass. The emission pass now
+  writes a **coverage marker into the FBO's unused alpha** (1 glass, 0.5 came, 0 the cleared void)
+  and the scatter pass weights by it — full ray strength in the air, 18% over glass, 4% over lead —
+  so rays read as light in the air rather than a veil over the subject. The halo keeps F-054's
+  bleed-through-lighter-pieces look by gating its glass contribution on the glass's own luminance, and
+  its broad bloom term was narrowed (weight `0.5 → 0.28`, falloff `0.14 → 0.35`), which is what made
+  it read as a panel-sized smudge. No new render target and no extra pass, so FR-6 is untouched.
+  Verified in the browser across sun positions and halo settings, including the old worst case
+  (halo 100%, concentration 0%).
 
-Remaining: C (Light recomposite), B (lead & solder material), A (glass material model),
-D-remaining (bloom + graded surround) — in that order, per Suggested sequencing.
+**Phase 3 — Thrust B, lead & solder, tuned to a reference photo (2026-08-14).** Mathieu supplied a
+photo of one of his own leaded panels, which corrected two assumptions:
+
+- **Came is near-black, not mid-grey.** `LEAD_RGB` 0.11 / `BORDER_RGB` 0.075, and the solder
+  finishes dropped to roughly half their old values. Backlit came is a silhouette.
+- **A soft contact shadow would be wrong for the Light view.** An H-profile came's flange covers
+  the glass edge, so backlit you get a **hard** boundary, not a gradient — so the AO/contact-shadow
+  bullet of thrust B is _not_ implemented, and open question 6 is answered by the reference rather
+  than by a choice of technique. It may still suit the Render (lightbox) view; left in scope there.
+- `FRAG_CAME` rewritten: a shallow crown in a narrow dark range, low-frequency **width wobble**
+  along the run with a feathered edge (came is now drawn with blending so it anti-aliases into the
+  glass), oxidation **patina** mottling, and the sheen cut to 0.055 lead / 0.16 solder.
+- **Solder joints** at lattice nodes: `render/joints.ts` derives them purely from came endpoints
+  (any position shared by ≥ 2 runs; interior vertices are curve detail, lone ends are unsoldered),
+  carrying the widest came's width _and kind_ — so a lead panel's joints are lead-dark and only foil
+  seams get bright solder. Drawn as a lumpy angle-perturbed dome, seeded per world position so no two
+  match, at 1.12× the came half-width. The Light view stamps the same joints as **disc occluders**, so
+  the lattice has no pinholes at its nodes for rays to leak through. 8 unit tests.
+- **Texture retuning + better noise.** The photo shows blotches ~5–15 mm across and far stronger than
+  the shipped values, so frequencies dropped to ~0.1/mm and amplitudes roughly doubled. That exposed a
+  latent flaw: single-octave value noise shows its **integer lattice as soft squares** at visible
+  amplitudes. Replaced by three-octave fBm with a domain warp (`gnoise`), added identically to both
+  fragment shaders **and** `@vitrum/core`'s `textureModulation`, preserving the CPU/GPU mirror
+  invariant. `smooth` stays flat: kind 0 short-circuits in both, so an amplitude there would be inert —
+  its faint unevenness is deferred to thrust A with the height-field branch.
+
+Remaining: A (glass material model — normals, relief lighting, thickness, hue variation, `smooth`
+unevenness, physical swatch tiling) and D-remaining (bloom + graded surround). Also noted during C:
+with the haze gone the panel is **darker** at some sun positions, because the old additive scatter was
+artificially brightening it — the `sunLit` gain curve wants tuning as part of A.

@@ -10,6 +10,7 @@ import {
 import { clamp01, type BBox, type Vec2 } from '@vitrum/geometry'
 
 import type { CameRibbonInput, GlassPieceInput } from '../render/glass-gl'
+import type { CameJoint } from '../render/joints'
 
 /**
  * The WebGL2 sunlight renderer (F-054) — the dark-stage volumetric look that is Diafane's showpiece.
@@ -34,6 +35,8 @@ import type { CameRibbonInput, GlassPieceInput } from '../render/glass-gl'
 export interface LightScene {
   readonly pieces: readonly GlassPieceInput[]
   readonly cames: readonly CameRibbonInput[]
+  /** Soldered intersections — stamped as occluders too, so the lattice has no gaps at its nodes. */
+  readonly joints: readonly CameJoint[]
   readonly sun: ResolvedSun
   /** Sun position in normalised canvas coords (x: 0 left…1 right, y: 0 top…1 bottom). */
   readonly sunScreen: { readonly x: number; readonly y: number }
@@ -96,6 +99,22 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// The same layered, domain-warped grain field as the render pass (F-064) — a single octave shows its
+// integer lattice as soft squares at these amplitudes. Kept identical in both shaders and in
+// @vitrum/core's textureModulation so the two views and the swatch preview agree.
+float fbm(vec2 p) {
+  float n = vnoise(p) * 0.5;
+  n += vnoise(p * 2.03 + vec2(5.2, 1.3)) * 0.28;
+  n += vnoise(p * 4.11 + vec2(9.7, 7.1)) * 0.14;
+  return n / 0.92;
+}
+vec2 warp(vec2 p) {
+  float wx = vnoise(p * 0.5 + vec2(1.7, 8.3)) - 0.5;
+  float wy = vnoise(p * 0.5 + vec2(4.9, 2.1)) - 0.5;
+  return p + vec2(wx, wy) * 1.6;
+}
+float gnoise(vec2 p) { return fbm(warp(p)); }
+
 // sRGB → linear: the CPU passes the lit base in sRGB-ish space; decode so the emission buffer and
 // the scatter accumulation are in linear light (gamma-correct compositing).
 vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
@@ -103,11 +122,11 @@ vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 void main() {
   vec2 fq = vWorld * uFreq;
   float m = 1.0;
-  if (uTexKind == 1) { m = 1.0 + uAmp * (2.0 * vnoise(fq) - 1.0); }
-  else if (uTexKind == 2) { m = 1.0 - uAmp * smoothstep(0.72, 0.9, vnoise(fq)); }
-  else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * vnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
-  else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * vnoise(fq)); }
-  else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (vnoise(fq) * 0.6 + vnoise(fq * 2.7) * 0.4) - 1.0); }
+  if (uTexKind == 1) { m = 1.0 + uAmp * (2.0 * gnoise(fq) - 1.0); }
+  else if (uTexKind == 2) { m = 1.0 - uAmp * smoothstep(0.72, 0.9, gnoise(fq)); }
+  else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * gnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
+  else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * gnoise(fq)); }
+  else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4) - 1.0); }
   frag = vec4(toLinear(uColor) * m, uMask);
 }`
 
@@ -379,6 +398,21 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.count)
       }
 
+      // Solder joints occlude too, so the lattice has no pinholes at its nodes for rays to leak
+      // through. Same black fill and lattice marker as the runs.
+      for (const joint of scene.joints) {
+        const radiusPx = Math.max(1.2, (joint.widthMm * pxPerMm) / 2) * 1.35
+        stampDisc(
+          gl,
+          posBuffer,
+          worldBuffer,
+          e.aScreen,
+          e.aWorld,
+          worldToScreen(viewport, joint.at),
+          radiusPx,
+        )
+      }
+
       // --- Pass 2: scatter + composite to the visible canvas -------------
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, backingW, backingH)
@@ -456,6 +490,34 @@ function stampRing(
   bindAttrib(gl, posBuffer, aScreen, screen, 2)
   bindAttrib(gl, worldBuffer, aWorld, world, 2)
   gl.drawArrays(gl.TRIANGLE_FAN, 0, ring.length)
+}
+
+/**
+ * Stamp a filled disc in screen space as a triangle fan — used for the solder-joint occluders, where
+ * a square quad would leave visible corners sticking out of the lattice.
+ */
+function stampDisc(
+  gl: WebGL2RenderingContext,
+  posBuffer: WebGLBuffer | null,
+  worldBuffer: WebGLBuffer | null,
+  aScreen: number,
+  aWorld: number,
+  centre: Vec2,
+  radiusPx: number,
+): void {
+  const steps = 12
+  const screen = new Float32Array((steps + 2) * 2)
+  const world = new Float32Array((steps + 2) * 2)
+  screen[0] = centre.x
+  screen[1] = centre.y
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI * 2
+    screen[(i + 1) * 2] = centre.x + Math.cos(t) * radiusPx
+    screen[(i + 1) * 2 + 1] = centre.y + Math.sin(t) * radiusPx
+  }
+  bindAttrib(gl, posBuffer, aScreen, screen, 2)
+  bindAttrib(gl, worldBuffer, aWorld, world, 2)
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, steps + 2)
 }
 
 function drawQuad(

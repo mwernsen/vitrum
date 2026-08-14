@@ -10,6 +10,8 @@ import {
 } from '@vitrum/core'
 import type { BBox, Vec2 } from '@vitrum/geometry'
 
+import type { CameJoint } from './joints'
+
 /**
  * The WebGL2 realistic-glass renderer (F-053) — the dedicated render pass behind the `render` view
  * mode, following the same factory pattern as the F-051 reference-underlay renderer (`reference/gl.ts`):
@@ -69,6 +71,8 @@ export interface CameRibbonInput {
 export interface GlassScene {
   readonly pieces: readonly GlassPieceInput[]
   readonly cames: readonly CameRibbonInput[]
+  /** Soldered intersections, from `cameJoints()` — derived at scene build, not per frame. */
+  readonly joints: readonly CameJoint[]
   readonly backlight: Backlight
   readonly solderFinish: SolderFinish
 }
@@ -133,6 +137,24 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// Three octaves of value noise. One octave alone shows its integer lattice as soft squares as soon
+// as the amplitude is strong enough to see (F-064), which is not what rolled glass looks like.
+float fbm(vec2 p) {
+  float n = vnoise(p) * 0.5;
+  n += vnoise(p * 2.03 + vec2(5.2, 1.3)) * 0.28;
+  n += vnoise(p * 4.11 + vec2(9.7, 7.1)) * 0.14;
+  return n / 0.92;
+}
+// Domain warp: displace the sample point by a low-frequency noise vector, which bends the lattice
+// into organic blotches instead of axis-aligned cells.
+vec2 warp(vec2 p) {
+  float wx = vnoise(p * 0.5 + vec2(1.7, 8.3)) - 0.5;
+  float wy = vnoise(p * 0.5 + vec2(4.9, 2.1)) - 0.5;
+  return p + vec2(wx, wy) * 1.6;
+}
+// The glass-grain field every texture tag is built from.
+float gnoise(vec2 p) { return fbm(warp(p)); }
+
 // sRGB <-> linear: uColor and the swatch photo arrive in sRGB-ish space. Compositing (texture
 // multiply, swatch mix, tone map) happens in linear light, then we encode back to sRGB for display —
 // the gamma-correct workflow the Light pass already uses. This does not change litColor (still the
@@ -150,24 +172,24 @@ void main() {
   float m = 1.0;
   if (uTexKind == 1) {
     // hammered: rounded dimples
-    float n = vnoise(fq);
+    float n = gnoise(fq);
     m = 1.0 + uAmp * (2.0 * n - 1.0);
   } else if (uTexKind == 2) {
     // seedy: sparse dark bubbles
-    float n = vnoise(fq);
+    float n = gnoise(fq);
     float bubble = smoothstep(0.72, 0.9, n);
     m = 1.0 - uAmp * bubble;
   } else if (uTexKind == 3) {
     // streaky: anisotropic streaks (stretched along one axis)
-    float n = vnoise(vec2(fq.x / uAniso, fq.y));
+    float n = gnoise(vec2(fq.x / uAniso, fq.y));
     m = 1.0 + uAmp * (2.0 * n - 1.0);
   } else if (uTexKind == 4) {
     // ripple: directional waves plus a little noise
     float wave = sin(q.y * uFreq * 6.2831853 / uAniso);
-    m = 1.0 + uAmp * wave * (0.6 + 0.4 * vnoise(fq));
+    m = 1.0 + uAmp * wave * (0.6 + 0.4 * gnoise(fq));
   } else if (uTexKind == 5) {
     // granite: fine high-frequency grain
-    float n = vnoise(fq) * 0.6 + vnoise(fq * 2.7) * 0.4;
+    float n = gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4;
     m = 1.0 + uAmp * (2.0 * n - 1.0);
   }
 
@@ -192,27 +214,107 @@ void main() {
   frag = vec4(toSrgb(col), 1.0);
 }`
 
-// Came / solder ribbon shader: a rounded cross-section (darker at the edges), a specular ridge near
-// the centre, and a length-wise bead for foil seams.
+// Came / solder ribbon shader (F-064 thrust B), tuned against Mathieu's reference photo of a real
+// leaded panel. What that photo shows: came is a near-black *silhouette* against lit glass, matte
+// with no chrome ridge, its width visibly wobbles along the run, and the metal is mottled with
+// oxidation. Colours arrive in display space and are written out directly (unlike the glass, which
+// tone-maps), so the authored near-blacks land exactly as intended.
 const FRAG_CAME = `#version 300 es
 precision highp float;
-in vec2 vWorld;
 in float vAcross;
 in float vAlong;
 uniform vec3 uCame;
 uniform int uBead;
 out vec4 frag;
+
+float hash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
 void main() {
   float a = clamp(vAcross, -1.0, 1.0);
-  // Rounded profile: edges fall off toward the glass, so the line reads as a raised bead.
-  float shade = 1.0 - 0.45 * a * a;
-  // A thin, dim sheen near the crown — matte lead, not chromed tube. Solder (bead) is a little
-  // glossier than lead, so it catches a touch more light.
-  float specAmt = uBead == 1 ? 0.22 : 0.11;
-  float spec = exp(-a * a * 16.0) * specAmt;
-  float bead = uBead == 1 ? (0.9 + 0.1 * sin(vAlong)) : 1.0;
-  vec3 col = uCame * shade * bead + vec3(spec) * bead;
-  frag = vec4(clamp(col, 0.0, 1.0), 1.0);
+  float aa = abs(a);
+
+  // Hand-leaded came is not a machined extrusion: wobble the half-width slowly along the run, and
+  // fade the last sliver so the edge anti-aliases into the glass instead of stair-stepping.
+  float wobble = vnoise(vec2(vAlong * 0.04, 0.0));
+  float halfW = 1.0 - 0.09 * wobble;
+  float edge = 1.0 - smoothstep(halfW - 0.12, halfW, aa);
+  if (edge <= 0.001) discard;
+
+  // A shallow crown. The range stays narrow and dark — the photo shows almost no tonal variation
+  // across a lead line, which is exactly what a previous "rounded profile" got wrong.
+  float crown = 1.0 - 0.30 * a * a;
+  // Oxidation: low-frequency mottling along the run and across the crown.
+  float patina = 0.86 + 0.14 * vnoise(vec2(vAlong * 0.3, a * 1.7));
+
+  // Solder is slightly glossier than lead; both stay matte.
+  float specAmt = uBead == 1 ? 0.16 : 0.055;
+  float spec = exp(-a * a * 20.0) * specAmt;
+  float bead = uBead == 1 ? (0.92 + 0.08 * sin(vAlong * 0.8)) : 1.0;
+
+  vec3 col = uCame * crown * patina * bead + vec3(spec);
+  frag = vec4(clamp(col, 0.0, 1.0), edge);
+}`
+
+// Solder-joint blob shader: a lumpy dome at each node, so intersections read as soldered rather
+// than as two ribbons crossing. The radius is perturbed by angle — a hand-made joint is never a disc.
+const VERT_JOINT = `#version 300 es
+in vec2 aScreen;
+in vec2 aLocal;
+uniform vec2 uResolution;
+out vec2 vLocal;
+void main() {
+  vLocal = aLocal;
+  vec2 clip = (aScreen / uResolution) * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+}`
+
+const FRAG_JOINT = `#version 300 es
+precision highp float;
+in vec2 vLocal;
+uniform vec3 uCame;
+uniform float uSeed;
+out vec4 frag;
+
+float hash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+void main() {
+  float r = length(vLocal);
+  float ang = atan(vLocal.y, vLocal.x);
+  // Lumpy outline: radius varies with angle, seeded per joint so no two look alike.
+  float lump = 0.80 + 0.20 * vnoise(vec2(cos(ang), sin(ang)) * 1.9 + uSeed);
+  float edge = 1.0 - smoothstep(lump - 0.18, lump, r);
+  if (edge <= 0.001) discard;
+
+  // A dome, so the blob reads as raised solder catching a little light.
+  float nr = r / max(lump, 0.001);
+  float dome = sqrt(max(0.0, 1.0 - nr * nr));
+  float patina = 0.88 + 0.12 * vnoise(vLocal * 3.1 + uSeed);
+  float spec = pow(dome, 6.0) * 0.14;
+
+  vec3 col = uCame * (0.82 + 0.30 * dome) * patina + vec3(spec);
+  frag = vec4(clamp(col, 0.0, 1.0), edge);
 }`
 
 interface CachedSwatch {
@@ -239,7 +341,8 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
 
   const glassProgram = buildProgram(gl, VERT, FRAG_GLASS)
   const cameProgram = buildProgram(gl, VERT_CAME, FRAG_CAME)
-  if (!glassProgram || !cameProgram) return null
+  const jointProgram = buildProgram(gl, VERT_JOINT, FRAG_JOINT)
+  if (!glassProgram || !cameProgram || !jointProgram) return null
 
   const g = {
     aScreen: gl.getAttribLocation(glassProgram, 'aScreen'),
@@ -266,10 +369,18 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
     uCame: gl.getUniformLocation(cameProgram, 'uCame'),
     uBead: gl.getUniformLocation(cameProgram, 'uBead'),
   }
+  const j = {
+    aScreen: gl.getAttribLocation(jointProgram, 'aScreen'),
+    aLocal: gl.getAttribLocation(jointProgram, 'aLocal'),
+    uResolution: gl.getUniformLocation(jointProgram, 'uResolution'),
+    uCame: gl.getUniformLocation(jointProgram, 'uCame'),
+    uSeed: gl.getUniformLocation(jointProgram, 'uSeed'),
+  }
 
   const posBuffer = gl.createBuffer()
   const worldBuffer = gl.createBuffer()
   const cameBuffer = gl.createBuffer()
+  const jointBuffer = gl.createBuffer()
   const swatches = new Map<string, CachedSwatch>()
 
   function swatchTexture(key: string, source: TexImageSource): WebGLTexture | null {
@@ -377,10 +488,14 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
       gl.disable(gl.STENCIL_TEST)
 
       // --- Came / solder ribbons -----------------------------------------
+      // Blend on: the came shader fades its wobbling outer edge, so it feathers into the glass
+      // instead of stair-stepping along every lead line.
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
       gl.useProgram(cameProgram)
       gl.uniform2f(c.uResolution, sizeCss.width, sizeCss.height)
-      const lead = { r: 0.29, g: 0.29, b: 0.28 }
-      const border = { r: 0.16, g: 0.16, b: 0.16 }
+      const lead = LEAD_RGB
+      const border = BORDER_RGB
       const solder = SOLDER_RGB[scene.solderFinish]
       const o = worldToScreen(viewport, { x: 0, y: 0 })
       const ox = worldToScreen(viewport, { x: 1, y: 0 })
@@ -402,6 +517,24 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
         gl.vertexAttribPointer(c.aAlong, 1, gl.FLOAT, false, stride, 12)
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.count)
       }
+
+      // --- Solder joints --------------------------------------------------
+      // Drawn last so a lump sits on top of the runs meeting under it.
+      gl.useProgram(jointProgram)
+      gl.uniform2f(j.uResolution, sizeCss.width, sizeCss.height)
+      for (const joint of scene.joints) {
+        // Tinted like the metal it joins: only foil seams get the bright solder finish.
+        const jointCol = joint.kind === 'foil' ? solder : joint.kind === 'border' ? border : lead
+        // Only slightly wider than the came it terminates — the reference photo's joints are subtle
+        // lumps, not beads sitting proud of the lattice.
+        const radiusPx = Math.max(2, (joint.widthMm * pxPerMm) / 2) * 1.12
+        const centre = worldToScreen(viewport, joint.at)
+        gl.uniform3f(j.uCame, jointCol.r, jointCol.g, jointCol.b)
+        // Seed from world position so each joint's lumpiness is distinct but stable across frames.
+        gl.uniform1f(j.uSeed, ((joint.at.x * 7.31 + joint.at.y * 3.17) % 10) + 0.5)
+        drawJointQuad(gl, jointBuffer, j.aScreen, j.aLocal, centre, radiusPx)
+      }
+      gl.disable(gl.BLEND)
     },
     dispose() {
       for (const { texture } of swatches.values()) gl.deleteTexture(texture)
@@ -409,17 +542,26 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
       gl.deleteBuffer(posBuffer)
       gl.deleteBuffer(worldBuffer)
       gl.deleteBuffer(cameBuffer)
+      gl.deleteBuffer(jointBuffer)
       gl.deleteProgram(glassProgram)
       gl.deleteProgram(cameProgram)
+      gl.deleteProgram(jointProgram)
     },
   }
 }
 
+// Backlit came reads as a near-black silhouette, not mid-grey (F-064 thrust B, reference photo).
+// Solder finishes stay recognisable as metal but sit far darker than the old values.
 const SOLDER_RGB: Record<SolderFinish, { r: number; g: number; b: number }> = {
-  silver: { r: 0.55, g: 0.56, b: 0.58 },
-  copper: { r: 0.62, g: 0.38, b: 0.2 },
-  black: { r: 0.09, g: 0.09, b: 0.1 },
+  silver: { r: 0.34, g: 0.35, b: 0.37 },
+  copper: { r: 0.32, g: 0.19, b: 0.11 },
+  black: { r: 0.06, g: 0.06, b: 0.07 },
 }
+
+/** Lead came: near-black, faintly cool. */
+const LEAD_RGB = { r: 0.11, g: 0.11, b: 0.115 }
+/** The perimeter came, darker still so the panel edge reads as a frame. */
+const BORDER_RGB = { r: 0.075, g: 0.075, b: 0.08 }
 
 const VERT_CAME = `#version 300 es
 in vec2 aScreen;
@@ -490,6 +632,43 @@ function drawQuad(
   bindAttrib(gl, posBuffer, aScreen, screen, 2)
   bindAttrib(gl, worldBuffer, aWorld, world, 2)
   gl.drawArrays(gl.TRIANGLES, 0, order.length)
+}
+
+/**
+ * Draw one solder joint: a screen-space quad centred on the node, carrying local −1..1 coordinates
+ * so the fragment shader can build a lumpy dome inside it. Interleaved [x, y, lx, ly].
+ */
+function drawJointQuad(
+  gl: WebGL2RenderingContext,
+  buffer: WebGLBuffer | null,
+  aScreen: number,
+  aLocal: number,
+  centre: Vec2,
+  radiusPx: number,
+): void {
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, -1],
+    [1, 1],
+    [-1, 1],
+  ]
+  const data = new Float32Array(corners.length * 4)
+  corners.forEach(([lx, ly], i) => {
+    data[i * 4] = centre.x + lx! * radiusPx
+    data[i * 4 + 1] = centre.y + ly! * radiusPx
+    data[i * 4 + 2] = lx!
+    data[i * 4 + 3] = ly!
+  })
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW)
+  const stride = 4 * 4
+  gl.enableVertexAttribArray(aScreen)
+  gl.vertexAttribPointer(aScreen, 2, gl.FLOAT, false, stride, 0)
+  gl.enableVertexAttribArray(aLocal)
+  gl.vertexAttribPointer(aLocal, 2, gl.FLOAT, false, stride, 8)
+  gl.drawArrays(gl.TRIANGLES, 0, corners.length)
 }
 
 function bindAttrib(

@@ -8,6 +8,7 @@
   import { segmentToWorldPoints } from '../canvas/scene'
   import type { ViewportController } from '../canvas/viewport.svelte'
   import type { CameRibbonInput, GlassPieceInput, TextureTransform } from '../render/glass-gl'
+  import { cameJoints } from '../render/joints'
 
   import { createLightRenderer, type LightRenderer, type LightScene } from './light-gl'
 
@@ -112,7 +113,15 @@
       }
     }
 
-    return { pieces: pieceInputs, cames, sun, sunScreen: sunScreen(), showTextures, photoGrain }
+    return {
+      pieces: pieceInputs,
+      cames,
+      joints: cameJoints(cames),
+      sun,
+      sunScreen: sunScreen(),
+      showTextures,
+      photoGrain,
+    }
   }
 
   onMount(() => {
