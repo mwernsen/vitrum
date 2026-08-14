@@ -1,6 +1,6 @@
 {
   "name": "@vitrum/desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "CAD-grade design application for stained glass",
   "author": "Mathieu Wernsen <mwn@synadia.nl>",
