@@ -8,10 +8,12 @@
   import Badge from '../components/Badge.svelte'
   import Tooltip from '../components/Tooltip.svelte'
   import Logo from '../design/assets/Logo.svelte'
+  import type { GlassLibraryController } from '../glass/library.svelte'
+  import GlassLibraryView from '../glass/GlassLibraryView.svelte'
 
   import type { LibraryController } from './controller.svelte'
   import { editedAt, panelDimensions, panelFigures, readinessPills, relativeTime } from './format'
-  import { RAIL_ITEMS } from './rail'
+  import { RAIL_ITEMS, type RailId } from './rail'
 
   interface Props {
     controller: LibraryController
@@ -25,14 +27,46 @@
     onOpenHistory?: (path: string) => void
     /** A `.vitrum` file dropped onto the screen (FR-4). */
     onDropFile?: (file: File) => void
-    /** How many glasses the global catalog holds, for the nav rail's count. */
-    glassCount?: number
+    /** The global glass catalog (F-022) — drives the rail count and the "Glass library" view (F-063). */
+    glassLibrary: GlassLibraryController
   }
 
-  let { controller, onNew, onOpenFile, onOpenEntry, onOpenHistory, onDropFile, glassCount }: Props =
-    $props()
+  let {
+    controller,
+    onNew,
+    onOpenFile,
+    onOpenEntry,
+    onOpenHistory,
+    onDropFile,
+    glassLibrary,
+  }: Props = $props()
 
   let dragging = $state(false)
+
+  /**
+   * Which portal destination is showing (F-063). The launch screen owns this state — the rail and
+   * header live here — and it sits *below* App.svelte's `library | editor` state, so it never grows a
+   * third arm of the FR-1 startup precedence.
+   */
+  let view = $state<RailId>('panels')
+
+  /**
+   * The header search field targets the active view, each remembering its own query (FR-6). Panels
+   * search filters recents by name (the F-058 behaviour, via `controller.query`); glass search filters
+   * the catalog. Bound one way to the active view's own query.
+   */
+  let glassQuery = $state('')
+  const searchLabel = $derived(view === 'glass' ? 'Search glass' : 'Search panels')
+  const searchValue = $derived(view === 'glass' ? glassQuery : controller.query)
+
+  function onSearchInput(value: string): void {
+    if (view === 'glass') glassQuery = value
+    else controller.query = value
+  }
+
+  function selectView(id: RailId): void {
+    view = id
+  }
 
   const hero = $derived(controller.hero)
   const gridRows = $derived(controller.gridRows)
@@ -54,9 +88,9 @@
   }
 
   /** The count shown against a rail destination, where it has one. */
-  function railCount(id: string): number | undefined {
+  function railCount(id: RailId): number | undefined {
     if (id === 'panels') return controller.rows.length
-    if (id === 'glass') return glassCount
+    if (id === 'glass') return glassLibrary.glasses.length
     return undefined
   }
 
@@ -90,15 +124,15 @@
     <span class="studio">Studio</span>
     <span class="spacer"></span>
 
-    <!-- Search filters panels by name; glass search arrives with the glass library home (F-063). -->
+    <!-- The search field targets the active view, each remembering its own query (FR-6). -->
     <label class="search">
       <Search size={15} aria-hidden="true" />
       <input
         type="search"
-        placeholder="Search panels"
-        aria-label="Search panels"
-        value={controller.query}
-        oninput={(event) => (controller.query = event.currentTarget.value)}
+        placeholder={searchLabel}
+        aria-label={searchLabel}
+        value={searchValue}
+        oninput={(event) => onSearchInput(event.currentTarget.value)}
       />
     </label>
   </header>
@@ -109,11 +143,17 @@
         {@const Icon = item.icon}
         {@const count = railCount(item.id)}
         {#if item.live}
-          <span class="rail-item active" aria-current="page">
+          <button
+            class="rail-item"
+            class:active={view === item.id}
+            type="button"
+            aria-current={view === item.id ? 'page' : undefined}
+            onclick={() => selectView(item.id)}
+          >
             <Icon size={16} />
             {item.label}
             {#if count !== undefined}<span class="rail-count">{count}</span>{/if}
-          </span>
+          </button>
         {:else}
           <Tooltip label={item.note ?? 'Not built yet'} side="right">
             <button class="rail-item" type="button" disabled>
@@ -127,159 +167,168 @@
     </nav>
 
     <main class="content">
-      {#if controller.error}
-        <!-- Non-blocking: the screen stays usable and the message can be dismissed (FR-4). -->
-        <div class="error" role="status">
-          <span>{controller.error}</span>
-          <button type="button" onclick={() => controller.clearError()}>Dismiss</button>
-        </div>
-      {/if}
-
-      {#if hero}
-        <!-- "Opens on what's in flight, not an empty grid" — the design's thesis (FR-9). -->
-        <section class="resume" aria-label="Continue">
-          <span class="eyebrow">Continue</span>
-          <div class="hero">
-            <div class="hero-thumb">
-              {#if controller.thumbnailUrl(hero.entry.path)}
-                <!-- Rendered document content: data-driven, so exempt from the token rule. -->
-                <img src={controller.thumbnailUrl(hero.entry.path)} alt="" />
-              {:else}
-                <span class="placeholder" aria-hidden="true"></span>
-              {/if}
-            </div>
-            <div class="hero-meta">
-              <strong class="hero-name">{hero.entry.name}</strong>
-              <span class="figures">
-                edited {relativeTime(editedAt(hero.entry))}{#if panelFigures(hero.entry)}
-                  · {panelFigures(hero.entry)}{/if}
-              </span>
-              {#if hero.entry.facts}
-                <div class="pills">
-                  {#each readinessPills(hero.entry.facts) as pill (pill.id)}
-                    <span class="pill" data-tone={pill.tone}>
-                      {#if pill.tone === 'done'}
-                        <Check size={12} />
-                      {:else if pill.percent !== undefined}
-                        <span class="dial" style:--dial-pct="{pill.percent}%" aria-hidden="true"
-                        ></span>
-                      {:else}
-                        <span class="dot" aria-hidden="true"></span>
-                      {/if}
-                      {pill.label}
-                    </span>
-                  {/each}
-                </div>
-              {:else}
-                <span class="unindexed">Save this panel to see its figures here.</span>
-              {/if}
-            </div>
-            <div class="hero-actions">
-              <button class="primary" type="button" onclick={() => onOpenEntry(hero.entry.path)}>
-                Resume editing
-              </button>
-              {#if onOpenHistory}
-                <button
-                  class="secondary"
-                  type="button"
-                  onclick={() => onOpenHistory(hero.entry.path)}
-                >
-                  Version history
-                </button>
-              {/if}
-            </div>
+      {#if view === 'glass'}
+        <GlassLibraryView
+          controller={glassLibrary}
+          query={glassQuery}
+          onImport={() => void glassLibrary.importLibrary()}
+          onExport={() => void glassLibrary.exportLibrary()}
+        />
+      {:else}
+        {#if controller.error}
+          <!-- Non-blocking: the screen stays usable and the message can be dismissed (FR-4). -->
+          <div class="error" role="status">
+            <span>{controller.error}</span>
+            <button type="button" onclick={() => controller.clearError()}>Dismiss</button>
           </div>
-        </section>
-      {/if}
+        {/if}
 
-      <div class="library-head">
-        <h2>All panels</h2>
-
-        <button class="open" type="button" onclick={onOpenFile}>
-          <FolderOpen size={16} />
-          Open panel…
-        </button>
-        <button class="new" type="button" onclick={onNew}>
-          <Plus size={16} />
-          New panel
-        </button>
-      </div>
-
-      {#if controller.noMatches}
-        <p class="note" data-testid="library-no-matches">
-          No panels match “{controller.query.trim()}”.
-        </p>
-      {:else if controller.rows.length === 0}
-        <p class="note" data-testid="library-empty">
-          {controller.loaded
-            ? 'No panels yet. Start one from a blank cartoon.'
-            : 'Reading your panels…'}
-        </p>
-      {/if}
-
-      <div class="grid">
-        {#each gridRows as row (row.entry.path)}
-          {@const url = controller.thumbnailUrl(row.entry.path)}
-          {@const size = panelDimensions(row.entry)}
-          {@const figures = panelFigures(row.entry)}
-          <div class="card" data-missing={row.missing ? 'true' : undefined}>
-            {#if row.missing}
-              <div class="thumb missing"><FileQuestion size={26} /></div>
-            {:else}
-              <button
-                class="thumb"
-                type="button"
-                onclick={() => onOpenEntry(row.entry.path)}
-                aria-label={`Open ${row.entry.name}`}
-              >
-                {#if url}
-                  <img src={url} alt="" />
+        {#if hero}
+          <!-- "Opens on what's in flight, not an empty grid" — the design's thesis (FR-9). -->
+          <section class="resume" aria-label="Continue">
+            <span class="eyebrow">Continue</span>
+            <div class="hero">
+              <div class="hero-thumb">
+                {#if controller.thumbnailUrl(hero.entry.path)}
+                  <!-- Rendered document content: data-driven, so exempt from the token rule. -->
+                  <img src={controller.thumbnailUrl(hero.entry.path)} alt="" />
                 {:else}
                   <span class="placeholder" aria-hidden="true"></span>
                 {/if}
-              </button>
-            {/if}
-
-            <div class="card-meta">
-              <strong class="card-name" title={row.entry.path}>{row.entry.name}</strong>
-              <!-- Omitted, not zeroed, for an entry with no indexed facts (FR-10 back-compat). -->
-              {#if figures}
-                <span class="figures">{figures}</span>
-              {/if}
-              <div class="card-foot">
-                {#if row.missing}
-                  <Badge tone="warning">File not found</Badge>
+              </div>
+              <div class="hero-meta">
+                <strong class="hero-name">{hero.entry.name}</strong>
+                <span class="figures">
+                  edited {relativeTime(editedAt(hero.entry))}{#if panelFigures(hero.entry)}
+                    · {panelFigures(hero.entry)}{/if}
+                </span>
+                {#if hero.entry.facts}
+                  <div class="pills">
+                    {#each readinessPills(hero.entry.facts) as pill (pill.id)}
+                      <span class="pill" data-tone={pill.tone}>
+                        {#if pill.tone === 'done'}
+                          <Check size={12} />
+                        {:else if pill.percent !== undefined}
+                          <span class="dial" style:--dial-pct="{pill.percent}%" aria-hidden="true"
+                          ></span>
+                        {:else}
+                          <span class="dot" aria-hidden="true"></span>
+                        {/if}
+                        {pill.label}
+                      </span>
+                    {/each}
+                  </div>
                 {:else}
-                  <span class="technique">{techniqueLine(row.entry.technique, size)}</span>
-                  <span class="when">{relativeTime(editedAt(row.entry))}</span>
+                  <span class="unindexed">Save this panel to see its figures here.</span>
                 {/if}
               </div>
-              {#if row.missing}
-                <div class="fixes">
-                  <button type="button" onclick={() => void controller.locate(row.entry.path)}>
-                    Locate…
+              <div class="hero-actions">
+                <button class="primary" type="button" onclick={() => onOpenEntry(hero.entry.path)}>
+                  Resume editing
+                </button>
+                {#if onOpenHistory}
+                  <button
+                    class="secondary"
+                    type="button"
+                    onclick={() => onOpenHistory(hero.entry.path)}
+                  >
+                    Version history
                   </button>
-                  <button type="button" onclick={() => void controller.forget(row.entry.path)}>
-                    Remove from library
-                  </button>
-                </div>
-              {/if}
+                {/if}
+              </div>
             </div>
-          </div>
-        {/each}
+          </section>
+        {/if}
 
-        <!-- Templates are deferred to F-060, so this reads "blank or photo" (spec §Scope). -->
-        <button class="start" type="button" onclick={onNew}>
-          <span class="start-icon"><Plus size={20} /></span>
-          <span class="start-label">
-            Start a panel
-            <span class="start-sub">blank or photo</span>
-          </span>
-        </button>
-      </div>
+        <div class="library-head">
+          <h2>All panels</h2>
 
-      {#if onDropFile}
-        <p class="drop-hint">Drop a .vitrum file here to open it.</p>
+          <button class="open" type="button" onclick={onOpenFile}>
+            <FolderOpen size={16} />
+            Open panel…
+          </button>
+          <button class="new" type="button" onclick={onNew}>
+            <Plus size={16} />
+            New panel
+          </button>
+        </div>
+
+        {#if controller.noMatches}
+          <p class="note" data-testid="library-no-matches">
+            No panels match “{controller.query.trim()}”.
+          </p>
+        {:else if controller.rows.length === 0}
+          <p class="note" data-testid="library-empty">
+            {controller.loaded
+              ? 'No panels yet. Start one from a blank cartoon.'
+              : 'Reading your panels…'}
+          </p>
+        {/if}
+
+        <div class="grid">
+          {#each gridRows as row (row.entry.path)}
+            {@const url = controller.thumbnailUrl(row.entry.path)}
+            {@const size = panelDimensions(row.entry)}
+            {@const figures = panelFigures(row.entry)}
+            <div class="card" data-missing={row.missing ? 'true' : undefined}>
+              {#if row.missing}
+                <div class="thumb missing"><FileQuestion size={26} /></div>
+              {:else}
+                <button
+                  class="thumb"
+                  type="button"
+                  onclick={() => onOpenEntry(row.entry.path)}
+                  aria-label={`Open ${row.entry.name}`}
+                >
+                  {#if url}
+                    <img src={url} alt="" />
+                  {:else}
+                    <span class="placeholder" aria-hidden="true"></span>
+                  {/if}
+                </button>
+              {/if}
+
+              <div class="card-meta">
+                <strong class="card-name" title={row.entry.path}>{row.entry.name}</strong>
+                <!-- Omitted, not zeroed, for an entry with no indexed facts (FR-10 back-compat). -->
+                {#if figures}
+                  <span class="figures">{figures}</span>
+                {/if}
+                <div class="card-foot">
+                  {#if row.missing}
+                    <Badge tone="warning">File not found</Badge>
+                  {:else}
+                    <span class="technique">{techniqueLine(row.entry.technique, size)}</span>
+                    <span class="when">{relativeTime(editedAt(row.entry))}</span>
+                  {/if}
+                </div>
+                {#if row.missing}
+                  <div class="fixes">
+                    <button type="button" onclick={() => void controller.locate(row.entry.path)}>
+                      Locate…
+                    </button>
+                    <button type="button" onclick={() => void controller.forget(row.entry.path)}>
+                      Remove from library
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/each}
+
+          <!-- Templates are deferred to F-060, so this reads "blank or photo" (spec §Scope). -->
+          <button class="start" type="button" onclick={onNew}>
+            <span class="start-icon"><Plus size={20} /></span>
+            <span class="start-label">
+              Start a panel
+              <span class="start-sub">blank or photo</span>
+            </span>
+          </button>
+        </div>
+
+        {#if onDropFile}
+          <p class="drop-hint">Drop a .vitrum file here to open it.</p>
+        {/if}
       {/if}
     </main>
   </div>

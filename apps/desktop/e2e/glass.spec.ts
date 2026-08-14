@@ -84,3 +84,53 @@ test('glass catalog: starter loads, search filters, new glass persists across re
   await expect(palette2.getByText('My studio blue')).toBeVisible()
   await expect(palette2.getByTestId('glass-count')).toHaveText('61 of 61')
 })
+
+// F-063 end to end from the launch screen's glass library home: the starter catalog renders in the
+// full-page grid, a glass created there persists across an app relaunch, and — the point of one shared
+// controller (FR-4) — a glass added on this surface is visible in the editor's palette. This extends
+// F-022's persistence proof across the new cross-document surface.
+test('glass library home: create on the launch screen, persist, and see it in the editor palette', async () => {
+  // The beforeEach stepped into the editor; go back to the launch screen to reach the portal rail.
+  let window = await app.firstWindow()
+  await window.getByRole('button', { name: 'Back to panel library' }).click()
+  const rail = window.getByRole('navigation', { name: 'Library sections' })
+  await expect(rail).toBeVisible()
+
+  // The "Glass library" destination is live now (not a disabled placeholder), and carries the count.
+  const glassNav = rail.getByRole('button', { name: /Glass library/ })
+  await expect(glassNav).toBeEnabled()
+  await glassNav.click()
+
+  const home = window.getByRole('region', { name: 'Glass library' })
+  await expect(home).toBeVisible()
+  // The starter catalog renders full-page (60 shipped glasses), searchable via the header field (FR-6).
+  await expect(home.getByTestId('glass-home-count')).toHaveText('60 of 60')
+  await window.getByLabel('Search glass').fill('emerald')
+  await expect(home.getByTestId('glass-home-count')).toHaveText('1 of 60')
+  await window.getByLabel('Search glass').fill('')
+
+  // Create a glass through the shared editor dialog on this surface.
+  await home.getByRole('button', { name: 'New glass' }).click()
+  const dialog = window.getByRole('dialog', { name: 'New glass' })
+  await dialog.getByLabel('Name').fill('Launch-screen amber')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(home.getByTestId('glass-home-count')).toHaveText('61 of 61')
+  await expect(home.getByRole('button', { name: 'Launch-screen amber' })).toBeVisible()
+
+  // Relaunch against the same library file: the glass persists (userData-backed, FR-4/F-022).
+  await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
+  app = await launch()
+  window = await app.firstWindow()
+  await window.getByRole('button', { name: /Glass library/ }).click()
+  const home2 = window.getByRole('region', { name: 'Glass library' })
+  await expect(home2.getByRole('button', { name: 'Launch-screen amber' })).toBeVisible()
+  await expect(home2.getByTestId('glass-home-count')).toHaveText('61 of 61')
+
+  // One controller, no cache to invalidate: the editor palette lists the same glass (FR-4). Return to
+  // the panels view first so `editorWindow` can step in through the new-panel dialog.
+  await window.getByRole('button', { name: /Panels/ }).click()
+  window = await editorWindow(app)
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
+  const palette = window.getByRole('region', { name: 'Glass palette' })
+  await expect(palette.getByText('Launch-screen amber')).toBeVisible()
+})

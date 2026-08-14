@@ -81,10 +81,10 @@ test('goes from the launch screen through a new panel and back, with a real inde
   // FR-1: a plain launch opens the launch screen, not the editor.
   await expect(window.getByRole('navigation', { name: 'Library sections' })).toBeVisible()
   await expect(window.getByTestId('library-empty')).toContainText('No panels yet')
-  // FR-8 (as amended 2026-08-14): "Glass library" (F-063) is the only unbuilt destination,
-  // present and disabled — never silently absent, never fake-clickable.
+  // "Glass library" (F-063) is now a live destination alongside "Panels"; the removed
+  // Cut lists / Versions / Settings rows stay gone (F-058 amendment 2026-08-14).
   const rail = window.getByRole('navigation', { name: 'Library sections' })
-  await expect(rail.getByRole('button', { name: /Glass library/ })).toBeDisabled()
+  await expect(rail.getByRole('button', { name: /Glass library/ })).toBeEnabled()
   await expect(rail.getByRole('button', { name: /Settings/ })).toHaveCount(0)
 
   // FR-3: the dialog creates the panel and enters the editor with its real name and size.

@@ -232,7 +232,7 @@
     onOpenEntry={(path) => void openPath(path)}
     onOpenHistory={(path) => void openPath(path, 'history')}
     onDropFile={(file) => void openDropped(file)}
-    glassCount={glassLibrary.glasses.length}
+    {glassLibrary}
   />
 {:else}
   <AppShell

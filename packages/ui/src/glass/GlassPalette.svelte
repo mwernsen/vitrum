@@ -1,11 +1,7 @@
 <script lang="ts">
   import {
     filterGlasses,
-    HUE_BUCKETS,
-    TEXTURE_TAGS,
-    TRANSPARENCY_CLASSES,
     type Glass,
-    type GlassFilter,
     type HueBucket,
     type TextureTag,
     type TransparencyClass,
@@ -18,6 +14,7 @@
   import Select from '../components/Select.svelte'
   import Tabs from '../components/Tabs.svelte'
 
+  import { HUE_OPTIONS, TEXTURE_OPTIONS, TRANSPARENCY_OPTIONS, toGlassFilter } from './facets'
   import GlassEditorDialog from './GlassEditorDialog.svelte'
   import type { GlassScopeActions } from './types'
 
@@ -61,31 +58,13 @@
   let transparency = $state<TransparencyClass | ''>('')
   let texture = $state<TextureTag | ''>('')
 
-  const filter = $derived<GlassFilter>({
-    query,
-    ...(hue ? { hue } : {}),
-    ...(transparency ? { transparency } : {}),
-    ...(texture ? { texture } : {}),
-  })
+  const filter = $derived(toGlassFilter({ query, hue, transparency, texture }))
 
   const activeGlasses = $derived(scope === 'project' && project ? project : library)
   const activeActions = $derived(
     scope === 'project' && projectActions ? projectActions : libraryActions,
   )
   const shown = $derived(filterGlasses(activeGlasses, filter))
-
-  const hueOptions = [
-    { value: '', label: 'Any hue' },
-    ...HUE_BUCKETS.map((h) => ({ value: h, label: cap(h) })),
-  ]
-  const transparencyOptions = [
-    { value: '', label: 'Any transparency' },
-    ...TRANSPARENCY_CLASSES.map((t) => ({ value: t, label: cap(t) })),
-  ]
-  const textureOptions = [
-    { value: '', label: 'Any texture' },
-    ...TEXTURE_TAGS.map((t) => ({ value: t, label: cap(t) })),
-  ]
 
   function cap(s: string): string {
     return s.charAt(0).toUpperCase() + s.slice(1)
@@ -154,19 +133,19 @@
   <div class="filters">
     <Select
       size="sm"
-      options={hueOptions}
+      options={HUE_OPTIONS}
       value={hue}
       onchange={(v) => (hue = v as HueBucket | '')}
     />
     <Select
       size="sm"
-      options={transparencyOptions}
+      options={TRANSPARENCY_OPTIONS}
       value={transparency}
       onchange={(v) => (transparency = v as TransparencyClass | '')}
     />
     <Select
       size="sm"
-      options={textureOptions}
+      options={TEXTURE_OPTIONS}
       value={texture}
       onchange={(v) => (texture = v as TextureTag | '')}
     />
