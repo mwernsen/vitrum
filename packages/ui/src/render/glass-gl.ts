@@ -133,6 +133,13 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// sRGB <-> linear: uColor and the swatch photo arrive in sRGB-ish space. Compositing (texture
+// multiply, swatch mix, tone map) happens in linear light, then we encode back to sRGB for display —
+// the gamma-correct workflow the Light pass already uses. This does not change litColor (still the
+// CPU reference in uColor); it is a display transform only, so the shading unit tests are unaffected.
+vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
+vec3 toSrgb(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
+
 void main() {
   // Texture-space position: undo per-piece offset, rotation and scale (all in world mm).
   vec2 p = vWorld - uOffset;
@@ -164,7 +171,8 @@ void main() {
     m = 1.0 + uAmp * (2.0 * n - 1.0);
   }
 
-  vec3 col = uColor * m;
+  vec3 base = toLinear(uColor);
+  vec3 col = base * m;
 
   if (uHasSwatch == 1) {
     vec2 uv = (vWorld - uBboxMin) / max(uBboxSize, vec2(0.001));
@@ -172,13 +180,16 @@ void main() {
     vec2 cc = uv - 0.5;
     cc = vec2(c * cc.x + s * cc.y, -s * cc.x + c * cc.y) / max(uScale, 0.001);
     uv = clamp(cc + 0.5, 0.0, 1.0);
-    vec3 tex = texture(uSwatch, uv).rgb;
+    vec3 tex = toLinear(texture(uSwatch, uv).rgb);
     float luma = dot(tex, vec3(0.299, 0.587, 0.114));
     // Modulate the assigned base colour by the photo's luminance (keeps the glass's hue).
-    col = mix(col, uColor * (0.55 + 0.9 * luma), 0.6);
+    col = mix(col, base * (0.55 + 0.9 * luma), 0.6);
   }
 
-  frag = vec4(col, 1.0);
+  // Filmic-ish tone map in linear light so lit glass reads luminous rather than flat, then encode to
+  // sRGB for display (gamma-correct output, matching the Light pass).
+  col = vec3(1.0) - exp(-col * 1.45);
+  frag = vec4(toSrgb(col), 1.0);
 }`
 
 // Came / solder ribbon shader: a rounded cross-section (darker at the edges), a specular ridge near
@@ -193,11 +204,14 @@ uniform int uBead;
 out vec4 frag;
 void main() {
   float a = clamp(vAcross, -1.0, 1.0);
-  // Rounded profile: edges fall off, centre catches a specular highlight.
-  float shade = 1.0 - 0.35 * a * a;
-  float spec = exp(-a * a * 7.0) * 0.6;
+  // Rounded profile: edges fall off toward the glass, so the line reads as a raised bead.
+  float shade = 1.0 - 0.45 * a * a;
+  // A thin, dim sheen near the crown — matte lead, not chromed tube. Solder (bead) is a little
+  // glossier than lead, so it catches a touch more light.
+  float specAmt = uBead == 1 ? 0.22 : 0.11;
+  float spec = exp(-a * a * 16.0) * specAmt;
   float bead = uBead == 1 ? (0.9 + 0.1 * sin(vAlong)) : 1.0;
-  vec3 col = uCame * shade * bead + vec3(spec);
+  vec3 col = uCame * shade * bead + vec3(spec) * bead;
   frag = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`
 
@@ -212,6 +226,9 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
     stencil: true,
     premultipliedAlpha: false,
     alpha: true,
+    // MSAA on the default framebuffer: smooths piece edges and came ribbons, which are otherwise
+    // hard-edged (stencil fills + triangle strips have no anti-aliasing of their own).
+    antialias: true,
     // Keep the drawing buffer so the F-043 PNG snapshot can read the render back via drawImage.
     preserveDrawingBuffer: true,
   }) as WebGL2RenderingContext | null
