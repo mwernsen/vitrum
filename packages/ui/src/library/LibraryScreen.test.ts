@@ -1,15 +1,23 @@
 import {
   createPanelProject,
+  emptyLibrary,
   emptyPanelLibrary,
   panelEntryFor,
   recordPanelOpened,
+  serializeLibrary,
   serializePanelLibrary,
+  upsertGlassInLibrary,
+  type Glass,
+  type GlassLibrary,
+  type GlassLibraryPort,
   type LibraryPort,
   type PanelFacts,
   type Project,
 } from '@vitrum/model'
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { describe, expect, it, vi } from 'vitest'
+
+import { GlassLibraryController } from '../glass/library.svelte'
 
 import { LibraryController } from './controller.svelte'
 import LibraryScreen from './LibraryScreen.svelte'
@@ -59,31 +67,134 @@ function controllerWith(
 }
 
 const noop = () => {}
-const baseProps = { onNew: noop, onOpenFile: noop, onOpenEntry: noop }
+
+/** A glass with just enough shape for the rail count and the F-063 view. */
+const glass = (id: string, over: Partial<Glass> = {}): Glass => ({
+  id,
+  name: id,
+  color: '#3a7bd5',
+  transparency: 'transparent',
+  texture: 'smooth',
+  thicknessMm: 3,
+  ...over,
+})
+
+/**
+ * A {@link GlassLibraryController} over an in-memory port seeded with `glasses` — used both for the
+ * rail count and the F-063 glass view. `init()` must be awaited before rendering so the seeded library
+ * has loaded.
+ */
+function glassControllerWith(glasses: Glass[]): GlassLibraryController {
+  let library: GlassLibrary = emptyLibrary()
+  for (const g of glasses) library = upsertGlassInLibrary(library, g)
+  let stored = serializeLibrary(library)
+  const port: GlassLibraryPort = {
+    load: async () => stored,
+    save: async (raw) => {
+      stored = raw
+    },
+    importLibrary: async () => null,
+    exportLibrary: async () => null,
+  }
+  return new GlassLibraryController(port)
+}
+
+async function loadedGlass(glasses: Glass[]): Promise<GlassLibraryController> {
+  const c = glassControllerWith(glasses)
+  await c.init()
+  return c
+}
+
+/** The launch screen's required props, with an empty glass library by default. */
+function baseProps() {
+  return {
+    onNew: noop,
+    onOpenFile: noop,
+    onOpenEntry: noop,
+    glassLibrary: glassControllerWith([]),
+  }
+}
 
 describe('LibraryScreen — #2a chrome (FR-8)', () => {
-  it('renders the header and the nav rail with only "Panels" live', async () => {
+  it('renders the header and the nav rail with both destinations live', async () => {
     const { controller } = controllerWith([])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps, glassCount: 42 })
+    // 42 glasses so the rail count is the real library size, not the design's sample number.
+    const glassLibrary = await loadedGlass(Array.from({ length: 42 }, (_, i) => glass(`g${i}`)))
+    render(LibraryScreen, { controller, ...baseProps(), glassLibrary })
 
     expect(screen.getByLabelText('Search panels')).toBeInTheDocument()
 
     const rail = screen.getByRole('navigation', { name: 'Library sections' })
     expect(rail).toHaveTextContent('Panels')
-    // "Glass library" (F-063) is the only other destination, present and visibly disabled —
-    // never silently absent. The design's Cut lists / Versions / Settings rows were removed
-    // 2026-08-14: nothing on the roadmap owns them.
+    // "Glass library" (F-063) is the second destination, now live — the design's Cut lists /
+    // Versions / Settings rows were removed 2026-08-14: nothing on the roadmap owns them.
     expect(rail).toHaveTextContent('Glass library')
     expect(rail).not.toHaveTextContent('Cut lists')
     expect(rail).not.toHaveTextContent('Versions')
     expect(rail).not.toHaveTextContent('Settings')
-    const disabled = rail.querySelectorAll('button:disabled')
-    expect(disabled).toHaveLength(1)
-    // Panels is the live one, and is not a button at all.
+    // Nothing is disabled: both rows are real destinations (FR-1).
+    expect(rail.querySelectorAll('button:disabled')).toHaveLength(0)
+    // Panels is the active view on entry.
     expect(rail.querySelector('[aria-current="page"]')).toHaveTextContent('Panels')
-    // Real counts, not the design's sample numbers.
+    // Real count, not the design's sample number.
     expect(rail).toHaveTextContent('42')
+  })
+})
+
+describe('LibraryScreen — rail navigation (FR-1)', () => {
+  it('swaps to the glass view and back, moving aria-current, with the panels state surviving', async () => {
+    const { controller } = controllerWith([
+      { path: '/a.vitrum', project: project('Kitchen transom'), at: 100, facts: facts() },
+    ])
+    await controller.init()
+    const glassLibrary = await loadedGlass([glass('g1', { name: 'Studio blue' })])
+    render(LibraryScreen, { controller, ...baseProps(), glassLibrary })
+
+    const rail = screen.getByRole('navigation', { name: 'Library sections' })
+    // Panels is active first; the panels grid is showing.
+    expect(rail.querySelector('[aria-current="page"]')).toHaveTextContent('Panels')
+    expect(screen.getByRole('region', { name: 'Continue' })).toBeInTheDocument()
+
+    // Click "Glass library": the content swaps and aria-current moves.
+    await fireEvent.click(screen.getByRole('button', { name: /Glass library/ }))
+    expect(rail.querySelector('[aria-current="page"]')).toHaveTextContent('Glass library')
+    expect(screen.getByRole('region', { name: 'Glass library' })).toBeInTheDocument()
+    expect(screen.getByText('Studio blue')).toBeInTheDocument()
+    // The panels view is gone while glass is showing.
+    expect(screen.queryByRole('region', { name: 'Continue' })).not.toBeInTheDocument()
+    // The search field now targets glass (FR-6).
+    expect(screen.getByLabelText('Search glass')).toBeInTheDocument()
+
+    // Click "Panels": the panels view returns with its hero intact (a round trip loses nothing).
+    await fireEvent.click(screen.getByRole('button', { name: /Panels/ }))
+    expect(rail.querySelector('[aria-current="page"]')).toHaveTextContent('Panels')
+    expect(screen.getByRole('region', { name: 'Continue' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Search panels')).toBeInTheDocument()
+  })
+
+  it('keeps a per-view search query when switching between views (FR-6)', async () => {
+    const { controller } = controllerWith([])
+    await controller.init()
+    const glassLibrary = await loadedGlass([
+      glass('g1', { name: 'Ruby cathedral' }),
+      glass('g2', { name: 'Emerald cathedral' }),
+    ])
+    render(LibraryScreen, { controller, ...baseProps(), glassLibrary })
+
+    // Type a panels query, then move to glass and type a glass query.
+    await fireEvent.input(screen.getByLabelText('Search panels'), { target: { value: 'transom' } })
+    await fireEvent.click(screen.getByRole('button', { name: /Glass library/ }))
+    await fireEvent.input(screen.getByLabelText('Search glass'), { target: { value: 'emerald' } })
+    expect(screen.getByText('Emerald cathedral')).toBeInTheDocument()
+    expect(screen.queryByText('Ruby cathedral')).not.toBeInTheDocument()
+
+    // Back to panels: its own query is still there, untouched by the glass query.
+    await fireEvent.click(screen.getByRole('button', { name: /Panels/ }))
+    expect(screen.getByLabelText('Search panels')).toHaveValue('transom')
+    // …and forward to glass again: its query survived too.
+    await fireEvent.click(screen.getByRole('button', { name: /Glass library/ }))
+    expect(screen.getByLabelText('Search glass')).toHaveValue('emerald')
   })
 })
 
@@ -91,7 +202,7 @@ describe('LibraryScreen — the grid (FR-2)', () => {
   it('prompts when the library is empty', async () => {
     const { controller } = controllerWith([])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     expect(screen.getByTestId('library-empty')).toHaveTextContent('No panels yet')
     // …and still offers the way in.
     expect(screen.getByRole('button', { name: /Start a panel/ })).toBeInTheDocument()
@@ -105,7 +216,7 @@ describe('LibraryScreen — the grid (FR-2)', () => {
       { path: '/c.vitrum', project: project('Chapel lancet'), at: 300, facts: facts() },
     ])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps, onOpenEntry })
+    render(LibraryScreen, { controller, ...baseProps(), onOpenEntry })
 
     // The newest is the hero, so the grid holds the other two.
     expect(screen.getByRole('button', { name: 'Open Kitchen transom' })).toBeInTheDocument()
@@ -127,7 +238,7 @@ describe('LibraryScreen — the grid (FR-2)', () => {
       },
     ])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     expect(screen.getByText('84 panes · 16.9 m seam')).toBeInTheDocument()
     expect(screen.getByText(/Copper foil/)).toBeInTheDocument()
   })
@@ -138,7 +249,7 @@ describe('LibraryScreen — the grid (FR-2)', () => {
       { path: '/old.vitrum', project: project('Never saved'), at: 100 },
     ])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     expect(screen.getByRole('button', { name: 'Open Never saved' })).toBeInTheDocument()
     // The figures line is omitted rather than zeroed; the card still carries its real facts.
     expect(screen.queryByText(/0 panes/)).not.toBeInTheDocument()
@@ -155,7 +266,7 @@ describe('LibraryScreen — the grid (FR-2)', () => {
       ['/hero.vitrum'],
     )
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
 
     expect(screen.getByText('File not found')).toBeInTheDocument()
     // A missing file is not clickable — its thumbnail is not an open button.
@@ -181,7 +292,7 @@ describe('LibraryScreen — the Continue hero (FR-9)', () => {
       },
     ])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
 
     const hero = screen.getByRole('region', { name: 'Continue' })
     expect(hero).toHaveTextContent('Rose window, south nave')
@@ -198,7 +309,7 @@ describe('LibraryScreen — the Continue hero (FR-9)', () => {
       { path: '/live.vitrum', project: project('Rose'), at: 500, facts: facts() },
     ])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps, onOpenEntry, onOpenHistory })
+    render(LibraryScreen, { controller, ...baseProps(), onOpenEntry, onOpenHistory })
 
     await fireEvent.click(screen.getByRole('button', { name: 'Resume editing' }))
     expect(onOpenEntry).toHaveBeenCalledWith('/live.vitrum')
@@ -209,7 +320,7 @@ describe('LibraryScreen — the Continue hero (FR-9)', () => {
   it('has no hero at all when there is no panel to resume — the empty state stands in', async () => {
     const { controller } = controllerWith([])
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     expect(screen.queryByRole('region', { name: 'Continue' })).not.toBeInTheDocument()
     expect(screen.getByTestId('library-empty')).toBeInTheDocument()
   })
@@ -223,7 +334,7 @@ describe('LibraryScreen — the Continue hero (FR-9)', () => {
       ['/here.vitrum'],
     )
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     expect(screen.getByRole('region', { name: 'Continue' })).toHaveTextContent('Still here')
   })
 })
@@ -239,7 +350,7 @@ describe('LibraryScreen — search (FR-11)', () => {
   it('filters the grid by name, case-insensitively', async () => {
     const { controller } = three()
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
 
     await fireEvent.input(screen.getByLabelText('Search panels'), { target: { value: 'KITCHEN' } })
     expect(screen.getByRole('button', { name: 'Open Kitchen transom' })).toBeInTheDocument()
@@ -251,7 +362,7 @@ describe('LibraryScreen — search (FR-11)', () => {
   it('leaves the Continue hero in place while searching', async () => {
     const { controller } = three()
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     await fireEvent.input(screen.getByLabelText('Search panels'), { target: { value: 'kitchen' } })
     expect(screen.getByRole('region', { name: 'Continue' })).toHaveTextContent('Rose window')
   })
@@ -259,7 +370,7 @@ describe('LibraryScreen — search (FR-11)', () => {
   it('distinguishes "no matches" from an empty library', async () => {
     const { controller } = three()
     await controller.init()
-    render(LibraryScreen, { controller, ...baseProps })
+    render(LibraryScreen, { controller, ...baseProps() })
     await fireEvent.input(screen.getByLabelText('Search panels'), { target: { value: 'zzz' } })
     expect(screen.getByTestId('library-no-matches')).toHaveTextContent('No panels match')
     expect(screen.queryByTestId('library-empty')).not.toBeInTheDocument()

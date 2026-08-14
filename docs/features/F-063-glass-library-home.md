@@ -3,7 +3,7 @@
 |                |                    |
 | -------------- | ------------------ |
 | **Phase**      | 5 — Power features |
-| **Status**     | agreed             |
+| **Status**     | done               |
 | **Depends on** | F-022, F-058       |
 | **Complexity** | M                  |
 
@@ -142,4 +142,79 @@ _All resolved 2026-08-14: Mathieu greenlit implementation with the proposals sta
 
 ## Implementation notes
 
-_(Filled in by the implementing agent after completion.)_
+_Delivered 2026-08-14. Branch `f-063-glass-library-home`._
+
+### What shipped
+
+- **`packages/ui/src/library/rail.ts`** — the "Glass library" placeholder became a **live**
+  destination. `RailItem` keeps its declarative shape (and its `live: false` + `note` branch, for the
+  next unbuilt surface); both current rows are now `live: true`. The launch screen owns a
+  `panels | glass` view state.
+- **`packages/ui/src/library/LibraryScreen.svelte`** — the portal now owns the view state (FR-1). The
+  rail rows are buttons that select the view; the active one carries `aria-current="page"`. The header
+  search field targets the active view with per-view placeholder ("Search panels" / "Search glass")
+  and **independent queries** (FR-6) — panels search stays on `controller.query` (F-058 behaviour),
+  glass search on a local `glassQuery`. The content area swaps between the existing panels view and
+  the new glass view; a panels ⇄ glass round trip leaves the panels state (hero, query) untouched
+  because that state never moves. The rail count reads the live library size.
+- **`packages/ui/src/glass/GlassLibraryView.svelte`** (net-new) — the full-page glass home: header
+  (title, Import / Export, New glass), a facet row (hue / transparency / texture) with the mono
+  "N of M" count, and a grid of **rich cards** (Open question 1) — swatch, name, manufacturer · SKU,
+  transparency / texture / thickness `Tag`s, price per m². Clicking a card opens the existing
+  `GlassEditorDialog`; **delete always confirms** through one `Dialog` (Open question 3) whose copy
+  states panels are unharmed (consume-by-value, FR-7). Search + facets reuse F-022's `filterGlasses`
+  (not reimplemented); the no-match state is distinct from an empty library (FR-3). All mutations and
+  import / export go through the **app-level `GlassLibraryController`** that `App.svelte` already
+  constructs and now passes into the portal, so this screen and the editor palette can never disagree
+  (FR-4).
+- **`packages/ui/src/glass/facets.ts`** (net-new, extracted) — the shared facet-row plumbing
+  (`HUE_OPTIONS` / `TRANSPARENCY_OPTIONS` / `TEXTURE_OPTIONS`, `toGlassFilter`, `hasActiveFacets`).
+  `GlassPalette.svelte` was refactored onto it, removing the duplicated option lists / filter
+  assembly the spec's Technical guidance flagged; the palette and the home cannot drift.
+- **`packages/ui/src/App.svelte`** — passes `glassLibrary` (the controller) into `LibraryScreen`
+  instead of the bare `glassCount`.
+
+### Tests
+
+- Unit: `glass/facets.test.ts` (option lists, sentinel-dropping filter assembly, `hasActiveFacets`).
+  `filterGlasses` itself is not re-tested (F-022 owns it, per the acceptance criteria).
+- Component: `glass/GlassLibraryView.test.ts` (grid + metadata, header-query filtering, facet
+  filtering, no-match vs empty-library states, create through the dialog updates the grid + the shared
+  controller, always-confirm delete with the FR-7 wording, import / export routed through the port).
+  `library/LibraryScreen.test.ts` gained rail-navigation tests (both ways, `aria-current` moving, the
+  glass region appearing / the panels region leaving) and a per-view search-query test (FR-6); its
+  "#2a chrome" test was updated — both rows are live now, so nothing in the rail is disabled and the
+  count comes from the seeded `GlassLibraryController`.
+- E2E: `glass.spec.ts` gained a test that drives the launch-screen glass home end to end — starter
+  catalog renders full-page, header "Search glass" filters, a glass created there **persists across an
+  app relaunch**, and the same glass appears in the **editor palette** (the one-controller proof,
+  FR-4). `library.spec.ts`'s FR-8 assertion flipped from "Glass library disabled" to
+  **"Glass library enabled"** (it is a live destination now); the removed Settings row stays absent.
+
+### Deviations
+
+- **No "clear filters" control shipped**, though `hasActiveFacets` exists in `facets.ts` for it —
+  the facets each carry an "Any …" option that clears them, so a separate reset felt redundant. Left
+  the helper in place (and tested) as the seam for one if wanted.
+- The header search drives the glass grid but the **facets are local** to the view (not in the
+  header), mirroring the editor palette; only the free-text query is the header's job, which is what
+  FR-6 scopes.
+
+### Net-new for back-port
+
+`GlassLibraryView` is a **net-new screen** with no canonical design (the spec's Design section says
+so — `#2a` draws only the rail row and count). It follows the Vitrum Design System: composed from
+`components/core` (`Card`-style cards, `Select`, `Dialog`, `Tag`, `Button`), tokens only for chrome,
+swatches exempt as glass data, sentence-case copy, mono numerals. **Back-port to the Claude Design
+project (`3c259295-607a-4eba-8cad-3890f7e80063`).** The rail's live-both-rows treatment and the
+always-confirm delete dialog are also new in-code details worth reflecting there.
+
+### Pending Mathieu
+
+- Visual sign-off of the net-new glass home (acceptance criteria "Manual"), and confirmation it is
+  back-ported to the Claude Design project.
+
+### Follow-ups (out of scope)
+
+- Usage counts ("used in N panels"), cross-document re-link / bulk replace, and manufacturer catalogs
+  (F-062) remain deferred exactly as the spec's Non-goals state.
