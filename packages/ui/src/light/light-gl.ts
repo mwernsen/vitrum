@@ -74,6 +74,10 @@ uniform int uTexKind;
 uniform float uFreq;
 uniform float uAmp;
 uniform float uAniso;
+// Coverage marker written to alpha, so the scatter pass knows what it is shading: 1 = glass,
+// 0.5 = came/solder, 0 = empty air (the cleared void). Without this the scatter pass cannot tell
+// the panel from the air around it, and its haze fills in the lead lattice.
+uniform float uMask;
 out vec4 frag;
 
 float hash(vec2 p) {
@@ -104,7 +108,7 @@ void main() {
   else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * vnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
   else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * vnoise(fq)); }
   else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (vnoise(fq) * 0.6 + vnoise(fq * 2.7) * 0.4) - 1.0); }
-  frag = vec4(toLinear(uColor) * m, 1.0);
+  frag = vec4(toLinear(uColor) * m, uMask);
 }`
 
 // Full-screen light-scattering + composite pass.
@@ -140,7 +144,17 @@ vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 const int SAMPLES = 64;
 void main() {
   // The emission buffer is already in linear light (see the emission pass).
-  vec3 base = texture(uEmission, vUv).rgb;
+  vec4 em = texture(uEmission, vUv);
+  vec3 base = em.rgb;
+
+  // What are we standing on? The emission pass wrote a coverage marker into alpha.
+  // Scattered light belongs in the *air*; over the panel it must not wash out the subject, and
+  // over the lead it must stay out entirely or the lattice — the thing that makes a panel read as
+  // stained glass — dissolves into haze.
+  float onGlass = smoothstep(0.75, 0.95, em.a);
+  float covered = smoothstep(0.25, 0.45, em.a);
+  float onCame = (1.0 - onGlass) * covered;
+  float inAir = 1.0 - covered;
 
   // March toward the sun, accumulating emission with distance decay → volumetric rays. Jitter the
   // start per-fragment so the step aliasing reads as fine noise, not concentric rings.
@@ -157,12 +171,26 @@ void main() {
   }
   scatter /= float(SAMPLES);
 
-  // Solar halo: a bright core plus a broad soft bloom, so it reads as glow rather than a hard ring.
+  // Solar halo: a bright core plus a soft bloom. The bloom term is kept narrow — a wide one reads
+  // as a panel-sized smudge rather than a sun.
   float d = distance(vUv, uSun);
   float tight = mix(26.0, 90.0, uConcentration);
-  float halo = exp(-d * d * tight) + 0.5 * exp(-d * d * tight * 0.14);
+  float halo = exp(-d * d * tight) + 0.28 * exp(-d * d * tight * 0.35);
 
-  vec3 col = base + scatter * uRayStrength * 3.4 + toLinear(uSunColor) * halo * uHaloBoost;
+  // Rays are light in the air: full strength in the void, a fraction over the glass, almost none
+  // over the lead.
+  float rayWeight = inAir + onGlass * 0.18 + onCame * 0.04;
+
+  // The halo may still bleed through the *lighter* pieces (the F-054 look), so gate its glass
+  // contribution on how luminous the glass already is — bright, transparent glass glows, dark and
+  // opaque glass stays dense.
+  float lum = dot(base, vec3(0.2126, 0.7152, 0.0722));
+  float bleed = smoothstep(0.15, 0.75, lum);
+  float haloWeight = inAir + onGlass * mix(0.10, 0.65, bleed) + onCame * 0.02;
+
+  vec3 col = base
+    + scatter * uRayStrength * 2.6 * rayWeight
+    + toLinear(uSunColor) * halo * uHaloBoost * haloWeight;
 
   // Filmic-ish tone map in linear, then encode to sRGB for display (gamma-correct output).
   col = vec3(1.0) - exp(-col * 1.35);
@@ -204,6 +232,7 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
     uFreq: gl.getUniformLocation(emitProgram, 'uFreq'),
     uAmp: gl.getUniformLocation(emitProgram, 'uAmp'),
     uAniso: gl.getUniformLocation(emitProgram, 'uAniso'),
+    uMask: gl.getUniformLocation(emitProgram, 'uMask'),
   }
   const r = {
     aPos: gl.getAttribLocation(rayProgram, 'aPos'),
@@ -276,7 +305,9 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       const haveFbo = ensureFbo(backingW, backingH)
       gl.bindFramebuffer(gl.FRAMEBUFFER, haveFbo ? fbo : null)
       gl.viewport(0, 0, backingW, backingH)
-      gl.clearColor(0.0009, 0.001, 0.0014, 1) // near-black void, in linear light
+      // Near-black void, in linear light. Alpha 0 marks "empty air" for the scatter pass's coverage
+      // test — this is where god-rays are allowed to be at full strength.
+      gl.clearColor(0.0009, 0.001, 0.0014, 0)
       gl.clearStencil(0)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
       gl.disable(gl.DEPTH_TEST)
@@ -318,6 +349,7 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
         gl.uniform1f(e.uFreq, tex.frequencyPerMm)
         gl.uniform1f(e.uAmp, tex.amplitude)
         gl.uniform1f(e.uAniso, tex.anisotropy)
+        gl.uniform1f(e.uMask, 1)
         drawQuad(gl, posBuffer, worldBuffer, e.aScreen, e.aWorld, viewport, piece.bbox)
       }
       gl.disable(gl.SCISSOR_TEST)
@@ -331,6 +363,9 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       gl.uniform3f(e.uColor, 0, 0, 0)
       gl.uniform1i(e.uTexKind, 0)
       gl.uniform1f(e.uAmp, 0)
+      // 0.5 marks the lattice: black in the emission buffer so it occludes the rays, and flagged so
+      // the scatter pass keeps it crisp instead of hazing over it.
+      gl.uniform1f(e.uMask, 0.5)
       for (const came of scene.cames) {
         const strip = ribbon(viewport, came.points, Math.max(1.2, (came.widthMm * pxPerMm) / 2))
         if (!strip) continue
