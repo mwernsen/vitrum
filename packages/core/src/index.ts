@@ -182,18 +182,28 @@ export {
 } from './svg'
 export {
   DEFAULT_BACKLIGHT,
+  REFERENCE_THICKNESS_MM,
   TEXTURE_KIND,
   TRANSMISSION,
   daylight,
+  fresnelSheen,
+  heightField,
   hexToRgb,
+  hueDriftMultiplier,
   litColor,
+  pathDepthFactor,
+  pathRatio,
   rgbToHex,
+  surfaceNormal,
+  surfaceParams,
   textureModulation,
   textureParams,
   transmission,
   type Backlight,
   type Rgb,
+  type SurfaceParams,
   type TextureParams,
+  type Vec3,
 } from './render'
 export {
   SEASON_PRESETS,

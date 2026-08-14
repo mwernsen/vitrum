@@ -2,6 +2,7 @@ import {
   daylight,
   hexToRgb,
   litColor,
+  surfaceParams,
   textureParams,
   transmission,
   worldToScreen,
@@ -55,6 +56,8 @@ export interface GlassPieceInput {
   readonly color: string
   readonly transparency: TransparencyClass
   readonly texture: TextureTag
+  /** Sheet thickness in mm, driving the Beer–Lambert optical path (F-064 thrust A). */
+  readonly thicknessMm: number
   /** Key into `resolveSwatch` for the glass's photo swatch, if any (swatch-photo modulation). */
   readonly swatchKey?: string
   readonly textureTransform: TextureTransform
@@ -119,6 +122,16 @@ uniform sampler2D uSwatch;
 uniform int uHasSwatch;
 uniform vec2 uBboxMin;
 uniform vec2 uBboxSize;
+// F-064 thrust A — the surface material. uGlass is the raw sheet colour (uColor is litColor, the CPU
+// reference); the rest describe the surface as a physical thing rather than as a pattern.
+uniform vec3 uGlass;
+uniform vec3 uLight;
+uniform float uRelief;
+uniform float uStep;
+uniform float uGloss;
+uniform float uHueDrift;
+uniform float uThickness;
+uniform float uSwatchTileMm;
 out vec4 frag;
 
 float hash(vec2 p) {
@@ -154,6 +167,28 @@ vec2 warp(vec2 p) {
 }
 // The glass-grain field every texture tag is built from.
 float gnoise(vec2 p) { return fbm(warp(p)); }
+
+// The surface height at a point in texture space (world mm), 0..1 — the mirror of @vitrum/core's
+// heightField. Each tag is a shape of *surface*: the same field drives the relief normal, the optical
+// path length and the brightness, so they cannot disagree with each other.
+float heightAt(vec2 q, float freq) {
+  vec2 fq = q * freq;
+  if (uTexKind == 1) {
+    // hammered: ridged noise gives rounded hollows rather than hills
+    return 1.0 - abs(2.0 * gnoise(fq) - 1.0);
+  } else if (uTexKind == 2) {
+    // seedy: bubbles sit proud in sparse round patches
+    return smoothstep(0.72, 0.92, gnoise(fq));
+  } else if (uTexKind == 3) {
+    return gnoise(vec2(fq.x / uAniso, fq.y));
+  } else if (uTexKind == 4) {
+    return 0.5 + 0.5 * sin(q.y * freq * 6.2831853 / uAniso) * (0.6 + 0.4 * gnoise(fq));
+  } else if (uTexKind == 5) {
+    return gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4;
+  }
+  // smooth: a faint long roll, so even "flat" glass is not a dead plane
+  return gnoise(fq);
+}
 
 // sRGB <-> linear: uColor and the swatch photo arrive in sRGB-ish space. Compositing (texture
 // multiply, swatch mix, tone map) happens in linear light, then we encode back to sRGB for display —
@@ -196,22 +231,45 @@ void main() {
   vec3 base = toLinear(uColor);
   vec3 col = base * m;
 
+  // --- The surface as a material (F-064 thrust A) ---------------------------
+  // Normal by forward differences on the height field: three evaluations, not five, because the
+  // field is multi-octave noise and this runs per fragment (FR-6).
+  float hfreq = uFreq > 0.0 ? uFreq : 0.04;
+  float st = max(uStep, 0.0001);
+  float h0 = heightAt(q, hfreq);
+  float hx = heightAt(q + vec2(st, 0.0), hfreq);
+  float hy = heightAt(q + vec2(0.0, st), hfreq);
+  vec3 n = normalize(vec3(-(hx - h0) * uRelief / st, -(hy - h0) * uRelief / st, 1.0));
+
+  // Beer–Lambert: a tilted surface lengthens the optical path, so relief shows up as varying colour
+  // *depth* rather than as varying brightness — the thing that makes glass read as a slab. Relative
+  // to the reference thickness, so a flat 3 mm sheet reproduces litColor exactly.
+  float ratio = (max(uThickness, 0.1) / 3.0) / max(n.z, 0.25);
+  col *= pow(max(toLinear(uGlass), vec3(0.004)), vec3(ratio - 1.0));
+
+  // Hue drift: real cathedral and streaky glass streaks *different colours* together, so warm and
+  // cool are pushed in opposite directions rather than the whole piece just dimming.
+  float d = gnoise(q * 0.035) - 0.5;
+  col *= vec3(1.0 + d * uHueDrift, 1.0 + d * uHueDrift * 0.15, 1.0 - d * uHueDrift);
+
   if (uHasSwatch == 1) {
-    vec2 uv = (vWorld - uBboxMin) / max(uBboxSize, vec2(0.001));
-    // apply the same rotation/scale about the piece centre so the photo tracks the transform
-    vec2 cc = uv - 0.5;
-    cc = vec2(c * cc.x + s * cc.y, -s * cc.x + c * cc.y) / max(uScale, 0.001);
-    uv = clamp(cc + 0.5, 0.0, 1.0);
+    // Physical tiling: the photo is a sheet of glass at a real size, so it repeats in world mm
+    // (F-053 follow-up) instead of being stretched to each piece's bbox.
+    vec2 uv = q / max(uSwatchTileMm, 1.0);
     vec3 tex = toLinear(texture(uSwatch, uv).rgb);
     float luma = dot(tex, vec3(0.299, 0.587, 0.114));
     // Modulate the assigned base colour by the photo's luminance (keeps the glass's hue).
     col = mix(col, base * (0.55 + 0.9 * luma), 0.6);
   }
 
-  // Filmic-ish tone map in linear light so lit glass reads luminous rather than flat, then encode to
-  // sRGB for display (gamma-correct output, matching the Light pass).
-  col = vec3(1.0) - exp(-col * 1.45);
-  frag = vec4(toSrgb(col), 1.0);
+  // Front-surface Fresnel sheen. Head-on the glass reflects ~4%; where relief tilts it away,
+  // reflectance climbs steeply, putting glints along dimple edges and ripple crests. This is the
+  // strongest single cue that a surface is glass and not backlit paper.
+  float fres = 0.04 + 0.96 * pow(1.0 - clamp(n.z, 0.0, 1.0), 5.0);
+  col += toLinear(uLight) * fres * uGloss * 0.22;
+
+  // Linear HDR out; the composite pass adds bloom and tone-maps.
+  frag = vec4(col, 1.0);
 }`
 
 // Came / solder ribbon shader (F-064 thrust B), tuned against Mathieu's reference photo of a real
@@ -263,7 +321,8 @@ void main() {
   float bead = uBead == 1 ? (0.92 + 0.08 * sin(vAlong * 0.8)) : 1.0;
 
   vec3 col = uCame * crown * patina * bead + vec3(spec);
-  frag = vec4(clamp(col, 0.0, 1.0), edge);
+  // Authored in display space, written to the linear scene buffer.
+  frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), edge);
 }`
 
 // Solder-joint blob shader: a lumpy dome at each node, so intersections read as soldered rather
@@ -314,7 +373,61 @@ void main() {
   float spec = pow(dome, 6.0) * 0.14;
 
   vec3 col = uCame * (0.82 + 0.30 * dome) * patina + vec3(spec);
-  frag = vec4(clamp(col, 0.0, 1.0), edge);
+  frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), edge);
+}`
+
+// Full-screen passes (F-064 thrust D): a graded surround behind the panel, and a composite that adds
+// bloom and tone-maps. Both use a single oversized triangle rather than a quad.
+const VERT_FS = `#version 300 es
+in vec2 aPos;
+out vec2 vUv;
+void main() {
+  vUv = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`
+
+// The surround. A flat near-black wash made a panel look like it was floating in a void; a soft
+// luminous field centred on the panel reads as a lit room behind glass.
+const FRAG_SURROUND = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform vec3 uWash;
+uniform vec2 uCentre;
+uniform float uSpread;
+uniform float uStrength;
+out vec4 frag;
+void main() {
+  float d = distance(vUv, uCentre) / max(uSpread, 0.001);
+  float g = exp(-d * d * 1.1);
+  frag = vec4(pow(max(uWash, vec3(0.0)), vec3(2.2)) * uStrength * (0.06 + 0.94 * g), 1.0);
+}`
+
+// Composite: bloom, then the filmic tone map, then sRGB encode. Bloom has to be a screen-space pass —
+// it is the one effect that cannot be computed from a single fragment.
+const FRAG_COMPOSITE = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uScene;
+uniform vec2 uTexel;
+uniform float uBloom;
+out vec4 frag;
+void main() {
+  vec3 base = texture(uScene, vUv).rgb;
+
+  // Ring taps at two radii, keeping only what is above the highlight threshold, so bright glass
+  // blooms into its surroundings and dark lead does not.
+  vec3 glow = vec3(0.0);
+  for (int i = 0; i < 12; i++) {
+    float a = float(i) * 0.5235988;
+    vec2 dir = vec2(cos(a), sin(a));
+    glow += max(texture(uScene, vUv + dir * uTexel * 7.0).rgb - 0.72, vec3(0.0));
+    glow += max(texture(uScene, vUv + dir * uTexel * 16.0).rgb - 0.72, vec3(0.0));
+  }
+  glow /= 24.0;
+
+  vec3 col = base + glow * uBloom;
+  col = vec3(1.0) - exp(-col * 1.45);
+  frag = vec4(pow(max(col, vec3(0.0)), vec3(1.0 / 2.2)), 1.0);
 }`
 
 interface CachedSwatch {
@@ -342,7 +455,14 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
   const glassProgram = buildProgram(gl, VERT, FRAG_GLASS)
   const cameProgram = buildProgram(gl, VERT_CAME, FRAG_CAME)
   const jointProgram = buildProgram(gl, VERT_JOINT, FRAG_JOINT)
-  if (!glassProgram || !cameProgram || !jointProgram) return null
+  const surroundProgram = buildProgram(gl, VERT_FS, FRAG_SURROUND)
+  const compositeProgram = buildProgram(gl, VERT_FS, FRAG_COMPOSITE)
+  if (!glassProgram || !cameProgram || !jointProgram || !surroundProgram || !compositeProgram) {
+    return null
+  }
+  // A half-float scene target keeps the whole composite in linear HDR, so bloom and the tone map
+  // behave; 8-bit would band. Fall back where the extension is missing (older GPUs, headless).
+  const floatColor = !!gl.getExtension('EXT_color_buffer_float')
 
   const g = {
     aScreen: gl.getAttribLocation(glassProgram, 'aScreen'),
@@ -360,6 +480,27 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
     uHasSwatch: gl.getUniformLocation(glassProgram, 'uHasSwatch'),
     uBboxMin: gl.getUniformLocation(glassProgram, 'uBboxMin'),
     uBboxSize: gl.getUniformLocation(glassProgram, 'uBboxSize'),
+    uGlass: gl.getUniformLocation(glassProgram, 'uGlass'),
+    uLight: gl.getUniformLocation(glassProgram, 'uLight'),
+    uRelief: gl.getUniformLocation(glassProgram, 'uRelief'),
+    uStep: gl.getUniformLocation(glassProgram, 'uStep'),
+    uGloss: gl.getUniformLocation(glassProgram, 'uGloss'),
+    uHueDrift: gl.getUniformLocation(glassProgram, 'uHueDrift'),
+    uThickness: gl.getUniformLocation(glassProgram, 'uThickness'),
+    uSwatchTileMm: gl.getUniformLocation(glassProgram, 'uSwatchTileMm'),
+  }
+  const sr = {
+    aPos: gl.getAttribLocation(surroundProgram, 'aPos'),
+    uWash: gl.getUniformLocation(surroundProgram, 'uWash'),
+    uCentre: gl.getUniformLocation(surroundProgram, 'uCentre'),
+    uSpread: gl.getUniformLocation(surroundProgram, 'uSpread'),
+    uStrength: gl.getUniformLocation(surroundProgram, 'uStrength'),
+  }
+  const cp = {
+    aPos: gl.getAttribLocation(compositeProgram, 'aPos'),
+    uScene: gl.getUniformLocation(compositeProgram, 'uScene'),
+    uTexel: gl.getUniformLocation(compositeProgram, 'uTexel'),
+    uBloom: gl.getUniformLocation(compositeProgram, 'uBloom'),
   }
   const c = {
     aScreen: gl.getAttribLocation(cameProgram, 'aScreen'),
@@ -381,7 +522,59 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
   const worldBuffer = gl.createBuffer()
   const cameBuffer = gl.createBuffer()
   const jointBuffer = gl.createBuffer()
+  const quadBuffer = gl.createBuffer()
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
   const swatches = new Map<string, CachedSwatch>()
+
+  // Offscreen linear-HDR scene target, sized to the backing store (recreated on resize). The stencil
+  // attachment is what lets the even-odd glass fills work off-screen.
+  let fbo: WebGLFramebuffer | null = null
+  let sceneTex: WebGLTexture | null = null
+  let depthStencil: WebGLRenderbuffer | null = null
+  let fboW = 0
+  let fboH = 0
+
+  function ensureFbo(w: number, h: number): boolean {
+    if (fbo && w === fboW && h === fboH) return true
+    if (!fbo) fbo = gl.createFramebuffer()
+    if (!sceneTex) sceneTex = gl.createTexture()
+    if (!depthStencil) depthStencil = gl.createRenderbuffer()
+    if (!fbo || !sceneTex || !depthStencil) return false
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex)
+    if (floatColor) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.bindRenderbuffer(gl.RENDERBUFFER, depthStencil)
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, w, h)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0)
+    gl.framebufferRenderbuffer(
+      gl.FRAMEBUFFER,
+      gl.DEPTH_STENCIL_ATTACHMENT,
+      gl.RENDERBUFFER,
+      depthStencil,
+    )
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    fboW = w
+    fboH = h
+    return ok
+  }
+
+  /** Draw a full-screen triangle for one of the screen-space passes. */
+  function fullScreen(aPos: number): void {
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+    gl.enableVertexAttribArray(aPos)
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+  }
 
   function swatchTexture(key: string, source: TexImageSource): WebGLTexture | null {
     const cached = swatches.get(key)
@@ -405,16 +598,43 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
       const backingH = Math.max(1, Math.round(sizeCss.height * dpr))
       if (canvas.width !== backingW) canvas.width = backingW
       if (canvas.height !== backingH) canvas.height = backingH
+      // --- Pass 1: the scene into a linear-HDR target ---------------------
+      const haveFbo = ensureFbo(backingW, backingH)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, haveFbo ? fbo : null)
       gl.viewport(0, 0, backingW, backingH)
+      // Release the scene texture from unit 0 before drawing *into* it. The composite pass left it
+      // bound, and the glass shader carries a sampler — so the driver sees a framebuffer/texture
+      // feedback loop and silently drops every glass draw, leaving only the came visible.
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, null)
 
-      // The surround: a dim wash of the backlight colour, so lit glass reads as glowing in a room.
       const room = daylight(scene.backlight.warmth)
-      const dim = 0.08 * scene.backlight.intensity
-      gl.clearColor(room.r * dim, room.g * dim, room.b * dim, 1)
+      gl.clearColor(0, 0, 0, 1)
       gl.clearStencil(0)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.BLEND)
+
+      // The graded surround, centred on the panel: a luminous field rather than a flat void, so the
+      // panel reads as glass in a lit room instead of floating on black (F-064 thrust D).
+      const panel = unionBBox(scene.pieces)
+      if (panel) {
+        const min = worldToScreen(viewport, panel.min)
+        const max = worldToScreen(viewport, panel.max)
+        const cx = (min.x + max.x) / 2 / Math.max(sizeCss.width, 1)
+        const cy = (min.y + max.y) / 2 / Math.max(sizeCss.height, 1)
+        const spanX = Math.abs(max.x - min.x) / Math.max(sizeCss.width, 1)
+        const spanY = Math.abs(max.y - min.y) / Math.max(sizeCss.height, 1)
+        gl.useProgram(surroundProgram)
+        gl.uniform3f(sr.uWash, room.r, room.g, room.b)
+        // vUv is y-up; the screen centre is y-down.
+        gl.uniform2f(sr.uCentre, cx, 1 - cy)
+        gl.uniform1f(sr.uSpread, Math.max(spanX, spanY) * 0.9 + 0.25)
+        // Peak linear ~0.018, which lands near 0.2 in display after the composite's tone map. The
+        // surround has to stay a suggestion of a lit room; brighter than this and it greys the stage.
+        gl.uniform1f(sr.uStrength, 0.018 * scene.backlight.intensity)
+        fullScreen(sr.aPos)
+      }
 
       // --- Glass fills (stencil even-odd) ---------------------------------
       gl.useProgram(glassProgram)
@@ -451,7 +671,18 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
         const t = transmission(piece.transparency)
         const lit = litColor(glass, t, scene.backlight)
         const tex = textureParams(piece.texture)
+        const surf = surfaceParams(piece.texture, piece.transparency)
         const tt = piece.textureTransform
+        // The surface material (F-064 thrust A). Relief and the normal step are in world mm, so the
+        // texture keeps its physical size and the per-piece transform composes with it.
+        gl.uniform3f(g.uGlass, glass.r, glass.g, glass.b)
+        gl.uniform3f(g.uLight, room.r, room.g, room.b)
+        gl.uniform1f(g.uRelief, surf.reliefMm)
+        gl.uniform1f(g.uStep, surf.normalStepMm)
+        gl.uniform1f(g.uGloss, surf.gloss)
+        gl.uniform1f(g.uHueDrift, surf.hueDrift)
+        gl.uniform1f(g.uThickness, piece.thicknessMm)
+        gl.uniform1f(g.uSwatchTileMm, SWATCH_TILE_MM)
         gl.uniform3f(g.uColor, lit.r, lit.g, lit.b)
         gl.uniform1i(g.uTexKind, tex.kind)
         gl.uniform1f(g.uFreq, tex.frequencyPerMm)
@@ -535,6 +766,19 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
         drawJointQuad(gl, jointBuffer, j.aScreen, j.aLocal, centre, radiusPx)
       }
       gl.disable(gl.BLEND)
+
+      // --- Pass 2: bloom + tone map to the visible canvas ------------------
+      if (haveFbo) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.viewport(0, 0, backingW, backingH)
+        gl.useProgram(compositeProgram)
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, sceneTex)
+        gl.uniform1i(cp.uScene, 0)
+        gl.uniform2f(cp.uTexel, 1 / backingW, 1 / backingH)
+        gl.uniform1f(cp.uBloom, 0.85)
+        fullScreen(cp.aPos)
+      }
     },
     dispose() {
       for (const { texture } of swatches.values()) gl.deleteTexture(texture)
@@ -543,9 +787,15 @@ export function createGlassRenderer(canvas: HTMLCanvasElement): GlassRenderer | 
       gl.deleteBuffer(worldBuffer)
       gl.deleteBuffer(cameBuffer)
       gl.deleteBuffer(jointBuffer)
+      gl.deleteBuffer(quadBuffer)
+      if (fbo) gl.deleteFramebuffer(fbo)
+      if (sceneTex) gl.deleteTexture(sceneTex)
+      if (depthStencil) gl.deleteRenderbuffer(depthStencil)
       gl.deleteProgram(glassProgram)
       gl.deleteProgram(cameProgram)
       gl.deleteProgram(jointProgram)
+      gl.deleteProgram(surroundProgram)
+      gl.deleteProgram(compositeProgram)
     },
   }
 }
@@ -556,6 +806,28 @@ const SOLDER_RGB: Record<SolderFinish, { r: number; g: number; b: number }> = {
   silver: { r: 0.34, g: 0.35, b: 0.37 },
   copper: { r: 0.32, g: 0.19, b: 0.11 },
   black: { r: 0.06, g: 0.06, b: 0.07 },
+}
+
+/**
+ * The physical size a glass swatch photo tiles at, in mm — a photographed sheet is a real object, so
+ * it repeats in world space rather than being stretched to each piece (F-053 follow-up).
+ */
+const SWATCH_TILE_MM = 240
+
+/** The union of every piece's bbox, for centring the graded surround. `null` for an empty panel. */
+function unionBBox(pieces: readonly GlassPieceInput[]): BBox | null {
+  if (pieces.length === 0) return null
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of pieces) {
+    minX = Math.min(minX, p.bbox.min.x)
+    minY = Math.min(minY, p.bbox.min.y)
+    maxX = Math.max(maxX, p.bbox.max.x)
+    maxY = Math.max(maxY, p.bbox.max.y)
+  }
+  return { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } }
 }
 
 /** Lead came: near-black, faintly cool. */

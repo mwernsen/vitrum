@@ -216,6 +216,172 @@ function gnoise(x: number, y: number): number {
   return fbm(x + wx * 1.6, y + wy * 1.6)
 }
 
+/* -------------------------------------------------------------------------- */
+/* Surface material model (F-064 thrust A)                                     */
+/* -------------------------------------------------------------------------- */
+
+/** A unit surface normal in texture space; `z` faces the viewer. */
+export interface Vec3 {
+  readonly x: number
+  readonly y: number
+  readonly z: number
+}
+
+/**
+ * The thickness the transmission model is calibrated at. A piece of this thickness, seen through a
+ * flat part of its surface, transmits exactly `litColor` — so the F-053 reference stays the nominal
+ * case and thickness only ever deepens or lightens *relative* to it.
+ */
+export const REFERENCE_THICKNESS_MM = 3
+
+/** The frequency of the smooth tag's long surface rolls, and of the hue drift, per mm. */
+const SMOOTH_HEIGHT_FREQ = 0.04
+const HUE_DRIFT_FREQ = 0.035
+
+/**
+ * How a glass's surface behaves as a *material* rather than as a pattern (F-064 thrust A): how deep
+ * its relief actually is, how glossy its front face is, and how far its colour drifts across a
+ * sheet. This is what turns "brightness times noise" into a lit surface.
+ */
+export interface SurfaceParams {
+  /** Peak-to-trough relief of the surface in mm — how deep the texture physically is. */
+  readonly reliefMm: number
+  /** Front-surface gloss, 0..1, driving the Fresnel sheen. */
+  readonly gloss: number
+  /** How far the hue drifts across the sheet, 0..1. Streaky glass drifts most. */
+  readonly hueDrift: number
+  /** The mm step for the finite-difference normal, scaled to the tag's feature size. */
+  readonly normalStepMm: number
+}
+
+const SURFACE: Record<TextureTag, SurfaceParams> = {
+  // Antique glass is never optically flat: a faint long roll, and the glossiest front face.
+  smooth: { reliefMm: 0.06, gloss: 1, hueDrift: 0.06, normalStepMm: 4 },
+  hammered: { reliefMm: 0.9, gloss: 0.9, hueDrift: 0.12, normalStepMm: 2.2 },
+  seedy: { reliefMm: 0.45, gloss: 0.85, hueDrift: 0.1, normalStepMm: 0.9 },
+  streaky: { reliefMm: 0.32, gloss: 0.8, hueDrift: 0.5, normalStepMm: 3.4 },
+  ripple: { reliefMm: 0.7, gloss: 0.95, hueDrift: 0.12, normalStepMm: 2.4 },
+  granite: { reliefMm: 0.24, gloss: 0.55, hueDrift: 0.2, normalStepMm: 0.6 },
+}
+
+/** Denser glass scatters rather than reflects, so it reads less glossy. */
+const GLOSS_BY_TRANSPARENCY: Record<TransparencyClass, number> = {
+  transparent: 1,
+  translucent: 0.85,
+  opalescent: 0.6,
+  opaque: 0.4,
+}
+
+/**
+ * The surface material for a glass. Gloss comes from the texture tag *and* the transparency class —
+ * derived, never authored, so no `Glass` field is needed (F-064 open question 2).
+ */
+export function surfaceParams(texture: TextureTag, transparency: TransparencyClass): SurfaceParams {
+  const base = SURFACE[texture]
+  return { ...base, gloss: base.gloss * GLOSS_BY_TRANSPARENCY[transparency] }
+}
+
+/**
+ * The surface height at a point in texture space (world mm), normalised 0..1. Every texture tag is a
+ * shape of *surface*, not a shape of brightness — that reframing is what lets the same field drive
+ * relief lighting, the refractive offset and the optical path length. Mirrored verbatim in both
+ * fragment shaders.
+ */
+export function heightField(texture: TextureTag, x: number, y: number): number {
+  const { kind, frequencyPerMm, anisotropy } = textureParams(texture)
+  const freq = frequencyPerMm > 0 ? frequencyPerMm : SMOOTH_HEIGHT_FREQ
+  const fx = x * freq
+  const fy = y * freq
+  switch (kind) {
+    case TEXTURE_KIND.hammered: {
+      // Dimples: ridged noise gives rounded hollows rather than smooth hills.
+      return 1 - Math.abs(2 * gnoise(fx, fy) - 1)
+    }
+    case TEXTURE_KIND.seedy: {
+      // Bubbles sit proud of the surface in sparse round patches.
+      const t = clamp01((gnoise(fx, fy) - 0.72) / 0.2)
+      return t * t * (3 - 2 * t)
+    }
+    case TEXTURE_KIND.streaky:
+      return gnoise(fx / anisotropy, fy)
+    case TEXTURE_KIND.ripple:
+      return (
+        0.5 + 0.5 * Math.sin((y * freq * 2 * Math.PI) / anisotropy) * (0.6 + 0.4 * gnoise(fx, fy))
+      )
+    case TEXTURE_KIND.granite:
+      return gnoise(fx, fy) * 0.6 + gnoise(fx * 2.7, fy * 2.7) * 0.4
+    default:
+      // smooth: a faint long roll, so even "flat" glass is not a dead plane.
+      return gnoise(fx, fy)
+  }
+}
+
+/**
+ * The unit surface normal at a point, by forward differences on `heightField`. Forward (not central)
+ * differences keep this to three height evaluations per fragment, which matters because the height
+ * field is multi-octave noise (FR-6).
+ */
+export function surfaceNormal(
+  texture: TextureTag,
+  x: number,
+  y: number,
+  reliefMm: number,
+  stepMm: number,
+): Vec3 {
+  const step = Math.max(stepMm, 1e-4)
+  const h0 = heightField(texture, x, y)
+  const dx = ((heightField(texture, x + step, y) - h0) * reliefMm) / step
+  const dy = ((heightField(texture, x, y + step) - h0) * reliefMm) / step
+  const len = Math.sqrt(dx * dx + dy * dy + 1)
+  return { x: -dx / len, y: -dy / len, z: 1 / len }
+}
+
+/**
+ * How far light travels through the glass, relative to the reference thickness. A tilted surface
+ * lengthens the path, which is precisely why relief shows up as varying colour *depth* rather than
+ * as varying brightness. Clamped so a near-vertical slope cannot blow the path up without bound.
+ */
+export function pathRatio(thicknessMm: number, normalZ: number): number {
+  const thickness = Math.max(thicknessMm, 0.1) / REFERENCE_THICKNESS_MM
+  return thickness / Math.max(normalZ, 0.25)
+}
+
+/**
+ * The Beer–Lambert deepening factor for a given path ratio, applied *relative* to the reference
+ * case: at `ratio === 1` every channel is exactly 1, so `litColor` is reproduced untouched. Longer
+ * paths push each channel toward its own absorption, which deepens saturated glass much faster than
+ * pale glass — the reason thick ruby reads almost black at a steep slope while thick opal barely
+ * changes.
+ */
+export function pathDepthFactor(glass: Rgb, ratio: number): Rgb {
+  const exponent = ratio - 1
+  const channel = (c: number): number => Math.pow(Math.max(c, 0.004), exponent)
+  return { r: channel(glass.r), g: channel(glass.g), b: channel(glass.b) }
+}
+
+/**
+ * Schlick's Fresnel reflectance for the glass's front face, scaled by gloss. Head-on the surface
+ * barely reflects (≈ 4%); where relief tilts it away, reflectance climbs steeply — which is what
+ * puts bright glints along the edges of hammered dimples and ripple crests, and the single strongest
+ * cue that a surface is glass rather than paper.
+ */
+export function fresnelSheen(normalZ: number, gloss: number): number {
+  const f0 = 0.04
+  const grazing = Math.pow(1 - clamp01(normalZ), 5)
+  return (f0 + (1 - f0) * grazing) * clamp01(gloss)
+}
+
+/**
+ * The per-channel hue drift across a sheet: real streaky and cathedral glass streaks *different
+ * colours* together, where the old model multiplied one hue by grey noise. A single low-frequency
+ * field pushes warm and cool in opposite directions, so a piece drifts between two tints of its own
+ * colour rather than just getting lighter and darker.
+ */
+export function hueDriftMultiplier(amount: number, x: number, y: number): Rgb {
+  const d = gnoise(x * HUE_DRIFT_FREQ, y * HUE_DRIFT_FREQ) - 0.5
+  return { r: 1 + d * amount, g: 1 + d * amount * 0.15, b: 1 - d * amount }
+}
+
 /**
  * The brightness multiplier a glass's surface texture applies at a point in texture space
  * (world mm). This is the CPU mirror of the F-053 fragment shader's texture branch — same noise,

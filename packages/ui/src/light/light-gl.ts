@@ -1,5 +1,6 @@
 import {
   hexToRgb,
+  surfaceParams,
   textureParams,
   transmission,
   worldToScreen,
@@ -81,6 +82,14 @@ uniform float uAniso;
 // 0.5 = came/solder, 0 = empty air (the cleared void). Without this the scatter pass cannot tell
 // the panel from the air around it, and its haze fills in the lead lattice.
 uniform float uMask;
+// The surface material (F-064 thrust A), shared with the render pass so both views agree.
+uniform vec3 uGlass;
+uniform vec3 uSunColor;
+uniform float uRelief;
+uniform float uStep;
+uniform float uGloss;
+uniform float uHueDrift;
+uniform float uThickness;
 out vec4 frag;
 
 float hash(vec2 p) {
@@ -115,6 +124,17 @@ vec2 warp(vec2 p) {
 }
 float gnoise(vec2 p) { return fbm(warp(p)); }
 
+// The surface height field — the mirror of @vitrum/core's heightField and the render pass's heightAt.
+float heightAt(vec2 q, float freq) {
+  vec2 fq = q * freq;
+  if (uTexKind == 1) { return 1.0 - abs(2.0 * gnoise(fq) - 1.0); }
+  else if (uTexKind == 2) { return smoothstep(0.72, 0.92, gnoise(fq)); }
+  else if (uTexKind == 3) { return gnoise(vec2(fq.x / uAniso, fq.y)); }
+  else if (uTexKind == 4) { return 0.5 + 0.5 * sin(q.y * freq * 6.2831853 / uAniso) * (0.6 + 0.4 * gnoise(fq)); }
+  else if (uTexKind == 5) { return gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4; }
+  return gnoise(fq);
+}
+
 // sRGB → linear: the CPU passes the lit base in sRGB-ish space; decode so the emission buffer and
 // the scatter accumulation are in linear light (gamma-correct compositing).
 vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
@@ -127,7 +147,30 @@ void main() {
   else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * gnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
   else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * gnoise(fq)); }
   else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4) - 1.0); }
-  frag = vec4(toLinear(uColor) * m, uMask);
+
+  vec3 col = toLinear(uColor) * m;
+
+  // Relief, optical depth, hue drift and sheen — the same material terms as the render pass, so a
+  // panel does not change substance when the view switches. Skipped when textures are toggled off.
+  if (uAmp > 0.0 || uRelief > 0.0) {
+    float hfreq = uFreq > 0.0 ? uFreq : 0.04;
+    float st = max(uStep, 0.0001);
+    float h0 = heightAt(vWorld, hfreq);
+    float hx = heightAt(vWorld + vec2(st, 0.0), hfreq);
+    float hy = heightAt(vWorld + vec2(0.0, st), hfreq);
+    vec3 n = normalize(vec3(-(hx - h0) * uRelief / st, -(hy - h0) * uRelief / st, 1.0));
+
+    float ratio = (max(uThickness, 0.1) / 3.0) / max(n.z, 0.25);
+    col *= pow(max(toLinear(uGlass), vec3(0.004)), vec3(ratio - 1.0));
+
+    float d = gnoise(vWorld * 0.035) - 0.5;
+    col *= vec3(1.0 + d * uHueDrift, 1.0 + d * uHueDrift * 0.15, 1.0 - d * uHueDrift);
+
+    float fres = 0.04 + 0.96 * pow(1.0 - clamp(n.z, 0.0, 1.0), 5.0);
+    col += toLinear(uSunColor) * fres * uGloss * 0.18;
+  }
+
+  frag = vec4(col, uMask);
 }`
 
 // Full-screen light-scattering + composite pass.
@@ -252,6 +295,13 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
     uAmp: gl.getUniformLocation(emitProgram, 'uAmp'),
     uAniso: gl.getUniformLocation(emitProgram, 'uAniso'),
     uMask: gl.getUniformLocation(emitProgram, 'uMask'),
+    uGlass: gl.getUniformLocation(emitProgram, 'uGlass'),
+    uSunColor: gl.getUniformLocation(emitProgram, 'uSunColor'),
+    uRelief: gl.getUniformLocation(emitProgram, 'uRelief'),
+    uStep: gl.getUniformLocation(emitProgram, 'uStep'),
+    uGloss: gl.getUniformLocation(emitProgram, 'uGloss'),
+    uHueDrift: gl.getUniformLocation(emitProgram, 'uHueDrift'),
+    uThickness: gl.getUniformLocation(emitProgram, 'uThickness'),
   }
   const r = {
     aPos: gl.getAttribLocation(rayProgram, 'aPos'),
@@ -359,10 +409,20 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
         gl.stencilFunc(gl.NOTEQUAL, 0, 0xff)
         gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
 
-        const lit = sunLit(hexToRgb(piece.color), transmission(piece.transparency), sun)
+        const glassRgb = hexToRgb(piece.color)
+        const lit = sunLit(glassRgb, transmission(piece.transparency), sun)
         const tex = scene.showTextures
           ? textureParams(piece.texture)
           : { kind: 0, frequencyPerMm: 0, amplitude: 0, anisotropy: 1 }
+        const surf = surfaceParams(piece.texture, piece.transparency)
+        gl.uniform3f(e.uGlass, glassRgb.r, glassRgb.g, glassRgb.b)
+        gl.uniform3f(e.uSunColor, sun.color.r, sun.color.g, sun.color.b)
+        // The textures toggle turns the whole material off, relief included.
+        gl.uniform1f(e.uRelief, scene.showTextures ? surf.reliefMm : 0)
+        gl.uniform1f(e.uStep, surf.normalStepMm)
+        gl.uniform1f(e.uGloss, scene.showTextures ? surf.gloss : 0)
+        gl.uniform1f(e.uHueDrift, scene.showTextures ? surf.hueDrift : 0)
+        gl.uniform1f(e.uThickness, piece.thicknessMm)
         gl.uniform3f(e.uColor, lit.r, lit.g, lit.b)
         gl.uniform1i(e.uTexKind, tex.kind)
         gl.uniform1f(e.uFreq, tex.frequencyPerMm)
@@ -382,6 +442,11 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       gl.uniform3f(e.uColor, 0, 0, 0)
       gl.uniform1i(e.uTexKind, 0)
       gl.uniform1f(e.uAmp, 0)
+      // Zero the material too, or the lattice inherits the last piece's relief and picks up a sheen —
+      // it has to stay a pure black occluder.
+      gl.uniform1f(e.uRelief, 0)
+      gl.uniform1f(e.uGloss, 0)
+      gl.uniform1f(e.uHueDrift, 0)
       // 0.5 marks the lattice: black in the emission buffer so it occludes the rays, and flagged so
       // the scatter pass keeps it crisp instead of hazing over it.
       gl.uniform1f(e.uMask, 0.5)
