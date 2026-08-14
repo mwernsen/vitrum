@@ -15,6 +15,7 @@
     type GlassScene,
     type TextureTransform,
   } from './glass-gl'
+  import { cameJoints } from './joints'
   import { SwatchCache } from './swatchCache'
 
   interface Props {
@@ -95,6 +96,7 @@
     return {
       pieces: pieceInputs,
       cames,
+      joints: cameJoints(cames),
       backlight,
       solderFinish: technique?.solderFinish ?? 'silver',
     }

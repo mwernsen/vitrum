@@ -99,21 +99,23 @@ intentionally lighter; they must be expanded and re-approved before implementati
 
 ### Phase 5 — Power features
 
-| ID                                                 | Feature                                           | Depends on   |
-| -------------------------------------------------- | ------------------------------------------------- | ------------ |
-| [F-050](docs/features/F-050-svg-import.md)         | SVG import                                        | F-011, F-020 |
-| [F-051](docs/features/F-051-reference-image.md)    | Reference image underlay & perspective correction | F-003        |
-| [F-052](docs/features/F-052-symmetry.md)           | Live symmetry                                     | F-011, F-013 |
-| [F-053](docs/features/F-053-realistic-render.md)   | Realistic glass rendering                         | F-023        |
-| [F-054](docs/features/F-054-light-simulation.md)   | Sunlight simulation                               | F-053        |
-| [F-055](docs/features/F-055-versioning-sharing.md) | Versioning & sharing                              | F-002        |
-| [F-056](docs/features/F-056-cost-estimation.md)    | Cost estimation & quoting                         | F-042        |
-| [F-057](docs/features/F-057-nesting.md)            | Sheet nesting & yield optimization                | F-042        |
-| [F-058](docs/features/F-058-panel-library.md)      | Panel library & launch screen                     | F-002, F-055 |
-| [F-059](docs/features/F-059-autotrace.md)          | Raster autotrace — scanned cartoons to lead lines | F-050, F-051 |
-| [F-060](docs/features/F-060-pattern-templates.md)  | Pattern templates (parametric generators)         | F-058        |
-| [F-061](docs/features/F-061-panel-lifecycle.md)    | Panel lifecycle & workshop status                 | F-058        |
-| [F-063](docs/features/F-063-glass-library-home.md) | Glass library home (launch-screen destination)    | F-022, F-058 |
+| ID                                                    | Feature                                           | Depends on          |
+| ----------------------------------------------------- | ------------------------------------------------- | ------------------- |
+| [F-050](docs/features/F-050-svg-import.md)            | SVG import                                        | F-011, F-020        |
+| [F-051](docs/features/F-051-reference-image.md)       | Reference image underlay & perspective correction | F-003               |
+| [F-052](docs/features/F-052-symmetry.md)              | Live symmetry                                     | F-011, F-013        |
+| [F-053](docs/features/F-053-realistic-render.md)      | Realistic glass rendering                         | F-023               |
+| [F-054](docs/features/F-054-light-simulation.md)      | Sunlight simulation                               | F-053               |
+| [F-055](docs/features/F-055-versioning-sharing.md)    | Versioning & sharing                              | F-002               |
+| [F-056](docs/features/F-056-cost-estimation.md)       | Cost estimation & quoting                         | F-042               |
+| [F-057](docs/features/F-057-nesting.md)               | Sheet nesting & yield optimization                | F-042               |
+| [F-058](docs/features/F-058-panel-library.md)         | Panel library & launch screen                     | F-002, F-055        |
+| [F-059](docs/features/F-059-autotrace.md)             | Raster autotrace — scanned cartoons to lead lines | F-050, F-051        |
+| [F-060](docs/features/F-060-pattern-templates.md)     | Pattern templates (parametric generators)         | F-058               |
+| [F-061](docs/features/F-061-panel-lifecycle.md)       | Panel lifecycle & workshop status                 | F-058               |
+| [F-063](docs/features/F-063-glass-library-home.md)    | Glass library home (launch-screen destination)    | F-022, F-058        |
+| [F-064](docs/features/F-064-photorealistic-render.md) | Photorealistic render & light                     | F-053, F-054        |
+| [F-065](docs/features/F-065-constraints.md)           | Parametric constraints                            | F-010, F-012, F-013 |
 
 ## Backlog — ids reserved, not yet scoped
 
@@ -125,6 +127,7 @@ a spec from [TEMPLATE.md](docs/features/TEMPLATE.md) first, then a ROADMAP row a
 | ID    | Idea                                                                                          | Referenced by |
 | ----- | --------------------------------------------------------------------------------------------- | ------------- |
 | F-062 | Manufacturer glass catalogs (Bullseye, Wissmach, Oceanside, …); needs data/licensing research | F-022         |
+| F-066 | Dimension annotations & parameters: printable dimensions, named variables, parametric resize  | F-065         |
 
 **Allocating an id**: add the row here the moment a spec first cites the number, and
 never reuse one. F-058 was briefly cited by F-022 as "manufacturer-catalogs" before it

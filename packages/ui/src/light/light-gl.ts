@@ -10,6 +10,7 @@ import {
 import { clamp01, type BBox, type Vec2 } from '@vitrum/geometry'
 
 import type { CameRibbonInput, GlassPieceInput } from '../render/glass-gl'
+import type { CameJoint } from '../render/joints'
 
 /**
  * The WebGL2 sunlight renderer (F-054) — the dark-stage volumetric look that is Diafane's showpiece.
@@ -34,6 +35,8 @@ import type { CameRibbonInput, GlassPieceInput } from '../render/glass-gl'
 export interface LightScene {
   readonly pieces: readonly GlassPieceInput[]
   readonly cames: readonly CameRibbonInput[]
+  /** Soldered intersections — stamped as occluders too, so the lattice has no gaps at its nodes. */
+  readonly joints: readonly CameJoint[]
   readonly sun: ResolvedSun
   /** Sun position in normalised canvas coords (x: 0 left…1 right, y: 0 top…1 bottom). */
   readonly sunScreen: { readonly x: number; readonly y: number }
@@ -74,6 +77,10 @@ uniform int uTexKind;
 uniform float uFreq;
 uniform float uAmp;
 uniform float uAniso;
+// Coverage marker written to alpha, so the scatter pass knows what it is shading: 1 = glass,
+// 0.5 = came/solder, 0 = empty air (the cleared void). Without this the scatter pass cannot tell
+// the panel from the air around it, and its haze fills in the lead lattice.
+uniform float uMask;
 out vec4 frag;
 
 float hash(vec2 p) {
@@ -92,6 +99,22 @@ float vnoise(vec2 p) {
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// The same layered, domain-warped grain field as the render pass (F-064) — a single octave shows its
+// integer lattice as soft squares at these amplitudes. Kept identical in both shaders and in
+// @vitrum/core's textureModulation so the two views and the swatch preview agree.
+float fbm(vec2 p) {
+  float n = vnoise(p) * 0.5;
+  n += vnoise(p * 2.03 + vec2(5.2, 1.3)) * 0.28;
+  n += vnoise(p * 4.11 + vec2(9.7, 7.1)) * 0.14;
+  return n / 0.92;
+}
+vec2 warp(vec2 p) {
+  float wx = vnoise(p * 0.5 + vec2(1.7, 8.3)) - 0.5;
+  float wy = vnoise(p * 0.5 + vec2(4.9, 2.1)) - 0.5;
+  return p + vec2(wx, wy) * 1.6;
+}
+float gnoise(vec2 p) { return fbm(warp(p)); }
+
 // sRGB → linear: the CPU passes the lit base in sRGB-ish space; decode so the emission buffer and
 // the scatter accumulation are in linear light (gamma-correct compositing).
 vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
@@ -99,12 +122,12 @@ vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 void main() {
   vec2 fq = vWorld * uFreq;
   float m = 1.0;
-  if (uTexKind == 1) { m = 1.0 + uAmp * (2.0 * vnoise(fq) - 1.0); }
-  else if (uTexKind == 2) { m = 1.0 - uAmp * smoothstep(0.72, 0.9, vnoise(fq)); }
-  else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * vnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
-  else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * vnoise(fq)); }
-  else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (vnoise(fq) * 0.6 + vnoise(fq * 2.7) * 0.4) - 1.0); }
-  frag = vec4(toLinear(uColor) * m, 1.0);
+  if (uTexKind == 1) { m = 1.0 + uAmp * (2.0 * gnoise(fq) - 1.0); }
+  else if (uTexKind == 2) { m = 1.0 - uAmp * smoothstep(0.72, 0.9, gnoise(fq)); }
+  else if (uTexKind == 3) { m = 1.0 + uAmp * (2.0 * gnoise(vec2(fq.x / uAniso, fq.y)) - 1.0); }
+  else if (uTexKind == 4) { m = 1.0 + uAmp * sin(vWorld.y * uFreq * 6.2831853 / uAniso) * (0.6 + 0.4 * gnoise(fq)); }
+  else if (uTexKind == 5) { m = 1.0 + uAmp * (2.0 * (gnoise(fq) * 0.6 + gnoise(fq * 2.7) * 0.4) - 1.0); }
+  frag = vec4(toLinear(uColor) * m, uMask);
 }`
 
 // Full-screen light-scattering + composite pass.
@@ -140,7 +163,17 @@ vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 const int SAMPLES = 64;
 void main() {
   // The emission buffer is already in linear light (see the emission pass).
-  vec3 base = texture(uEmission, vUv).rgb;
+  vec4 em = texture(uEmission, vUv);
+  vec3 base = em.rgb;
+
+  // What are we standing on? The emission pass wrote a coverage marker into alpha.
+  // Scattered light belongs in the *air*; over the panel it must not wash out the subject, and
+  // over the lead it must stay out entirely or the lattice — the thing that makes a panel read as
+  // stained glass — dissolves into haze.
+  float onGlass = smoothstep(0.75, 0.95, em.a);
+  float covered = smoothstep(0.25, 0.45, em.a);
+  float onCame = (1.0 - onGlass) * covered;
+  float inAir = 1.0 - covered;
 
   // March toward the sun, accumulating emission with distance decay → volumetric rays. Jitter the
   // start per-fragment so the step aliasing reads as fine noise, not concentric rings.
@@ -157,12 +190,26 @@ void main() {
   }
   scatter /= float(SAMPLES);
 
-  // Solar halo: a bright core plus a broad soft bloom, so it reads as glow rather than a hard ring.
+  // Solar halo: a bright core plus a soft bloom. The bloom term is kept narrow — a wide one reads
+  // as a panel-sized smudge rather than a sun.
   float d = distance(vUv, uSun);
   float tight = mix(26.0, 90.0, uConcentration);
-  float halo = exp(-d * d * tight) + 0.5 * exp(-d * d * tight * 0.14);
+  float halo = exp(-d * d * tight) + 0.28 * exp(-d * d * tight * 0.35);
 
-  vec3 col = base + scatter * uRayStrength * 3.4 + toLinear(uSunColor) * halo * uHaloBoost;
+  // Rays are light in the air: full strength in the void, a fraction over the glass, almost none
+  // over the lead.
+  float rayWeight = inAir + onGlass * 0.18 + onCame * 0.04;
+
+  // The halo may still bleed through the *lighter* pieces (the F-054 look), so gate its glass
+  // contribution on how luminous the glass already is — bright, transparent glass glows, dark and
+  // opaque glass stays dense.
+  float lum = dot(base, vec3(0.2126, 0.7152, 0.0722));
+  float bleed = smoothstep(0.15, 0.75, lum);
+  float haloWeight = inAir + onGlass * mix(0.10, 0.65, bleed) + onCame * 0.02;
+
+  vec3 col = base
+    + scatter * uRayStrength * 2.6 * rayWeight
+    + toLinear(uSunColor) * halo * uHaloBoost * haloWeight;
 
   // Filmic-ish tone map in linear, then encode to sRGB for display (gamma-correct output).
   col = vec3(1.0) - exp(-col * 1.35);
@@ -204,6 +251,7 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
     uFreq: gl.getUniformLocation(emitProgram, 'uFreq'),
     uAmp: gl.getUniformLocation(emitProgram, 'uAmp'),
     uAniso: gl.getUniformLocation(emitProgram, 'uAniso'),
+    uMask: gl.getUniformLocation(emitProgram, 'uMask'),
   }
   const r = {
     aPos: gl.getAttribLocation(rayProgram, 'aPos'),
@@ -276,7 +324,9 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       const haveFbo = ensureFbo(backingW, backingH)
       gl.bindFramebuffer(gl.FRAMEBUFFER, haveFbo ? fbo : null)
       gl.viewport(0, 0, backingW, backingH)
-      gl.clearColor(0.0009, 0.001, 0.0014, 1) // near-black void, in linear light
+      // Near-black void, in linear light. Alpha 0 marks "empty air" for the scatter pass's coverage
+      // test — this is where god-rays are allowed to be at full strength.
+      gl.clearColor(0.0009, 0.001, 0.0014, 0)
       gl.clearStencil(0)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
       gl.disable(gl.DEPTH_TEST)
@@ -318,6 +368,7 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
         gl.uniform1f(e.uFreq, tex.frequencyPerMm)
         gl.uniform1f(e.uAmp, tex.amplitude)
         gl.uniform1f(e.uAniso, tex.anisotropy)
+        gl.uniform1f(e.uMask, 1)
         drawQuad(gl, posBuffer, worldBuffer, e.aScreen, e.aWorld, viewport, piece.bbox)
       }
       gl.disable(gl.SCISSOR_TEST)
@@ -331,6 +382,9 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
       gl.uniform3f(e.uColor, 0, 0, 0)
       gl.uniform1i(e.uTexKind, 0)
       gl.uniform1f(e.uAmp, 0)
+      // 0.5 marks the lattice: black in the emission buffer so it occludes the rays, and flagged so
+      // the scatter pass keeps it crisp instead of hazing over it.
+      gl.uniform1f(e.uMask, 0.5)
       for (const came of scene.cames) {
         const strip = ribbon(viewport, came.points, Math.max(1.2, (came.widthMm * pxPerMm) / 2))
         if (!strip) continue
@@ -342,6 +396,21 @@ export function createLightRenderer(canvas: HTMLCanvasElement): LightRenderer | 
         gl.enableVertexAttribArray(e.aWorld)
         gl.vertexAttribPointer(e.aWorld, 2, gl.FLOAT, false, 16, 0)
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, strip.count)
+      }
+
+      // Solder joints occlude too, so the lattice has no pinholes at its nodes for rays to leak
+      // through. Same black fill and lattice marker as the runs.
+      for (const joint of scene.joints) {
+        const radiusPx = Math.max(1.2, (joint.widthMm * pxPerMm) / 2) * 1.35
+        stampDisc(
+          gl,
+          posBuffer,
+          worldBuffer,
+          e.aScreen,
+          e.aWorld,
+          worldToScreen(viewport, joint.at),
+          radiusPx,
+        )
       }
 
       // --- Pass 2: scatter + composite to the visible canvas -------------
@@ -421,6 +490,34 @@ function stampRing(
   bindAttrib(gl, posBuffer, aScreen, screen, 2)
   bindAttrib(gl, worldBuffer, aWorld, world, 2)
   gl.drawArrays(gl.TRIANGLE_FAN, 0, ring.length)
+}
+
+/**
+ * Stamp a filled disc in screen space as a triangle fan — used for the solder-joint occluders, where
+ * a square quad would leave visible corners sticking out of the lattice.
+ */
+function stampDisc(
+  gl: WebGL2RenderingContext,
+  posBuffer: WebGLBuffer | null,
+  worldBuffer: WebGLBuffer | null,
+  aScreen: number,
+  aWorld: number,
+  centre: Vec2,
+  radiusPx: number,
+): void {
+  const steps = 12
+  const screen = new Float32Array((steps + 2) * 2)
+  const world = new Float32Array((steps + 2) * 2)
+  screen[0] = centre.x
+  screen[1] = centre.y
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI * 2
+    screen[(i + 1) * 2] = centre.x + Math.cos(t) * radiusPx
+    screen[(i + 1) * 2 + 1] = centre.y + Math.sin(t) * radiusPx
+  }
+  bindAttrib(gl, posBuffer, aScreen, screen, 2)
+  bindAttrib(gl, worldBuffer, aWorld, world, 2)
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, steps + 2)
 }
 
 function drawQuad(

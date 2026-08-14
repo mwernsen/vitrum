@@ -137,13 +137,23 @@ export interface TextureParams {
   readonly anisotropy: number
 }
 
+/**
+ * Tuned against Mathieu's reference photo of a real leaded panel (F-064): the blotches in rolled
+ * cathedral glass are **large** — roughly 5–15 mm across, so frequencies sit near 0.1/mm, not the
+ * fine dust an 0.5/mm grain produces — and their depth is far stronger than a subtle 0.1.
+ *
+ * `smooth` stays flat here: giving it an amplitude would be inert, because kind 0 short-circuits in
+ * both the CPU mirror and the fragment shader. Real antique glass is never optically flat, so a faint
+ * unevenness for `smooth` is scoped to F-064 thrust A, where the height-field branch is added to the
+ * CPU function and the GLSL together.
+ */
 const TEXTURE_PARAMS: Record<TextureTag, TextureParams> = {
   smooth: { kind: TEXTURE_KIND.smooth, frequencyPerMm: 0, amplitude: 0, anisotropy: 1 },
-  hammered: { kind: TEXTURE_KIND.hammered, frequencyPerMm: 0.18, amplitude: 0.16, anisotropy: 1 },
-  seedy: { kind: TEXTURE_KIND.seedy, frequencyPerMm: 0.5, amplitude: 0.12, anisotropy: 1 },
-  streaky: { kind: TEXTURE_KIND.streaky, frequencyPerMm: 0.09, amplitude: 0.2, anisotropy: 6 },
-  ripple: { kind: TEXTURE_KIND.ripple, frequencyPerMm: 0.14, amplitude: 0.14, anisotropy: 4 },
-  granite: { kind: TEXTURE_KIND.granite, frequencyPerMm: 0.9, amplitude: 0.1, anisotropy: 1 },
+  hammered: { kind: TEXTURE_KIND.hammered, frequencyPerMm: 0.11, amplitude: 0.3, anisotropy: 1 },
+  seedy: { kind: TEXTURE_KIND.seedy, frequencyPerMm: 0.32, amplitude: 0.26, anisotropy: 1 },
+  streaky: { kind: TEXTURE_KIND.streaky, frequencyPerMm: 0.07, amplitude: 0.34, anisotropy: 6 },
+  ripple: { kind: TEXTURE_KIND.ripple, frequencyPerMm: 0.1, amplitude: 0.26, anisotropy: 4 },
+  granite: { kind: TEXTURE_KIND.granite, frequencyPerMm: 0.45, amplitude: 0.2, anisotropy: 1 },
 }
 
 /** The procedural texture parameters for a texture tag. */
@@ -184,6 +194,29 @@ function vnoise(x: number, y: number): number {
 }
 
 /**
+ * Three octaves of value noise — the shader's `fbm`. A single octave shows its integer lattice as
+ * soft squares once the amplitude is strong enough to see, which is not what rolled glass looks
+ * like (F-064, from the reference photo).
+ */
+function fbm(x: number, y: number): number {
+  let n = vnoise(x, y) * 0.5
+  n += vnoise(x * 2.03 + 5.2, y * 2.03 + 1.3) * 0.28
+  n += vnoise(x * 4.11 + 9.7, y * 4.11 + 7.1) * 0.14
+  return n / 0.92
+}
+
+/**
+ * Domain warp then fBm — the shader's `gnoise`, the grain field every texture tag builds on.
+ * Displacing the sample point by a low-frequency noise vector bends the lattice into organic
+ * blotches instead of axis-aligned cells.
+ */
+function gnoise(x: number, y: number): number {
+  const wx = vnoise(x * 0.5 + 1.7, y * 0.5 + 8.3) - 0.5
+  const wy = vnoise(x * 0.5 + 4.9, y * 0.5 + 2.1) - 0.5
+  return fbm(x + wx * 1.6, y + wy * 1.6)
+}
+
+/**
  * The brightness multiplier a glass's surface texture applies at a point in texture space
  * (world mm). This is the CPU mirror of the F-053 fragment shader's texture branch — same noise,
  * same per-tag formulas — so a 2D preview of a glass (the glass editor's swatch) reads the same
@@ -195,21 +228,21 @@ export function textureModulation(texture: TextureTag, x: number, y: number): nu
   const fy = y * freq
   switch (kind) {
     case TEXTURE_KIND.hammered:
-      return 1 + amp * (2 * vnoise(fx, fy) - 1)
+      return 1 + amp * (2 * gnoise(fx, fy) - 1)
     case TEXTURE_KIND.seedy: {
-      const n = vnoise(fx, fy)
+      const n = gnoise(fx, fy)
       // Sparse dark bubbles: the shader's smoothstep(0.72, 0.9, n).
       const t = clamp01((n - 0.72) / (0.9 - 0.72))
       return 1 - amp * (t * t * (3 - 2 * t))
     }
     case TEXTURE_KIND.streaky:
-      return 1 + amp * (2 * vnoise(fx / aniso, fy) - 1)
+      return 1 + amp * (2 * gnoise(fx / aniso, fy) - 1)
     case TEXTURE_KIND.ripple: {
       const wave = Math.sin((y * freq * 2 * Math.PI) / aniso)
-      return 1 + amp * wave * (0.6 + 0.4 * vnoise(fx, fy))
+      return 1 + amp * wave * (0.6 + 0.4 * gnoise(fx, fy))
     }
     case TEXTURE_KIND.granite: {
-      const n = vnoise(fx, fy) * 0.6 + vnoise(fx * 2.7, fy * 2.7) * 0.4
+      const n = gnoise(fx, fy) * 0.6 + gnoise(fx * 2.7, fy * 2.7) * 0.4
       return 1 + amp * (2 * n - 1)
     }
     default:
