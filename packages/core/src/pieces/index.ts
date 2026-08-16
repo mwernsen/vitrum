@@ -14,6 +14,7 @@ export {
   type RenumberInput,
   type RenumberResult,
 } from './numbering'
+export { pieceOrbits } from './orbits'
 export { spanPoints } from './properties'
 export {
   DETECT_DEFAULTS,

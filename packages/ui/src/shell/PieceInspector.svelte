@@ -81,6 +81,11 @@
 
   const topIssue = $derived<Violation | null>(issues[0] ?? null)
 
+  // True when the selected piece is a live symmetry replica (F-052): its glass comes from the piece it
+  // repeats, and assigning here writes through to that source. Saying so keeps the write-through from
+  // reading as a bug when the other sectors change colour too.
+  const isReplica = $derived(single ? (assignments?.isReplica(pieceKey(single)) ?? false) : false)
+
   function textureOf(piece: Piece): PieceTextureTransform {
     return doc?.render.textureTransforms[pieceKey(piece)] ?? identityTextureTransform()
   }
@@ -130,6 +135,12 @@
 
   <section class="block">
     <span class="eyebrow">Glass</span>
+    {#if isReplica}
+      <span class="note">
+        Mirrored piece. Its glass follows the source sector, so every sector changes together. Bake
+        the symmetry to colour one sector on its own.
+      </span>
+    {/if}
     {#if quickGlass.length > 0}
       <div class="swatches" role="group" aria-label="Assign glass">
         {#each quickGlass as g (g.id)}
@@ -280,6 +291,12 @@
   }
 
   .sub {
+    font: var(--text-caption);
+    color: var(--ink-500);
+  }
+
+  /* An explanatory caption inside a block — why this piece's glass behaves the way it does (F-052). */
+  .note {
     font: var(--text-caption);
     color: var(--ink-500);
   }

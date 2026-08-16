@@ -191,6 +191,73 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
   `format:check` on `main` (pre-existing, commit 8c52ad6) so the gate could go green; no
   content change.
 
+### Glass inherits across replicas (2026-08-16, from user test [S2])
+
+Closes finding **[S2]** of [docs/testing/runs/2026-08-16-a/F-052.md](../testing/runs/2026-08-16-a/F-052.md)
+(SUMMARY issue 3): symmetry replicated linework but not colour, so a 4-fold border had to be painted
+four times. See F-023's Implementation notes for the resolution-precedence details; the symmetry side
+is recorded here.
+
+- **The missing relation is a piece orbit, derived from segment ids.** `pieceOrbits`
+  (`packages/core/src/pieces/orbits.ts`) returns `contentId(replica.ring) → contentId(source.ring)` —
+  deliberately the same shape as F-020's edit lineage, so F-023's `resolveGeneration` composes the two
+  rather than growing a second inheritance mechanism. It is **exact, with no geometric tolerance**:
+  `expandReplicas` mints replica ids as `${id}~sym${k}`, the expanded network is invariant under the
+  symmetry group, so a face maps to another face by shifting each boundary segment's sector index
+  through the group's composition table (built by matching `compose(gⱼ, gₖ)` against the ordered
+  transform list). A piece's orbit key is the smallest shifted signature; the one piece whose _own_
+  signature is that minimum is the source the rest inherit from.
+  - Why not the obvious "strip the `~symN` suffix": it misses pieces that **straddle a sector seam**,
+    which is exactly the tested Art Deco border — a quarter-border's own reflection closes into one
+    box spanning two sectors, and that box's image spans the other two. The orbit walk groups them;
+    suffix-stripping would leave the user painting the top and bottom strips separately. Covered by a
+    test.
+  - Why not geometric matching (transform each centroid and look for a piece): it needs a tolerance
+    and an area guard, and concentric pieces fixed by the group can collide. Ids are exact.
+  - A piece that is its **own** image (astride the axis) is left ungrouped — an orbit of one needs no
+    inheritance. An orbit whose signature minimum is claimed by two pieces does not inherit at all,
+    rather than guessing.
+- **Where it is wired:** `DocumentController.detect()` — the seam that already owns expansion — tags
+  the generation with `DetectionResult.symLineage` (a new **optional** field; detection itself stays
+  symmetry-agnostic and never sets it). Absent, and free, when symmetry is off. `AssignmentController`
+  reads it off the detection result it already receives as the generation token, so **no shell change
+  was needed** (`AppShell.svelte` is untouched — another agent held it for the centre work).
+- **No schema change, no migration.** Assignments still store one glass per content id; replica colour
+  is derived at resolution time and re-derives on a _cold_ detection, so a reopened symmetric file is
+  coloured with nothing extra persisted. Saved files resolve exactly as before (a direct entry on a
+  replica still outranks its source — see F-023 notes).
+- **Painting a replica writes through to the source** (the user-visible semantic choice — flagged for
+  Mathieu). `PaintController` routes every write (click, drag, bulk assign, fill-unassigned, unassign)
+  through the orbit source and clears any stale direct entry on the orbit's other replicas, so the
+  patch is still one command / one undo entry. Rationale: replicas are derived output and read-only for
+  geometry (Decision §1), so making them read-only for colour too keeps one rule; the document stays
+  minimal (one entry per orbit, matching "un-baked files store source + setup only"); and the invariant
+  "with symmetry on, an orbit is monochrome" is provable, with no invisible per-replica state to
+  diverge when the fold count or axis angle changes. To colour one sector on its own, **bake** first —
+  the same escape hatch geometry editing already uses. The alternatives considered were (a) a local
+  override on the replica and (b) refusing the paint outright; (a) leaves hidden state keyed to
+  coordinates that the next setup edit invalidates, and (b) makes drag-paint across the panel fail
+  silently.
+- **Bake keeps the colours, with no new code.** The baked replicas re-key (bake mints new segment ids,
+  and F-020 canonicalizes a ring's start span _by segment id_, so an unchanged region gets a new content
+  id), but F-023's edit lineage maps each post-bake piece to its pre-bake self and carries the colour;
+  the save-time normaliser then materialises them under their new keys. Asserted end to end in
+  `packages/ui/src/glass/symmetryInheritance.svelte.test.ts` (paint → bake → same colours → save →
+  four stored entries → undo bake → still coloured).
+- **UI.** No new surface (the Draw panel was held by another agent). The piece inspector explains the
+  rule when a replica is selected: "Its glass follows the source sector, so every sector changes
+  together. Bake the symmetry to colour one sector on its own." Tokens only, sentence case. A matching
+  hint line in the Draw dock's symmetry section is a follow-up.
+- **Tests.** Core: `pieces/orbits.test.ts` (mirror / double-mirror / radial-N / radial+mirror
+  multiplicity, straddling-seam orbits, self-image pieces, out-of-range sectors, plus fast-check
+  properties for order-independence, "only genuine rigid images are paired" via area+perimeter, and
+  orbit size ≤ group order) and `pieces/assignment.test.ts` (precedence). UI:
+  `glass/assignment.svelte.test.ts`, `tools/paint.svelte.test.ts` (write-through),
+  `glass/symmetryInheritance.svelte.test.ts` (integration incl. bake),
+  `shell/Inspector.symmetry.test.ts`. E2E: `apps/desktop/e2e/symmetry-glass.spec.ts` — mirror on, draw
+  a rectangle, one paint click, readiness reads "N of N painted", then save and reopen with the colour
+  intact.
+
 ## Follow-ups (out of scope for v1)
 
 - **Edit anywhere (deferred, agreed §1).** Editing a replica and mapping the change back
@@ -205,6 +272,30 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
 - **Bake weld tolerance.** Bake welds by exact coincidence + F-020 clustering; a
   tolerance-based weld pass at bake would tidy the ≤1 ulp gaps that non-axis-aligned
   reflections can leave between sectors before F-020 clustering absorbs them.
+
+Discovered while wiring glass inheritance (2026-08-16), all out of scope for that change:
+
+- **The save-time normaliser should skip replicas.** `normalizeAssignments` in `AppShell.svelte`
+  materialises every live piece's effective glass, so a save now also writes one redundant entry per
+  replica. Harmless (they equal the inherited value, and the next paint on that orbit clears them —
+  covered by a test), but it bloats the file and breaks the "one entry per orbit" invariant until then.
+  The fix is one line inside the loop: `if (assignments.isReplica(key)) continue`. Not applied because
+  `AppShell.svelte` was held by the concurrent symmetry-centre work.
+- **A hint line in the Draw dock's symmetry section** — "glass follows the source sector; bake to
+  colour a sector on its own" — same reason (`DrawPanel.svelte` was held). The piece inspector says it
+  today, which only helps once a piece is selected.
+- **Piece numbering (F-040) has the identical keying problem.** `NumberingController` resolves through
+  the same `resolveGeneration`, so replicas get no number and a renumber treats each sector as a
+  separate piece. Passing the generation's `symLineage` through would make an orbit share one number —
+  which is arguably what a cut list wants ("piece 7 ×4"), but it changes what F-042's BOM counts, so it
+  needs a decision rather than a patch.
+- **Per-piece texture placement (F-053)** is keyed by content id too, so a texture set on a replica is
+  a local override that the orbit does not share. Same seam (`setPieceTextureTransforms`) if it should
+  follow the source.
+- **Geometry drawn exactly on a mirror axis degenerates.** A closed shape symmetric about the axis
+  reflects onto itself, so the expanded network carries duplicate segments and detection returns _no_
+  pieces for it (found while building the orbit tests; pre-existing, unrelated to glass). Worth a
+  `duplicate-segment` DRC surface or a de-duplication pass in `expandReplicas`.
 
 _Cockpit v2 (2026-07-30):_ the symmetry controls moved from the Layers panel into the **Draw** dock section. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.

@@ -4,6 +4,7 @@ import {
   expandNetwork,
   expandReplicas,
   PieceDetector,
+  pieceOrbits,
   type CutContour,
   type DetectionResult,
   type Piece,
@@ -157,8 +158,17 @@ export class DocumentController {
    * callers memoise it against `doc` (the dev overlay and the debug palette both do). Uses
    * the incremental `PieceDetector`, so redrawing one line reuses unchanged components and
    * keeps piece ids stable across the session (FR-3/FR-5).
+   *
+   * Also tags the generation with its symmetry **orbits** (F-052): which pieces are live replicas of
+   * which, so glass assignment resolves a replica's colour from the piece it repeats instead of
+   * leaving every sector to be painted by hand. This is the seam that already owns expansion, and
+   * detection stays symmetry-agnostic. Absent (and free) when symmetry is off.
    */
-  detect = (): DetectionResult => this.#detector.update(this.outputNetwork())
+  detect = (): DetectionResult => {
+    const result = this.#detector.update(this.outputNetwork())
+    const symLineage = pieceOrbits(result.pieces, this.doc.symmetry)
+    return Object.keys(symLineage).length === 0 ? result : { ...result, symLineage }
+  }
 
   /**
    * The full output network piece detection, DRC and every export operate on (F-052): the source
