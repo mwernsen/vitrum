@@ -133,3 +133,76 @@ describe('PaintController (F-023)', () => {
     expect(paint.selectedPieces.size).toBe(0)
   })
 })
+
+describe('PaintController — live symmetry (F-052)', () => {
+  /** The same two rectangles, but the right one is a live replica of the left (the source). */
+  function mirrored(stored: Record<string, string> = {}) {
+    const s = setup()
+    const detection = detectPieces(splitSquare())
+    s.assignments.update(
+      { ...detection, symLineage: { [pieceKey(s.right)]: pieceKey(s.left) } },
+      s.pieces,
+      detection.lineage,
+      stored,
+    )
+    return s
+  }
+
+  it('routes a paint on a replica to its source piece', () => {
+    const { paint, assignments, right, left, commands, result } = mirrored()
+    paint.setMode('paint')
+    assignments.setSelectedGlass('glass-1')
+    paint.pointerDown(right.centroid, mods)
+    paint.pointerUp()
+    expect(commands).toHaveLength(1)
+    expect(result().assignments).toEqual({ [pieceKey(left)]: 'glass-1' })
+  })
+
+  it('drag-painting both sectors still writes one source entry', () => {
+    const { paint, assignments, left, right, commands, result } = mirrored()
+    paint.setMode('paint')
+    assignments.setSelectedGlass('glass-1')
+    paint.pointerDown(right.centroid, mods)
+    paint.pointerMove(left.centroid)
+    paint.pointerUp()
+    expect(commands).toHaveLength(1)
+    expect(result().assignments).toEqual({ [pieceKey(left)]: 'glass-1' })
+  })
+
+  /** The replica (right-hand) piece's content key, before a scenario is built. */
+  function replicaKey(): string {
+    return pieceKey(detectPieces(splitSquare()).pieces.find((p) => p.centroid.x > 50)!)
+  }
+
+  it('clears a stale direct entry on the replica so the source colour is what shows', () => {
+    const { paint, assignments, left, right, commands, result } = mirrored({
+      [replicaKey()]: 'glass-old',
+    })
+    paint.setMode('paint')
+    assignments.setSelectedGlass('glass-1')
+    paint.pointerDown(right.centroid, mods)
+    paint.pointerUp()
+    expect(commands).toHaveLength(1)
+    // Applied over a document that already holds the stale entry, the patch removes it.
+    const doc = commands.reduce((d, c) => c.apply(d), {
+      ...createEmptyProject(),
+      assignments: { [pieceKey(right)]: 'glass-old' },
+    })
+    expect(doc.assignments).toEqual({ [pieceKey(left)]: 'glass-1' })
+    expect(result().assignments).toEqual({ [pieceKey(left)]: 'glass-1' })
+  })
+
+  it('unassigning a replica clears the source entry too', () => {
+    const { paint, right, left, commands, result } = mirrored()
+    paint.setMode('select')
+    paint.pointerDown(right.centroid, mods)
+    paint.unassignSelected()
+    expect(commands).toHaveLength(1)
+    const doc = commands.reduce((d, c) => c.apply(d), {
+      ...createEmptyProject(),
+      assignments: { [pieceKey(left)]: 'glass-1' },
+    })
+    expect(doc.assignments).toEqual({})
+    expect(result().assignments).toEqual({})
+  })
+})

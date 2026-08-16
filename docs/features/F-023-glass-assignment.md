@@ -168,8 +168,51 @@ serialize→deserialize→detect→resolve path proving FR-5 for the standard fl
   inheritance and save-normalisation are covered, but the "sensible" bar on aggressive rework is a
   human judgement.
 
+### Symmetry inheritance (2026-08-16, F-052 [S2])
+
+Live symmetry (F-052) replicated linework but not colour, because assignments key off a piece's
+**content id** — a hash of absolute coordinates — and a replica hashes differently. Finding **[S2]** in
+[docs/testing/runs/2026-08-16-a/F-052.md](../testing/runs/2026-08-16-a/F-052.md) (SUMMARY issue 3).
+The replica → source relation is derived in `@vitrum/core`'s `pieceOrbits` (see F-052's Implementation
+notes for how, and for the write-through decision); what changed here is the **resolver**.
+
+`resolveGeneration` gained an optional fifth argument, `symLineage` — same
+`Record<current, ancestor>` shape as the edit lineage, so the two compose instead of forking. Three
+sources, in strict precedence:
+
+1. **Direct** — the glass stored under the piece's own key.
+2. **Symmetry** — the effective glass of the piece this one replicates. Resolved _within_ the
+   generation, so it works on a **cold** detection: a reopened symmetric file colours its replicas from
+   the source, with nothing per-replica persisted. **No schema change and no migration** — the stored
+   map is unchanged in shape and meaning.
+3. **Edit lineage** — the ancestor's effective glass in the previous generation (unchanged F-023 FR-2).
+
+Two precedence choices are load-bearing:
+
+- **Direct outranks symmetry**, which is what keeps saved documents resolving exactly as they did: a
+  file painted sector-by-sector before this change stores an entry per replica, and those entries still
+  win. (A cold reload has an empty edit lineage, so nothing else can differ either.) The cost is that a
+  stale per-replica entry would make a repaint of the source invisible in that sector — so
+  `PaintController` clears an orbit's stale entries whenever it writes, in the same command.
+- **Symmetry outranks edit lineage.** Otherwise, after any intervening geometry edit, the
+  carried-forward map still holds the colour the source had _before_ it was repainted, and the replica
+  would keep the old colour while its source changed. Regression-tested.
+
+Omitting the argument reproduces the previous behaviour exactly, which is why `NumberingController`
+(F-040) is untouched — and why numbering still has this problem; see F-052's follow-ups.
+
 **Follow-ups (out of scope):**
 
+- **Removing a glass does not take effect until the geometry changes or the file reloads.** Unassigning
+  a piece — or undoing a paint — clears the stored entry, but the live resolver immediately restores the
+  colour: with unchanged geometry the detector's lineage maps each piece to _itself_, so the piece
+  "inherits" the value the previous generation resolved. That self-lineage hop is exactly the mechanism
+  that carries an _inherited_ colour forward across later edits, so it cannot simply be suppressed —
+  distinguishing "carry this forward" from "the user just removed it" needs the resolver to track
+  provenance (carry forward only values that were themselves inherited, and clear that side map when the
+  user unassigns). Found while testing symmetry inheritance and confirmed to be **pre-existing and
+  independent of symmetry** (reproduced with symmetry off, straight through `AssignmentController`).
+  Worth its own ticket — it makes `unassignSelected` look broken, which is an FR-1 claim.
 - Swatch-image (photo) texture fills as clipped patterns (deferred above).
 - Autosave/recovery does not run the save-time normaliser, so a crash-recovery snapshot taken after
   a mid-session reshape could lose that reshape's colour on recover; explicit save/save-as is

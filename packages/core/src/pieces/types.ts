@@ -93,6 +93,14 @@ export interface DetectionResult {
    * detection (no previous generation).
    */
   readonly lineage: Readonly<Record<PieceId, PieceId>>
+  /**
+   * Piece ancestry *within* this generation under live symmetry (F-052): `contentId(replica.ring)` →
+   * `contentId(source.ring)`, so a replica shows the glass of the piece it repeats. Same shape as
+   * {@link lineage}, so {@link resolveGeneration} consumes both. Detection itself knows nothing about
+   * symmetry — the field is filled in by the shell seam that owns expansion (`DocumentController`)
+   * via `pieceOrbits`, and is absent whenever symmetry is off.
+   */
+  readonly symLineage?: Readonly<Record<PieceId, PieceId>>
 }
 
 /** Tuning knobs for detection. Every field has a documented default (see `DETECT_DEFAULTS`). */

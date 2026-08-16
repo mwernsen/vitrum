@@ -160,3 +160,95 @@ describe('resolveGeneration (F-023)', () => {
     reloaded.pieces.forEach((p) => expect(effective.get(pieceKey(p))).toBe(stored[pieceKey(p)]))
   })
 })
+
+describe('resolveGeneration — symmetry inheritance (F-052 [S2])', () => {
+  // A four-fold rosette: `src` is the source-sector piece, `a`/`b`/`c` its live replicas. The orbit
+  // map is what `pieceOrbits` returns; here it is written out so the precedence rules are legible.
+  const rosette = (): {
+    pieces: Piece[]
+    keys: { src: PieceId; a: PieceId; b: PieceId; c: PieceId }
+    sym: Record<PieceId, PieceId>
+  } => {
+    const pieces: Piece[] = []
+    for (const dx of [0, 200, 400, 600]) {
+      pieces.push(
+        ...detectPieces(
+          net(
+            {
+              n0: vec2(dx, 0),
+              n1: vec2(dx + 100, 0),
+              n2: vec2(dx + 100, 100),
+              n3: vec2(dx, 100),
+            },
+            SQUARE_EDGES,
+          ),
+        ).pieces,
+      )
+    }
+    const [src, a, b, c] = pieces.map(pieceKey) as [PieceId, PieceId, PieceId, PieceId]
+    return { pieces, keys: { src, a, b, c }, sym: { [a]: src, [b]: src, [c]: src } }
+  }
+
+  it('gives every replica the source piece glass — painted once, shown four times', () => {
+    const { pieces, keys, sym } = rosette()
+    const effective = resolveGeneration(pieces, {}, { [keys.src]: 'amber' }, new Map(), sym)
+    expect(effective.size).toBe(4)
+    for (const key of Object.values(keys)) expect(effective.get(key)).toBe('amber')
+  })
+
+  it('resolves on a cold detection, so a reopened symmetric file is coloured (FR-5)', () => {
+    // No previous generation and no lineage — exactly the reload path. Only the source piece needs a
+    // stored entry, which is why no schema change or per-replica materialisation is required.
+    const { pieces, keys, sym } = rosette()
+    const effective = resolveGeneration(pieces, {}, { [keys.src]: 'amber' }, new Map(), sym)
+    expect(effective.get(keys.c)).toBe('amber')
+  })
+
+  it('leaves the whole orbit unassigned when the source piece has no glass', () => {
+    const { pieces, sym } = rosette()
+    expect(resolveGeneration(pieces, {}, {}, new Map(), sym).size).toBe(0)
+  })
+
+  it('a direct assignment on a replica still wins — saved files resolve as they always did', () => {
+    // A document painted sector-by-sector before symmetry inheritance existed stores one entry per
+    // replica. Those entries outrank the source, so its colours are unchanged by this feature.
+    const { pieces, keys, sym } = rosette()
+    const stored = { [keys.src]: 'amber', [keys.a]: 'ruby', [keys.b]: 'ruby' }
+    const effective = resolveGeneration(pieces, {}, stored, new Map(), sym)
+    expect(effective.get(keys.src)).toBe('amber')
+    expect(effective.get(keys.a)).toBe('ruby')
+    expect(effective.get(keys.b)).toBe('ruby')
+    expect(effective.get(keys.c)).toBe('amber')
+  })
+
+  it('a replica tracks the source colour even across an intervening geometry edit', () => {
+    // Symmetry must outrank edit inheritance: after a geometry edit the carried-forward map still
+    // holds the colour the source had *before* it was repainted, and a replica must not keep that.
+    const { pieces, keys, sym } = rosette()
+    const gen0 = resolveGeneration(pieces, {}, { [keys.src]: 'amber' }, new Map(), sym)
+    expect(gen0.get(keys.a)).toBe('amber')
+
+    // New generation, same geometry (lineage maps each piece to itself), source repainted.
+    const identity = Object.fromEntries(pieces.map((p) => [pieceKey(p), pieceKey(p)]))
+    const gen1 = resolveGeneration(pieces, identity, { [keys.src]: 'ruby' }, gen0, sym)
+    for (const key of Object.values(keys)) expect(gen1.get(key)).toBe('ruby')
+  })
+
+  it('falls back to edit inheritance for a replica whose source has no glass', () => {
+    // A replica painted under an earlier setup keeps its colour rather than being blanked when the
+    // orbit it now belongs to has an unpainted source.
+    const { pieces, keys, sym } = rosette()
+    const gen0 = resolveGeneration(pieces, {}, { [keys.a]: 'ruby' }, new Map(), sym)
+    const identity = Object.fromEntries(pieces.map((p) => [pieceKey(p), pieceKey(p)]))
+    const gen1 = resolveGeneration(pieces, identity, {}, gen0, sym)
+    expect(gen1.get(keys.a)).toBe('ruby')
+    expect(gen1.get(keys.src)).toBeUndefined()
+  })
+
+  it('is unchanged when no orbit map is supplied (F-023 behaviour by default)', () => {
+    const { pieces, keys } = rosette()
+    const effective = resolveGeneration(pieces, {}, { [keys.src]: 'amber' }, new Map())
+    expect(effective.size).toBe(1)
+    expect(effective.get(keys.a)).toBeUndefined()
+  })
+})

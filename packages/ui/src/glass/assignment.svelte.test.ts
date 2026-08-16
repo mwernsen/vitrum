@@ -52,6 +52,56 @@ describe('AssignmentController (F-023)', () => {
     expect(c.glassFor(smaller)).toBe('glass-1')
   })
 
+  it('reads the generation symmetry orbits and resolves replicas from their source (F-052)', () => {
+    const c = new AssignmentController()
+    const d = detectPieces(splitSquare(50))
+    const [source, replica] = d.pieces
+    const sourceKey = pieceKey(source!)
+    const replicaKey = pieceKey(replica!)
+    // Stand in for `pieceOrbits`: the right-hand rectangle is a live replica of the left one.
+    const detection = { ...d, symLineage: { [replicaKey]: sourceKey } }
+
+    c.update(detection, d.pieces, d.lineage, { [sourceKey]: 'glass-1' })
+    expect(c.glassFor(source!)).toBe('glass-1')
+    expect(c.glassFor(replica!)).toBe('glass-1')
+
+    expect(c.isReplica(replicaKey)).toBe(true)
+    expect(c.isReplica(sourceKey)).toBe(false)
+    // A paint on the replica must be stored on the source; a paint on the source stays put.
+    expect(c.representativeOf(replicaKey)).toBe(sourceKey)
+    expect(c.representativeOf(sourceKey)).toBe(sourceKey)
+    // No direct entry on the replica ⇒ nothing stale to clear.
+    expect(c.staleReplicasOf(sourceKey)).toEqual([])
+  })
+
+  it('reports a replica carrying its own stored entry as stale', () => {
+    const c = new AssignmentController()
+    const d = detectPieces(splitSquare(50))
+    const [source, replica] = d.pieces
+    const sourceKey = pieceKey(source!)
+    const replicaKey = pieceKey(replica!)
+    const detection = { ...d, symLineage: { [replicaKey]: sourceKey } }
+
+    // The state a save-time normalisation (or a file painted sector-by-sector) leaves behind.
+    c.update(detection, d.pieces, d.lineage, { [sourceKey]: 'glass-1', [replicaKey]: 'glass-2' })
+    expect(c.glassFor(replica!)).toBe('glass-2') // direct still wins — saved files are untouched
+    expect(c.staleReplicasOf(sourceKey)).toEqual([replicaKey])
+  })
+
+  it('drops the orbit map when symmetry goes away', () => {
+    const c = new AssignmentController()
+    const d = detectPieces(splitSquare(50))
+    const [source, replica] = d.pieces
+    const sourceKey = pieceKey(source!)
+    const replicaKey = pieceKey(replica!)
+
+    c.update({ ...d, symLineage: { [replicaKey]: sourceKey } }, d.pieces, d.lineage, {})
+    expect(c.isReplica(replicaKey)).toBe(true)
+    c.update({ ...d }, d.pieces, d.lineage, {})
+    expect(c.isReplica(replicaKey)).toBe(false)
+    expect(c.representativeOf(replicaKey)).toBe(replicaKey)
+  })
+
   it('reset discards carried-forward inheritance', () => {
     const c = new AssignmentController()
     const gen0 = detectPieces(square())

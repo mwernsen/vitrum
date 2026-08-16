@@ -114,6 +114,7 @@ export {
   matchIds,
   matchIdsWithLineage,
   pieceKey,
+  pieceOrbits,
   renumber,
   resolveGeneration,
   rowMajorOrder,
