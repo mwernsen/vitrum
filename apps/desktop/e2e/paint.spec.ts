@@ -85,3 +85,38 @@ test('paint a piece, then reload the file with the colour intact', async () => {
   await window.keyboard.press('Control+o')
   await painted()
 })
+
+// Regression for the F-023 fix of 2026-08-16: unassigning used to leave the colour on screen until
+// the geometry changed or the file was reloaded, because the resolver inherited the value it had just
+// resolved for the same piece. This drives the whole user path — paint, select the piece, unassign —
+// and reads the piece count back with nothing else touched.
+test('unassign a piece and it reads unassigned straight away', async () => {
+  const window = await app.firstWindow()
+  const canvas = window.getByRole('main', { name: 'Design canvas' })
+  await expect(canvas).toBeVisible()
+  const box = (await canvas.boundingBox())!
+  const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
+
+  await window.getByRole('button', { name: 'Panel border' }).click()
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await window.mouse.click(...at(120, 120))
+  await window.mouse.click(...at(360, 300))
+
+  // Pick a glass from the dock (auto-imported into the project) and paint the piece.
+  await window.getByRole('button', { name: 'Glass', exact: true }).click()
+  const palette = window.getByRole('region', { name: 'Glass palette' })
+  await expect(palette).toBeVisible()
+  await palette.locator('button.glass').first().click()
+  await window.mouse.click(...at(240, 210))
+  await expect(await readinessRow(window, 'Every piece has glass')).toContainText('1 of 1 painted')
+  await closeReadiness(window)
+
+  // Select the piece and clear its glass from the inspector.
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
+  await window.getByRole('button', { name: 'Select pieces' }).click()
+  await window.mouse.click(...at(240, 210))
+  await window.getByRole('button', { name: 'Unassign' }).click()
+
+  // No reload, no geometry change: the panel reads unassigned immediately.
+  await expect(await readinessRow(window, 'Every piece has glass')).toContainText('0 of 1 painted')
+})

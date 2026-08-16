@@ -124,6 +124,7 @@ export {
   type DetectOptions,
   type Diagnostic,
   type DiagnosticKind,
+  type GenerationResolution,
   type GraphEdge,
   type LabelPlacement,
   type LineageResult,

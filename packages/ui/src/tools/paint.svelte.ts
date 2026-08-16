@@ -125,7 +125,13 @@ export class PaintController {
     if (Object.keys(patch).length > 0) this.#host.execute(setGlassAssignments(patch))
   }
 
-  /** Clear the glass on every selected piece, in one undo step. */
+  /**
+   * Clear the glass on every selected piece, in one undo step. Clears the piece's own stored entry
+   * (routed to its symmetry source), which is what the resolver reads — so the colour goes at once
+   * rather than on the next geometry edit. A piece whose colour is *inherited* from a vanished
+   * ancestor's entry (painted before a split or reshape) is the one case this cannot express; see
+   * F-023's follow-up on persisting inheritance eagerly.
+   */
   unassignSelected(): void {
     const patch: Record<PieceId, GlassId | null> = {}
     for (const key of this.selectedPieces) this.#route(patch, key, null)

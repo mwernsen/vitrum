@@ -201,18 +201,70 @@ Two precedence choices are load-bearing:
 Omitting the argument reproduces the previous behaviour exactly, which is why `NumberingController`
 (F-040) is untouched — and why numbering still has this problem; see F-052's follow-ups.
 
+### Removal takes effect at once — inheritance carries provenance, not values (2026-08-16)
+
+_Fixed on branch `fix-f-023-unassign-provenance`._ Removing a glass used to have no visible effect
+until the geometry changed or the file was reloaded, which made FR-1's "unassign … is one undo step"
+claim ring hollow and silently defeated undo of a paint. Found in the run
+[2026-08-16-a](../testing/runs/2026-08-16-a/) while testing symmetry inheritance, and pre-existing and
+independent of symmetry.
+
+**Mechanism.** Every document change makes a new detection generation, and with the geometry unchanged
+the detector's lineage maps each piece to **itself** (max ring overlap is with itself). The resolver
+carried the previous generation's _resolved values_ forward, so a piece whose stored entry had just been
+cleared "inherited" through that self hop the very colour the previous generation had resolved for it.
+The colour only disappeared once the hop stopped being self-referential (a geometry edit) or the
+previous generation was gone (a reload). Worse, the save-time normaliser then materialised the
+resurrected colour as a direct assignment, making the removal permanent.
+
+**The model: provenance, not values.** `resolveGeneration` now returns
+`{ effective, origins }`, and `origins` — piece key → the **stored** key its value was read from — is
+the only thing threaded from one generation to the next (it replaces the old `prevEffective` argument).
+The value itself is re-read from `stored` every generation, so the document is authoritative: clear an
+entry and its heirs lose the colour, change it and they follow. Inheritance is unchanged in reach — a
+surviving piece still learns _which_ document entry it reads through its lineage ancestor, across any
+number of edits (FR-2 split, merge, multi-hop, reshape, bake) — it just no longer carries a value of its
+own. Suppressing the self-lineage hop instead was not an option: it is exactly what keeps an _inherited_
+colour attached to a piece across later edits.
+
+Because it is the same shared resolver, F-040 numbering (`NumberingController`'s two pipelines) gets the
+same fix: clearing a manual override now takes effect immediately too.
+
+The invariant is stated as a property test (`assignment.property.test.ts`): over random sequences of
+paints, unassigns and geometry edits, **every resolved value is one the document currently stores**, and
+**with no stored assignments nothing is coloured**.
+
+**One case remains, deliberately.** A piece whose colour is _inherited_ (no entry of its own — e.g. a
+split fragment reading the vanished parent's entry, which its sibling reads too) still cannot be
+unassigned on its own: the document has no way to say "not this heir". Dropping the shared ancestor entry
+and materialising the siblings does work in isolation, but the transient provenance then disagrees with
+the undo stack — undoing that unassign restores the old stored map while the provenance has moved on, and
+_both_ fragments lose their colour. The clean answer is to persist inheritance when the edit re-keys the
+piece (see the follow-up below), which also removes the autosave gap; until then a save materialises each
+piece's own entry and unassign works normally afterwards. `AssignmentController.isDirect(key)` reports the
+distinction, and the limitation is pinned by a test in `unassign.svelte.test.ts`.
+
+**Tests.** Core: four regression cases in `assignment.test.ts` (self-lineage does not resurrect; the
+document value wins so a repaint is never masked; clearing the parent clears both split fragments;
+clearing a symmetry source clears the whole orbit) plus the property test. UI: `unassign.svelte.test.ts`
+drives the real seams (document → detection → resolution → paint) for explicit unassign, undo/redo of a
+paint, the save-time normaliser, FR-2 split inheritance, the symmetric orbit, and the known limitation.
+E2E: `paint.spec.ts` "unassign a piece and it reads unassigned straight away" — paint, select the piece,
+Unassign, and the readiness meter reads `0 of 1 painted` with no reload and no geometry change. All six UI
+cases and the E2E fail on pre-fix code; the whole suite is green with the fix (**1494 unit**, **38 E2E**).
+
+One existing F-052 test changed its setup rather than its claim: "falls back to edit inheritance for a
+replica whose source has no glass" used to empty `stored` between generations, which asserts that a
+_removed_ assignment lives on — the bug. It now exercises the same fallback the way it actually happens,
+by reshaping the replica so its stored entry stays on the old key.
+
 **Follow-ups (out of scope):**
 
-- **Removing a glass does not take effect until the geometry changes or the file reloads.** Unassigning
-  a piece — or undoing a paint — clears the stored entry, but the live resolver immediately restores the
-  colour: with unchanged geometry the detector's lineage maps each piece to _itself_, so the piece
-  "inherits" the value the previous generation resolved. That self-lineage hop is exactly the mechanism
-  that carries an _inherited_ colour forward across later edits, so it cannot simply be suppressed —
-  distinguishing "carry this forward" from "the user just removed it" needs the resolver to track
-  provenance (carry forward only values that were themselves inherited, and clear that side map when the
-  user unassigns). Found while testing symmetry inheritance and confirmed to be **pre-existing and
-  independent of symmetry** (reproduced with symmetry off, straight through `AssignmentController`).
-  Worth its own ticket — it makes `unassignSelected` look broken, which is an FR-1 claim.
+- **Persist inheritance eagerly** (materialise a piece's effective glass under its new content id in the
+  same command as the edit that re-keys it). That would make every live coloured piece a direct entry,
+  which closes the inherited-unassign case above _and_ the autosave gap below, at the cost of touching
+  the paint/edit command seam. F-023 deliberately chose lazy resolution; this is the ticket that would
+  revisit it.
 - Swatch-image (photo) texture fills as clipped patterns (deferred above).
 - Autosave/recovery does not run the save-time normaliser, so a crash-recovery snapshot taken after
   a mid-session reshape could lose that reshape's colour on recover; explicit save/save-as is
