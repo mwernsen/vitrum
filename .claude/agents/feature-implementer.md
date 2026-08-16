@@ -368,3 +368,17 @@ this file steers every future feature.
 - (F-033, 2026-08-16, testing) `getByRole('button', { name: 'Check' })` goes ambiguous once the DRC
   queue has rows (a violation message contains "check hanging hardware"); don't re-click a rail
   button while its own panel is showing.
+- (F-052, 2026-08-16) Geometry fixed by a symmetry element must not have its image emitted:
+  `expandReplicas` de-duplicates against the already-emitted network. Suppress at **F-020's weld
+  tolerance**, not exact equality — the degeneracy needs the two copies' endpoints to cluster into
+  one vertex, so the two tolerances must be the same number; require containment **both** ways so
+  partial overlaps survive; and rank acceptance by id so the surviving set stays input-order
+  independent.
+- (F-052, 2026-08-16) F-020's face trace cannot survive duplicate edges at all: two half-edges
+  leaving a vertex at the same angle make the sweep pair each with the other's twin, so every cycle
+  traced there has zero signed area and is dropped — the shape silently vanishes. Suspect it
+  whenever pieces go to zero with `duplicate-segment` diagnostics present.
+- (F-052, 2026-08-16) A group-multiplicity assertion (×2/×4/×N/×2N) is only true in **general
+  position**. When a fix shortens an orbit, state the exception and assert it explicitly rather than
+  loosening the count, and add the dual property "no group image is lost" as the guard against
+  over-suppression.
