@@ -382,3 +382,16 @@ this file steers every future feature.
   position**. When a fix shortens an orbit, state the exception and assert it explicitly rather than
   loosening the count, and add the dual property "no group image is lost" as the guard against
   over-suppression.
+- (F-023, 2026-08-16) Generation-threaded resolvers (`resolveGeneration`) must carry **provenance**
+  (which stored key a surviving piece reads), never resolved values — the document stays
+  authoritative, so a removal or an undo takes effect at once. Corollary: transient per-generation
+  state is not undo-aware, so a command that rewrites which key holds a value can desync it from the
+  undo stack.
+- (F-033, 2026-08-16) A domain quantity two features share (perimeter came overhang) belongs in the
+  owning feature's pure module as the twin of its existing function (`perimeterAllowance` next to
+  `edgeAllowanceMm`), never as a constant in the consumer — the DRC pack, the canvas frame and any
+  future BOM line then agree by construction.
+- (F-033, 2026-08-16, testing) `.vitrum` E2E fixtures must be **packed** with `packDocument` (zip),
+  not `serialize` (JSON) — the app opens through `unpackDocument`, so a JSON fixture fails with
+  "could not be opened". `packages/drc`'s golden fixtures are JSON because they load via
+  `deserialize` directly.
