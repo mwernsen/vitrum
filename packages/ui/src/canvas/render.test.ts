@@ -94,3 +94,66 @@ describe('drawPanelFrame (F-058)', () => {
     ).not.toThrow()
   })
 })
+
+/**
+ * The panel size is the *finished* panel (F-033, 2026-08-16), so the solid rectangle is the assembled
+ * outline and the line the user draws sits the perimeter came allowance inside it. That inner
+ * centreline target is the second rectangle.
+ */
+describe('drawPanelFrame: the came centreline target (F-033)', () => {
+  const panel = { min: vec2(0, 0), max: vec2(300, 400) }
+
+  it('strokes a second rectangle inset by the came allowance', () => {
+    const { calls, ctx } = recorder()
+    drawPanelFrame(ctx, vp, panel, readCanvasPalette(document.body), 2.5)
+    // 2.5 mm at scale 2 is 5 px: the finished outline, then the centreline 5 px inside it.
+    expect(calls).toContain('strokeRect(10.5,20.5,600,800)')
+    expect(calls).toContain('strokeRect(15.5,25.5,590,790)')
+  })
+
+  it('dots the centreline, so it reads as neither the panel edge nor a guide', () => {
+    const { calls, state, ctx } = recorder()
+    drawPanelFrame(ctx, vp, panel, readCanvasPalette(document.body), 2.5)
+    // Solid for the finished outline, dotted for the centreline, and reset before restore.
+    expect(calls.filter((c) => c.startsWith('setLineDash'))).toEqual([
+      'setLineDash()',
+      'setLineDash(1,3)',
+      'setLineDash()',
+    ])
+    expect(state.lineWidth).toBe(1)
+    expect(state.strokeStyle).toBe(readCanvasPalette(document.body).panelFrame)
+  })
+
+  it('draws only the finished outline when the edge treatment adds no width (foil)', () => {
+    const { calls, ctx } = recorder()
+    drawPanelFrame(ctx, vp, panel, readCanvasPalette(document.body), 0)
+    expect(calls.filter((c) => c.startsWith('strokeRect'))).toEqual([
+      'strokeRect(10.5,20.5,600,800)',
+    ])
+  })
+
+  it('omits the centreline when the two hairlines would be indistinguishable on screen', () => {
+    // Zoomed far out: 2.5 mm is under a pixel, so a second line would only muddy the frame.
+    const { calls, ctx } = recorder()
+    drawPanelFrame(
+      ctx,
+      { scale: 0.2, offset: vec2(0, 0) },
+      panel,
+      readCanvasPalette(document.body),
+      2.5,
+    )
+    expect(calls.filter((c) => c.startsWith('strokeRect'))).toHaveLength(1)
+  })
+
+  it('omits the centreline when the allowance would swallow the panel', () => {
+    const { calls, ctx } = recorder()
+    drawPanelFrame(
+      ctx,
+      vp,
+      { min: vec2(0, 0), max: vec2(6, 400) },
+      readCanvasPalette(document.body),
+      4,
+    )
+    expect(calls.filter((c) => c.startsWith('strokeRect'))).toHaveLength(1)
+  })
+})

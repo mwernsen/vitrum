@@ -77,6 +77,21 @@ export function misplacedScene(): FitScene {
   }
 }
 
+/**
+ * A border drawn to exactly the ordered 300 × 400 mm. Error: `panelSize` is the *finished* panel
+ * (Mathieu, 2026-08-16), and the drawn line is the came centreline, so this assembles to
+ * 305 × 405 mm with the default H 5 mm came. The scene that passed clean under the old meaning.
+ */
+export function drawnToSizeScene(): FitScene {
+  return {
+    name: 'fit-drawn-to-size',
+    project: ordered(rect(0, 0, 300, 400)),
+    headline: 'design-exceeds-panel',
+    count: 1,
+    severity: 'error',
+  }
+}
+
 /** The same design, inside the ordered panel — silent. */
 export function insideScene(): FitScene {
   return {
@@ -88,5 +103,5 @@ export function insideScene(): FitScene {
 }
 
 export function fitScenes(): FitScene[] {
-  return [oversizedScene(), misplacedScene(), insideScene()]
+  return [oversizedScene(), misplacedScene(), drawnToSizeScene(), insideScene()]
 }

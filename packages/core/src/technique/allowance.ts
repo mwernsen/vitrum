@@ -66,3 +66,55 @@ export function edgeAllowanceMm(technique: TechniqueSettings, segmentId: string)
 export function leadFlangeMm(technique: TechniqueSettings, segmentId: string): number {
   return resolveCame(technique, segmentId).flangeMm
 }
+
+/**
+ * What the panel's edge treatment adds **outside** the drawn line, per side.
+ *
+ * The drawn network is the came centreline, so the assembled panel is larger than the drawing: an
+ * outward allowance in mm, plus the came that produced it when there is one. `mm` is `0` when the
+ * edge treatment genuinely adds nothing (copper foil), and callers must not read that as "unknown".
+ */
+export interface PerimeterAllowance {
+  /** Outward overhang beyond the drawn centreline, in mm, on every side. `≥ 0`. */
+  readonly mm: number
+  /** The came whose flange produced {@link mm}. Absent for foil, which has no perimeter came. */
+  readonly came?: ResolvedCame
+}
+
+/** The came on a segment with no override at all — i.e. the library's default profile. */
+function defaultCame(technique: TechniqueSettings): ResolvedCame {
+  return resolveCame(technique, '')
+}
+
+/**
+ * How far the finished panel reaches outside the drawn border, per side (F-021, for F-033's fit
+ * check and the canvas panel frame). The drawn line is the came centreline, and the renderer draws
+ * each came as a band of `flangeMm` centred on it, so:
+ *
+ * - **lead came**: the perimeter came's outer face lies half a flange outside the drawn border, and
+ *   that face _is_ the panel's finished edge. The perimeter came is the came resolved on the
+ *   `border`-role segments (heavier perimeter came is the standard case, F-021 FR-2); with several
+ *   different ones the widest wins, so a rectangular estimate never under-states the finished size.
+ *   With no border drawn yet the library default profile stands in.
+ * - **copper foil**: there is no came. Each piece is cut back half the piece gap from the drawn
+ *   line and the edge is then wrapped and soldered, so the finished edge lands back at the drawn
+ *   line to within a fraction of a millimetre — the honest allowance is nothing, not a came number.
+ *
+ * A U-profile perimeter came actually overhangs less than half its flange (its channel opens inward,
+ * so its back web sits nearer the glass edge), but F-021 deliberately deferred a U-specific
+ * perimeter model and renders every came centred at flange width. Until that lands, the came band
+ * the canvas draws is the authority here too, and the estimate errs generously.
+ */
+export function perimeterAllowance(
+  technique: TechniqueSettings,
+  borderSegmentIds: readonly string[] = [],
+): PerimeterAllowance {
+  if (technique.kind === 'foil') return { mm: 0 }
+  let widest: ResolvedCame | undefined
+  for (const id of borderSegmentIds) {
+    const came = resolveCame(technique, id)
+    if (!widest || came.flangeMm > widest.flangeMm) widest = came
+  }
+  const came = widest ?? defaultCame(technique)
+  return { mm: Math.max(0, came.flangeMm / 2), came }
+}

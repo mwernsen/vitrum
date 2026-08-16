@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { detectPieces, type PieceSegment, type PieceSegmentRole } from '../pieces'
 
-import { edgeAllowanceMm, leadFlangeMm, resolveCame } from './allowance'
+import { edgeAllowanceMm, leadFlangeMm, perimeterAllowance, resolveCame } from './allowance'
 import { cutContourFor } from './cutContour'
 import { computeCutContours, CutContourCache } from './cutContours'
 import type { TechniqueSettings } from './types'
@@ -95,6 +95,53 @@ describe('allowance resolution (FR-1, FR-5)', () => {
       lead: { ...technique.lead, overrides: { s0: { profileId: 'gone' } } },
     }
     expect(resolveCame(bad, 's0').heartMm).toBe(1.5)
+  })
+})
+
+/**
+ * The outward half of the same model (added 2026-08-16 for F-033): how far the *finished* panel
+ * reaches outside the drawn centreline, which is what makes `Project.settings.panelSize` — the
+ * finished panel a customer orders — comparable with a drawing.
+ */
+describe('perimeter allowance', () => {
+  it('is half the perimeter came flange, the came band the canvas draws', () => {
+    const allowance = perimeterAllowance(leadTechnique())
+    expect(allowance.mm).toBeCloseTo(2.5) // flange 5 / 2
+    expect(allowance.came?.name).toBe('H 5 mm')
+  })
+
+  it('takes the came fitted on the border segments over the library default', () => {
+    const technique = leadTechnique()
+    const heavy: TechniqueSettings = {
+      ...technique,
+      lead: {
+        ...technique.lead,
+        profiles: {
+          ...technique.lead.profiles,
+          u9: { id: 'u9', name: 'U 9 mm', kind: 'U', flangeMm: 9, heartMm: 1.8 },
+        },
+        overrides: { b0: { profileId: 'u9' } },
+      },
+    }
+    expect(perimeterAllowance(heavy, ['b0']).mm).toBeCloseTo(4.5)
+    // With several perimeter cames the widest wins, so the estimate never under-states the panel.
+    expect(perimeterAllowance(heavy, ['b0', 'b1']).mm).toBeCloseTo(4.5)
+    // And a border list that never mentions the heavy came falls back to the default profile.
+    expect(perimeterAllowance(heavy, ['b1']).mm).toBeCloseTo(2.5)
+  })
+
+  it('is nothing for copper foil, which has no perimeter came', () => {
+    const foil: TechniqueSettings = { ...leadTechnique(), kind: 'foil' }
+    expect(perimeterAllowance(foil, ['b0'])).toEqual({ mm: 0 })
+  })
+
+  it('never goes negative on a nonsensical flange', () => {
+    const technique = leadTechnique()
+    const broken: TechniqueSettings = {
+      ...technique,
+      lead: { ...technique.lead, overrides: { b0: { flangeMm: -8 } } },
+    }
+    expect(perimeterAllowance(broken, ['b0']).mm).toBe(0)
   })
 })
 

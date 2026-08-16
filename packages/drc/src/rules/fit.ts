@@ -1,4 +1,5 @@
-import { bboxOf, bboxUnion, vec2, type BBox, type Vec2 } from '@vitrum/geometry'
+import { perimeterAllowance, type PerimeterAllowance } from '@vitrum/core'
+import { bboxExpand, bboxOf, bboxUnion, vec2, type BBox, type Vec2 } from '@vitrum/geometry'
 import { outputSegments, type Project } from '@vitrum/model'
 
 import { resolveThreshold } from '../thresholds'
@@ -16,6 +17,16 @@ import type { DrcInput, Rule, ThresholdSpec } from '../types'
  * The panel rectangle spans (0,0)→(width, height) in world mm, the same rectangle zoom-to-fit frames
  * and the canvas draws. `panelSize` is optional: with no ordered size there is no reference and the
  * pack emits nothing.
+ *
+ * **What the ordered size means** (Mathieu, 2026-08-16, closing this spec's open question 1):
+ * `panelSize` is the **finished** panel — the outside dimensions of the assembled panel, as a
+ * customer orders it and a glazier measures it. The user draws the came *centreline*, so the drawn
+ * extent is not that number: perimeter came adds its own width outside the drawn border, and a
+ * design drawn to exactly 300 mm assembles into something wider. This rule therefore measures the
+ * **assembled** extent — the drawn extent grown by the technique's perimeter allowance (F-021's
+ * `perimeterAllowance`) — against the ordered rectangle. Before that decision it compared the drawn
+ * extent directly, which let a design drawn to exactly the ordered size pass clean and then not fit
+ * the opening.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -80,6 +91,38 @@ function designExtent(input: DrcInput): BBox | undefined {
     box = box ? bboxUnion(box, piece.bbox) : piece.bbox
   }
   return box
+}
+
+/** The design's perimeter segments — whose came is the one that lands outside the finished edge. */
+function borderSegmentIds(project: Project): string[] {
+  return outputSegments(project)
+    .filter((s) => s.role === 'border')
+    .map((s) => s.id)
+}
+
+/**
+ * How far the finished panel reaches outside the drawn line, per side, from the project's technique
+ * (F-021). Derived, never a constant in this pack: a heavier perimeter came, a lighter default
+ * profile or a switch to copper foil all change the answer, and only the technique model knows.
+ */
+function allowanceFor(project: Project): PerimeterAllowance {
+  return perimeterAllowance(project.technique, borderSegmentIds(project))
+}
+
+/** Where the assembled panel reaches: the drawn extent grown by the perimeter allowance. */
+function assembledExtent(drawn: BBox, allowance: PerimeterAllowance): BBox {
+  return allowance.mm > 0 ? bboxExpand(drawn, allowance.mm) : drawn
+}
+
+/**
+ * How the message accounts for the difference between what was drawn and what gets assembled, so the
+ * maker can reconcile every number with their own ruler.
+ */
+function allowanceNote(drawnW: number, drawnH: number, allowance: PerimeterAllowance): string {
+  const drawn = `drawn ${mm(drawnW)} × ${mm(drawnH)} mm`
+  return allowance.mm > 0
+    ? `${drawn} plus ${mm(allowance.mm)} mm of came on each side`
+    : `${drawn}; foiled edges add no width`
 }
 
 /** How far `box` reaches outside `panel` on each side, in mm. Zero or negative ⇒ inside. */
@@ -157,10 +200,9 @@ const FIT_TOLERANCE = fixed(
   'Panel fit tolerance',
   'mm',
   1,
-  'How far the drawing may fall outside the ordered panel rectangle before it is reported. A ' +
-    'millimetre absorbs snapping and rounding slop. It is not a fitting allowance: perimeter came ' +
-    'adds its own width outside the drawn edge, so a design that only just fits still grows when ' +
-    'it is leaded.',
+  'How far the assembled panel may fall outside the ordered rectangle before it is reported. A ' +
+    'millimetre absorbs snapping and rounding slop. The perimeter came is not part of it: the ' +
+    "came's own width is added to the drawn extent first, from the technique.",
 )
 
 const designExceedsPanel: Rule = {
@@ -171,18 +213,22 @@ const designExceedsPanel: Rule = {
   // below (F-031's per-violation grading seam), because no amount of moving will make it fit.
   defaultSeverity: 'warning',
   explain:
-    'The drawing is measured against the panel size this document was created with. Glass outside ' +
-    'that rectangle does not exist to be cut, and perimeter came adds its own width outside the ' +
-    'drawn edge, so a design that only just fits on paper will not fit the opening. Move or shrink ' +
-    'the design, or set the panel size to the glass you are actually cutting.',
+    'The panel size this document was created with is the finished panel — the outside dimensions ' +
+    'of the assembled panel, as a customer orders it and a glazier measures it. What you draw is ' +
+    'the came centreline, and perimeter came adds its own width outside it, so the assembled panel ' +
+    'is larger than the drawing. That grown extent is what is measured here. Move or shrink the ' +
+    'design, fit a lighter perimeter came, or order the panel at the size it really assembles to.',
   thresholds: [FIT_TOLERANCE],
   check: (input) => {
     const panel = orderedPanel(input.project)
     if (!panel) return []
-    const design = designExtent(input)
-    if (!design) return []
+    const drawn = designExtent(input)
+    if (!drawn) return []
 
     const tol = resolveThreshold(input, 'design-exceeds-panel', FIT_TOLERANCE)
+    // The came lands outside the drawn line, so everything below measures the *assembled* panel.
+    const allowance = allowanceFor(input.project)
+    const design = assembledExtent(drawn, allowance)
     const o = overrunsOf(design, panel)
     if (worstOverrun(o) <= tol) return []
 
@@ -196,23 +242,26 @@ const designExceedsPanel: Rule = {
     // fixed by moving the design, so it is the error case.
     const tooBig = tooWide > tol || tooTall > tol
 
-    const size = `design is ${mm(designW)} × ${mm(designH)} mm`
+    const size = `assembles to ${mm(designW)} × ${mm(designH)} mm`
     const ordered = `the ordered ${mm(orderedW)} × ${mm(orderedH)} mm panel`
-    const message = tooBig
-      ? `${size} — ${prose([
+    const note = allowanceNote(drawn.max.x - drawn.min.x, drawn.max.y - drawn.min.y, allowance)
+    const verdict = tooBig
+      ? `${prose([
           ...(tooWide > tol ? [`${mm(tooWide)} mm wider`] : []),
           ...(tooTall > tol ? [`${mm(tooTall)} mm taller`] : []),
         ])} than ${ordered}`
-      : `${size} — it fits ${ordered} but extends ${prose(edgeList(o, tol))}`
+      : `it fits ${ordered} but extends ${prose(edgeList(o, tol))}`
+    const message = `${size} — ${verdict} (${note})`
 
     // Point at exactly what sticks out, so hovering the row highlights it (F-030 FR-2). Segments
-    // are checked with their true geometry; pieces come from the expanded network.
+    // are checked with their true geometry; pieces come from the expanded network. Each is measured
+    // assembled too, so a segment drawn just inside the edge whose came lands outside is named.
     const segmentIds = outputSegments(input.project)
-      .filter((s) => outsideBy(bboxOf(s.geometry), panel, tol))
+      .filter((s) => outsideBy(assembledExtent(bboxOf(s.geometry), allowance), panel, tol))
       .map((s) => s.id)
       .sort()
     const pieceIds = input.pieces
-      .filter((p) => outsideBy(p.bbox, panel, tol))
+      .filter((p) => outsideBy(assembledExtent(p.bbox, allowance), panel, tol))
       .map((p) => p.id)
       .sort()
 

@@ -42,7 +42,7 @@
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
-  import { defaultSymmetryCenter, documentBounds, panelRect } from '../canvas/scene'
+  import { defaultSymmetryCenter, documentBounds, panelInsetMm, panelRect } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
   import type { OpenedImage } from '../document/host'
@@ -222,6 +222,9 @@
   // asked for, finally visible. `null` on a document with no panel size, and only in the design
   // view — it is a drawing aid, so it stays out of the four derived readings.
   const panelFrame = $derived<BBox | null>(controller ? panelRect(controller.doc) : null)
+  // …and how far inside it the drawn border belongs (F-033): the panel size is the *finished* panel,
+  // so the came centreline the maker aims at is inset by the technique's perimeter allowance.
+  const panelInset = $derived<number>(controller ? panelInsetMm(controller.doc) : 0)
 
   // Bounds frame the full design (source + replicas), so zoom-to-fit sees the whole rosette.
   const bounds = $derived.by<BBox | null>(() => {
@@ -1178,6 +1181,7 @@
           previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
           {bounds}
           panelRect={viewMode === 'design' ? panelFrame : null}
+          panelInsetMm={panelInset}
           {tools}
           {snap}
           {edit}

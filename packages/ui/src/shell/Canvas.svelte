@@ -83,6 +83,11 @@
     bounds?: BBox | null
     /** The panel rectangle to frame the drawing with (F-058). `null` ⇒ no frame is drawn. */
     panelRect?: BBox | null
+    /**
+     * How far inside the finished panel the drawn border belongs, in mm (F-033): the perimeter came
+     * allowance. Drawn as the dotted centreline target inside the frame. `0` ⇒ only the frame.
+     */
+    panelInsetMm?: number
     /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
     tools?: ToolController
     /** The snapping controller (F-012). Absent ⇒ no snap markers. */
@@ -170,6 +175,7 @@
     previewReplicaShapes = [],
     bounds = null,
     panelRect = null,
+    panelInsetMm = 0,
     tools,
     snap,
     edit,
@@ -408,7 +414,7 @@
         // The panel rectangle (F-058) first, so every other marker sits on top of the frame. It
         // lives on the overlay — chrome, like the symmetry axes and snap markers — which also keeps
         // it out of the F-043 PNG snapshot, since it is an affordance and not drawn glass.
-        drawPanelFrame(ctx, viewport.transform, panelRect, palette)
+        drawPanelFrame(ctx, viewport.transform, panelRect, palette, panelInsetMm)
         drawOverlay(ctx, size, viewport.cursorScreen, palette)
         if (painting() && selectedPieces) {
           drawPieceSelection(ctx, viewport.transform, pieces, selectedPieces, palette)
@@ -557,6 +563,7 @@
     void symmetryDomain
     void previewReplicaShapes
     void panelRect
+    void panelInsetMm
     void printTiles
     void bomHighlightPieces?.size
     void bomHighlightSegments?.size

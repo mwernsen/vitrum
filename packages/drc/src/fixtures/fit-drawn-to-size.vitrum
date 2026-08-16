@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 17,
+  "project": {
+    "settings": {
+      "units": "mm",
+      "name": "Panel fit",
+      "panelSize": {
+        "width": 300,
+        "height": 400
+      }
+    },
+    "technique": {
+      "kind": "lead",
+      "lead": {
+        "defaultProfileId": "came-h-5",
+        "cuttingToleranceMm": 0,
+        "profiles": {
+          "came-h-4": {
+            "id": "came-h-4",
+            "name": "H 4 mm",
+            "kind": "H",
+            "flangeMm": 4,
+            "heartMm": 1.4
+          },
+          "came-h-5": {
+            "id": "came-h-5",
+            "name": "H 5 mm",
+            "kind": "H",
+            "flangeMm": 5,
+            "heartMm": 1.5
+          },
+          "came-h-6": {
+            "id": "came-h-6",
+            "name": "H 6 mm",
+            "kind": "H",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-h-7": {
+            "id": "came-h-7",
+            "name": "H 7 mm",
+            "kind": "H",
+            "flangeMm": 7,
+            "heartMm": 1.7
+          },
+          "came-h-9": {
+            "id": "came-h-9",
+            "name": "H 9 mm",
+            "kind": "H",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          },
+          "came-h-12": {
+            "id": "came-h-12",
+            "name": "H 12 mm",
+            "kind": "H",
+            "flangeMm": 12,
+            "heartMm": 2
+          },
+          "came-u-6": {
+            "id": "came-u-6",
+            "name": "U 6 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 6,
+            "heartMm": 1.6
+          },
+          "came-u-9": {
+            "id": "came-u-9",
+            "name": "U 9 mm (perimeter)",
+            "kind": "U",
+            "flangeMm": 9,
+            "heartMm": 1.8
+          }
+        },
+        "overrides": {}
+      },
+      "foil": {
+        "foilWidthMm": 5.6,
+        "pieceGapMm": 0.8,
+        "solderFinish": "silver"
+      }
+    },
+    "segments": {
+      "Obtpxl3j0Tv9NDftHKzyM": {
+        "id": "Obtpxl3j0Tv9NDftHKzyM",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 0
+          },
+          "b": {
+            "x": 300,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "1O1rFoyX8euaTyCLuahN8",
+          "58IXK6W2WwKIfWKbyLPN_"
+        ]
+      },
+      "VQT_ep57f0RR1LbAfi-nT": {
+        "id": "VQT_ep57f0RR1LbAfi-nT",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 300,
+            "y": 0
+          },
+          "b": {
+            "x": 300,
+            "y": 400
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "58IXK6W2WwKIfWKbyLPN_",
+          "2LRLr0FkbPZgRwwtcDgF3"
+        ]
+      },
+      "8ToIfL-CGuttr8uAWXNeW": {
+        "id": "8ToIfL-CGuttr8uAWXNeW",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 300,
+            "y": 400
+          },
+          "b": {
+            "x": 0,
+            "y": 400
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "2LRLr0FkbPZgRwwtcDgF3",
+          "b5dIUDZmokIw51p46pWRB"
+        ]
+      },
+      "f2Ot8PC9D_glr71MWDjms": {
+        "id": "f2Ot8PC9D_glr71MWDjms",
+        "geometry": {
+          "kind": "line",
+          "a": {
+            "x": 0,
+            "y": 400
+          },
+          "b": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        "role": "border",
+        "endpoints": [
+          "b5dIUDZmokIw51p46pWRB",
+          "1O1rFoyX8euaTyCLuahN8"
+        ]
+      }
+    },
+    "nodes": {
+      "1O1rFoyX8euaTyCLuahN8": {
+        "pos": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "58IXK6W2WwKIfWKbyLPN_": {
+        "pos": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "2LRLr0FkbPZgRwwtcDgF3": {
+        "pos": {
+          "x": 300,
+          "y": 400
+        }
+      },
+      "b5dIUDZmokIw51p46pWRB": {
+        "pos": {
+          "x": 0,
+          "y": 400
+        }
+      }
+    },
+    "glasses": {},
+    "assignments": {},
+    "layers": [],
+    "drc": {
+      "exclusions": {},
+      "rules": {}
+    },
+    "reinforcements": [],
+    "numbering": {
+      "scheme": "grouped",
+      "glassCodes": {},
+      "auto": {},
+      "overrides": {}
+    },
+    "bom": {
+      "glassWaste": 0.3,
+      "leadWaste": 0.1,
+      "solderGramsPerMetre": 20,
+      "foilRollLengthMm": 33000
+    },
+    "symmetry": {
+      "mode": "none",
+      "center": {
+        "x": 0,
+        "y": 0
+      },
+      "angle": 1.5707963267948966,
+      "count": 6,
+      "mirror": false
+    },
+    "render": {
+      "backlightIntensity": 1,
+      "backlightWarmth": 0,
+      "textureTransforms": {}
+    },
+    "light": {
+      "mode": "astronomical",
+      "latitudeDeg": 52.37,
+      "longitudeDeg": 4.9,
+      "facadeAzimuthDeg": 180,
+      "tiltDeg": 90,
+      "dayOfYear": 172,
+      "timeMinutes": 720,
+      "manualAzimuthDeg": 0,
+      "manualElevationDeg": 45,
+      "intensity": 1,
+      "temperatureK": 5500,
+      "haloIntensity": 0.6,
+      "haloConcentration": 0.5,
+      "overcast": false,
+      "photoGrain": false,
+      "showTextures": true
+    },
+    "quote": {
+      "currency": {
+        "code": "EUR",
+        "symbol": "€"
+      },
+      "priceBook": {
+        "leadPerMetre": 3.5,
+        "foilPerMetre": 1.2,
+        "solderPerKg": 28,
+        "reinforcementPerMetre": 6,
+        "consumables": []
+      },
+      "labor": {
+        "hourlyRate": 45,
+        "setupHours": 2,
+        "minutesPerPiece": 12,
+        "minutesPerSeamMetre": 15,
+        "minutesPerComplexity": 8,
+        "foilPieceFactor": 1.4
+      },
+      "overheadPct": 0.15,
+      "marginPct": 0.3,
+      "client": {
+        "clientName": "",
+        "projectTitle": "",
+        "quoteNumber": "",
+        "notes": ""
+      },
+      "manualLines": []
+    },
+    "nesting": {
+      "spacingMm": 3,
+      "seed": 1,
+      "strategy": "fewest",
+      "perGlass": {}
+    }
+  }
+}
