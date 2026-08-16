@@ -20,22 +20,51 @@ export function segmentToWorldPoints(geometry: SegmentGeometry): Vec2[] {
 }
 
 /**
- * The world-space bounding box of everything drawable in a project: its segments and,
- * if set, the panel rectangle. `null` when there is nothing to frame (used by
- * zoom-to-fit to fall back to a default view).
+ * The panel's world-space rectangle: `(0, 0)` → `(width, height)` in mm, the frame the
+ * new-panel dialog's size actually describes (F-058). `null` when the document carries no
+ * panel size, in which case nothing frames the drawing.
  */
-export function documentBounds(project: Project): BBox | null {
+export function panelRect(project: Project): BBox | null {
+  const panel = project.settings.panelSize
+  if (!panel) return null
+  return { min: vec2(0, 0), max: vec2(panel.width, panel.height) }
+}
+
+/** The world-space bounding box of a project's drawn segments alone. `null` when empty. */
+export function contentBounds(project: Project): BBox | null {
   let box: BBox | null = null
   for (const segment of Object.values(project.segments)) {
     const b = bboxOf(segment.geometry)
     box = box ? bboxUnion(box, b) : b
   }
-  const panel = project.settings.panelSize
-  if (panel) {
-    const b: BBox = { min: vec2(0, 0), max: vec2(panel.width, panel.height) }
-    box = box ? bboxUnion(box, b) : b
-  }
   return box
+}
+
+/**
+ * The world-space bounding box of everything drawable in a project: its segments and,
+ * if set, the panel rectangle. `null` when there is nothing to frame (used by
+ * zoom-to-fit to fall back to a default view).
+ */
+export function documentBounds(project: Project): BBox | null {
+  const content = contentBounds(project)
+  const panel = panelRect(project)
+  if (!panel) return content
+  return content ? bboxUnion(content, panel) : panel
+}
+
+/**
+ * Where a symmetry setup should pivot when it is first switched on (F-052): the panel's
+ * centre, so "draw one half" lands replicas inside the glass. Falls back to the centre of
+ * whatever is already drawn, then to the world origin for an empty, size-less document.
+ *
+ * This overturns the original 2026-07-22 default of the world origin, which is the panel's
+ * *top-left corner* once a panel is laid out from `(0, 0)` — every axis and spoke anchored
+ * off the glass. See `docs/testing/runs/2026-08-16-a/F-052.md` finding 1.
+ */
+export function defaultSymmetryCenter(project: Project): Vec2 {
+  const box = panelRect(project) ?? contentBounds(project)
+  if (!box) return vec2(0, 0)
+  return vec2((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2)
 }
 
 /**

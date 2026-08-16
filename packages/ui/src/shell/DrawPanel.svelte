@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { SNAP_KINDS, formatLength, type SnapKind } from '@vitrum/core'
+  import {
+    SNAP_KINDS,
+    convertLength,
+    formatLength,
+    toMillimetres,
+    type SnapKind,
+  } from '@vitrum/core'
+  import { vec2 } from '@vitrum/geometry'
   import type { SymmetryMode } from '@vitrum/model'
   import ChevronDown from 'lucide-svelte/icons/chevron-down'
   import ChevronUp from 'lucide-svelte/icons/chevron-up'
@@ -126,6 +133,22 @@
     return symmetry.setup.mode === 'double-mirror' ? '2 axes' : '1 axis'
   })
 
+  // The centre the axes pivot about, in the document's unit (the model stores mm). Seeded to the
+  // panel centre; editable here until the on-canvas handle lands (run 2026-08-16-a, F-052).
+  function showMm(mm: number): string {
+    return String(Number(convertLength(mm, viewport.unit).toFixed(4)))
+  }
+  function setCenterAxis(axis: 'x' | 'y', text: string): void {
+    // A number input reports `''` for anything it cannot parse (and while the box is empty), and
+    // `Number('')` is 0 — so an empty read must not slide the centre to the origin mid-typing.
+    if (!symmetry || text.trim() === '') return
+    const n = Number(text)
+    if (!Number.isFinite(n)) return
+    const mm = toMillimetres(n, viewport.unit)
+    const c = symmetry.center
+    symmetry.setCenter(axis === 'x' ? vec2(mm, c.y) : vec2(c.x, mm))
+  }
+
   // --- Tracing (F-051) ------------------------------------------------------
   // Top of the stack first (later layers draw on top).
   const referenceLayers = $derived(reference ? [...reference.layers].reverse() : [])
@@ -231,6 +254,32 @@
 
         {#if symmetry.active}
           <div class="sunken">
+            <label class="readout">
+              <span class="row-label">Centre x</span>
+              <span class="field">
+                <input
+                  type="number"
+                  step="1"
+                  value={showMm(symmetry.center.x)}
+                  oninput={(e) => setCenterAxis('x', e.currentTarget.value)}
+                  aria-label="Symmetry centre x"
+                />
+                <span class="unit">{viewport.unit}</span>
+              </span>
+            </label>
+            <label class="readout">
+              <span class="row-label">Centre y</span>
+              <span class="field">
+                <input
+                  type="number"
+                  step="1"
+                  value={showMm(symmetry.center.y)}
+                  oninput={(e) => setCenterAxis('y', e.currentTarget.value)}
+                  aria-label="Symmetry centre y"
+                />
+                <span class="unit">{viewport.unit}</span>
+              </span>
+            </label>
             <label class="readout">
               <span class="row-label">Axis angle</span>
               <span class="field">

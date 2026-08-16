@@ -202,6 +202,76 @@ describe('DrawPanel — live symmetry (F-052)', () => {
     expect(ctrl.doc.symmetry.angle).toBeCloseTo((30 * Math.PI) / 180, 9)
   })
 
+  it('shows the seeded centre and moves it from the numeric fields', async () => {
+    const { viewport, ctrl } = setup()
+    const { SymmetryController } = await import('../tools/symmetry.svelte')
+    const { vec2 } = await import('@vitrum/geometry')
+    const symmetry = new SymmetryController({
+      getDoc: () => ctrl.doc,
+      execute: (c) => ctrl.execute(c),
+      // What the shell now seeds from the panel size: the centre of a 300 × 400 panel.
+      defaultCenter: () => vec2(150, 200),
+    })
+    render(DrawPanel, { viewport, symmetry })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Mirror (1 axis)' }))
+
+    // The fields read back the seeded panel centre rather than the old (0, 0) corner.
+    const x = screen.getByLabelText('Symmetry centre x') as HTMLInputElement
+    const y = screen.getByLabelText('Symmetry centre y') as HTMLInputElement
+    expect(x.value).toBe('150')
+    expect(y.value).toBe('200')
+
+    await fireEvent.input(x, { target: { value: '120' } })
+    expect(ctrl.doc.symmetry.center).toEqual(vec2(120, 200))
+    await fireEvent.input(y, { target: { value: '90' } })
+    expect(ctrl.doc.symmetry.center).toEqual(vec2(120, 90))
+
+    // One undo entry per edit: undoing twice walks back to the seeded centre.
+    ctrl.undo()
+    expect(ctrl.doc.symmetry.center).toEqual(vec2(120, 200))
+    ctrl.undo()
+    expect(ctrl.doc.symmetry.center).toEqual(vec2(150, 200))
+  })
+
+  it('ignores an unparseable centre instead of moving the axes to NaN', async () => {
+    const { viewport, ctrl } = setup()
+    const { SymmetryController } = await import('../tools/symmetry.svelte')
+    const { vec2 } = await import('@vitrum/geometry')
+    const symmetry = new SymmetryController({
+      getDoc: () => ctrl.doc,
+      execute: (c) => ctrl.execute(c),
+      defaultCenter: () => vec2(150, 200),
+    })
+    render(DrawPanel, { viewport, symmetry })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Mirror (1 axis)' }))
+    const x = screen.getByLabelText('Symmetry centre x') as HTMLInputElement
+    await fireEvent.input(x, { target: { value: 'abc' } })
+    expect(ctrl.doc.symmetry.center).toEqual(vec2(150, 200))
+  })
+
+  it('states the centre in the document unit', async () => {
+    const { viewport, ctrl } = setup()
+    const { SymmetryController } = await import('../tools/symmetry.svelte')
+    const { vec2 } = await import('@vitrum/geometry')
+    const symmetry = new SymmetryController({
+      getDoc: () => ctrl.doc,
+      execute: (c) => ctrl.execute(c),
+      defaultCenter: () => vec2(254, 508),
+    })
+    viewport.setUnit('in')
+    render(DrawPanel, { viewport, symmetry })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Mirror (1 axis)' }))
+    // 254 mm = 10 in, 508 mm = 20 in — and typing inches stores millimetres.
+    expect((screen.getByLabelText('Symmetry centre x') as HTMLInputElement).value).toBe('10')
+    expect((screen.getByLabelText('Symmetry centre y') as HTMLInputElement).value).toBe('20')
+
+    await fireEvent.input(screen.getByLabelText('Symmetry centre x'), { target: { value: '4' } })
+    expect(ctrl.doc.symmetry.center.x).toBeCloseTo(101.6, 6)
+  })
+
   it('bakes the derived replicas into stored segments as one command', async () => {
     const { viewport, ctrl } = setup()
     const { SymmetryController } = await import('../tools/symmetry.svelte')

@@ -38,6 +38,8 @@ export interface CanvasPalette {
   readonly gridMinor: string
   readonly gridMajor: string
   readonly axis: string
+  /** The panel rectangle's frame line (F-058): quieter than lead, darker than any grid tone. */
+  readonly panelFrame: string
   readonly cursor: string
   readonly content: string
   readonly construction: string
@@ -86,6 +88,7 @@ const FALLBACK: CanvasPalette = {
   gridMinor: '#e9e9e4',
   gridMajor: '#d9d9d2',
   axis: '#bcbcb4',
+  panelFrame: '#6b6b68',
   cursor: '#2f63e8',
   content: '#1f1f1f',
   construction: '#6b6b68',
@@ -121,6 +124,9 @@ export function readCanvasPalette(el: HTMLElement): CanvasPalette {
     gridMinor: read('--paper-200', FALLBACK.gridMinor),
     gridMajor: read('--paper-300', FALLBACK.gridMajor),
     axis: read('--paper-400', FALLBACK.axis),
+    // Its own key rather than reusing `construction`: the frame is a fixed property of the
+    // document, not a user-placed guide, and the two are meant to read differently.
+    panelFrame: read('--ink-500', FALLBACK.panelFrame),
     cursor: read('--cobalt-500', FALLBACK.cursor),
     content: read('--ink-800', FALLBACK.content),
     construction: read('--ink-500', FALLBACK.construction),
@@ -240,6 +246,35 @@ export function drawGrid(
     ctx.lineTo(size.width, crisp(origin.y))
   }
   ctx.stroke()
+}
+
+/**
+ * Draw the panel rectangle — the world-mm frame the new-panel dialog's size describes (F-058) —
+ * as a quiet solid hairline. Chrome, so token-sourced: a mid-grey that is darker than every grid
+ * tone but lighter and thinner than the lead network, and *solid* where construction guides
+ * (F-012) and the symmetry axes (F-052) are dashed, so the three never read as the same thing.
+ * Nothing is drawn without a panel size, and content is never clipped to it.
+ */
+export function drawPanelFrame(
+  ctx: CanvasRenderingContext2D | null,
+  vp: Viewport,
+  panel: BBox | null,
+  palette: CanvasPalette,
+): void {
+  if (!ctx || !panel) return
+  const a = worldToScreen(vp, panel.min)
+  const b = worldToScreen(vp, panel.max)
+  const x = crisp(Math.min(a.x, b.x))
+  const y = crisp(Math.min(a.y, b.y))
+  const w = Math.abs(b.x - a.x)
+  const h = Math.abs(b.y - a.y)
+  if (w <= 0 || h <= 0) return
+  ctx.save()
+  ctx.strokeStyle = palette.panelFrame
+  ctx.lineWidth = 1
+  ctx.setLineDash([])
+  ctx.strokeRect(x, y, w, h)
+  ctx.restore()
 }
 
 /** Smallest on-screen line weight (CSS px) so a came stays visible when zoomed far out. */

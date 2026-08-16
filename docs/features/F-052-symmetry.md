@@ -181,8 +181,9 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
   the commit path) and drawn at half alpha, so drawing shows the full symmetric result
   live. Covered by `symmetry.svelte.test.ts` (domain spans + replica multiplicity /
   reflected geometry). The domain wedge was visually confirmed in `dev:ui`.
-  - **Default center = world origin (0, 0)** (was panel/content center) — the predictable
-    pivot a user expects, and where the grid axes already cross.
+  - ~~**Default center = world origin (0, 0)** (was panel/content center) — the predictable
+    pivot a user expects, and where the grid axes already cross.~~ **Reverted 2026-08-16;
+    see the amendment below.**
   - The **axes + center pivot now render in the accent (cobalt)** matching the source tint
     (`drawSymmetryAxes`), with a filled ringed center dot, so the active mirror/rotation
     line reads distinctly from grey construction guides. Mirror-mode axis-through-origin +
@@ -191,6 +192,50 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
   `format:check` on `main` (pre-existing, commit 8c52ad6) so the gate could go green; no
   content change.
 
+### Amendment (2026-08-16) — the centre seeds to the panel and is editable
+
+Fix ticket from user-test run [`docs/testing/runs/2026-08-16-a/`](../testing/runs/2026-08-16-a/SUMMARY.md)
+(F-052 finding 1, SUMMARY issue 1, verdict **fail**). The feature's signature story — "draw
+one half and see the whole design mirror live" — could not complete on a real panel: every
+axis, spoke and shaded source domain anchored on world `(0, 0)`, which is the panel's
+**top-left corner**, so replicas landed off the glass, and there was no UI way to correct it.
+
+**a) The default centre is now the panel centre.** This **overturns the deliberate 2026-07-22
+decision** recorded above ("the predictable pivot a user expects, and where the grid axes
+already cross"). That reasoning was sound for an origin-centred document and did not survive
+F-058: panels are laid out from `(0, 0)` to `(w, h)`, so the origin is a corner, not a pivot.
+Nothing about the old default was predictable in practice — the axes crossed the corner of
+the glass. Precedence is panel size (halved) → the bounding box of what is already drawn →
+the world origin for an empty, size-less document; the panel wins over content so a stray
+line cannot drag the pivot off the glass. Implemented as the pure
+`defaultSymmetryCenter(project)` in `canvas/scene.ts` (next to F-058's `panelRect`, which it
+reuses) and wired into `AppShell`'s `SymmetryHost.defaultCenter`. Seeding still happens only
+on the off → on transition, so an explicitly moved centre is never overwritten.
+
+**b) The centre is editable.** `SymmetryController.setCenter` existed since v1 with no UI
+caller; the Draw panel's symmetry section now has **Centre x / Centre y** rows above "Axis
+angle", using the identical `readout` / `field` markup, mono numerals and tokens. They read
+and write in the document's display unit (`convertLength` / `toMillimetres`, the F-013
+Inspector's pattern) while the model keeps millimetres, and each edit is one undo entry via
+the existing `setSymmetry` command. One guard worth keeping: a `type="number"` input reports
+`''` for anything it cannot parse, and `Number('')` is `0` — without an empty-string check
+a half-typed value would slide the centre to the origin, reintroducing the bug being fixed.
+
+On-canvas dragging of the centre handle stays a follow-up (below), deliberately not built here.
+
+**Net-new UI:** the Centre x / Centre y rows — flag for back-port to the Claude Design
+project, as the rest of this section already is.
+
+Verified: `scene.test.ts` (panel centre, content fallback, origin fallback, panel-beats-content),
+`DrawPanel.test.ts` (fields read the seeded centre, each axis edit lands as its own undo entry,
+unit round-trip in inches, unparseable input ignored), and `e2e/symmetry.spec.ts` now asserts
+the centre reads 150 / 200 on the dialog's default 300 × 400 panel before drawing. Confirmed
+in `dev:ui`: the mirror axis crosses the panel centre and follows the field as it is typed.
+
+Still open and **not** touched here — filed in the run as needing Mathieu's decision first:
+glass inheritance across replicas (issue 3), nested-symmetry / bake-staging discoverability
+(issue 4), a named "rotate 180°" mode (the run's [Q]), and a `design-exceeds-panel` DRC rule.
+
 ## Follow-ups (out of scope for v1)
 
 - **Edit anywhere (deferred, agreed §1).** Editing a replica and mapping the change back
@@ -198,10 +243,10 @@ Delivered as specified; all quality gates green from the repo root (`pnpm lint`,
   canonicalization seam already folds pointers into source space — the follow-up adds the
   inverse mapping for hit-testing/selecting a replica and re-authoring the corresponding
   source geometry.
-- **On-canvas axis/center dragging.** Axes render as guides and are editable via the
-  Layers panel (angle, fold count, mirror) and seeded to the panel center; direct drag of
-  the center/axis handles on the canvas (and snapping draw points _to_ the axis via the
-  F-012 spatial index) is a natural next increment.
+- **On-canvas axis/center dragging.** Axes render as guides and are editable from the Draw
+  panel (centre x/y since 2026-08-16, angle, fold count, mirror) and seeded to the panel
+  centre; direct drag of the center/axis handles on the canvas (and snapping draw points
+  _to_ the axis via the F-012 spatial index) is a natural next increment.
 - **Bake weld tolerance.** Bake welds by exact coincidence + F-020 clustering; a
   tolerance-based weld pass at bake would tidy the ≤1 ulp gaps that non-axis-aligned
   reflections can leave between sectors before F-020 clustering absorbs them.
