@@ -2,7 +2,13 @@ import { createEmptyProject, createSegment } from '@vitrum/model'
 import { arc, line, vec2 } from '@vitrum/geometry'
 import { describe, expect, it } from 'vitest'
 
-import { documentBounds, segmentToWorldPoints, stressScene } from './scene'
+import {
+  defaultSymmetryCenter,
+  documentBounds,
+  panelRect,
+  segmentToWorldPoints,
+  stressScene,
+} from './scene'
 
 describe('segmentToWorldPoints', () => {
   it('keeps a line as its two endpoints', () => {
@@ -34,6 +40,40 @@ describe('documentBounds', () => {
     expect(box).not.toBeNull()
     expect(box!.min).toEqual(vec2(-50, 0))
     expect(box!.max).toEqual(vec2(200, 300))
+  })
+})
+
+describe('panelRect (F-058)', () => {
+  it('spans the origin to the panel size in world mm', () => {
+    const project = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    expect(panelRect(project)).toEqual({ min: vec2(0, 0), max: vec2(300, 400) })
+  })
+
+  it('is null without a panel size, so nothing is framed', () => {
+    expect(panelRect(createEmptyProject())).toBeNull()
+  })
+})
+
+describe('defaultSymmetryCenter (F-052)', () => {
+  it('is the panel centre, not its top-left corner', () => {
+    const project = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    expect(defaultSymmetryCenter(project)).toEqual(vec2(150, 200))
+  })
+
+  it('falls back to the centre of what is drawn when there is no panel size', () => {
+    const base = createEmptyProject()
+    const seg = createSegment(line(vec2(20, 40), vec2(120, 140)))
+    expect(defaultSymmetryCenter({ ...base, segments: { [seg.id]: seg } })).toEqual(vec2(70, 90))
+  })
+
+  it('falls back to the origin on an empty, size-less document', () => {
+    expect(defaultSymmetryCenter(createEmptyProject())).toEqual(vec2(0, 0))
+  })
+
+  it('prefers the panel over the drawn content, so a stray line cannot move the pivot', () => {
+    const base = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    const seg = createSegment(line(vec2(-500, -500), vec2(-400, -400)))
+    expect(defaultSymmetryCenter({ ...base, segments: { [seg.id]: seg } })).toEqual(vec2(150, 200))
   })
 })
 

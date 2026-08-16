@@ -52,6 +52,13 @@ test('6-fold radial: draw one line → 6 replicas, undo removes all, then bake',
   // select with four mode buttons, so the current mode is visible without opening anything.
   await window.getByRole('button', { name: 'Draw', exact: true }).click()
   await window.getByRole('button', { name: 'Radial (N-fold)' }).click()
+
+  // The centre seeds to the panel's centre, not its top-left corner: the new-panel dialog's
+  // defaults are 300 × 400 mm, so the spokes pivot on (150, 200) and every replica lands on the
+  // glass (run 2026-08-16-a, F-052 finding 1). Editable right here, too.
+  await expect(window.getByLabel('Symmetry centre x')).toHaveValue('150')
+  await expect(window.getByLabel('Symmetry centre y')).toHaveValue('200')
+
   await window.getByLabel('Radial fold count').fill('6')
   await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
 

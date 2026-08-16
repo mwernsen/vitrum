@@ -24,6 +24,7 @@
     drawGrid,
     drawNumbers,
     drawOverlay,
+    drawPanelFrame,
     drawPieceFills,
     drawPieceHighlight,
     drawPieceSelection,
@@ -80,6 +81,8 @@
     previewReplicaShapes?: readonly PreviewShape[]
     /** World bounds for zoom-to-fit; `null` frames the default panel region. */
     bounds?: BBox | null
+    /** The panel rectangle to frame the drawing with (F-058). `null` ⇒ no frame is drawn. */
+    panelRect?: BBox | null
     /** The drawing-tool controller (F-011). Absent ⇒ canvas is view-only. */
     tools?: ToolController
     /** The snapping controller (F-012). Absent ⇒ no snap markers. */
@@ -166,6 +169,7 @@
     symmetryDomain = null,
     previewReplicaShapes = [],
     bounds = null,
+    panelRect = null,
     tools,
     snap,
     edit,
@@ -401,6 +405,10 @@
       // The light view (F-054) is a clean presentation stage: no cursor / selection / marker overlays
       // (the context is cleared by prepareContext above, so nothing draws).
       if (!lightMode) {
+        // The panel rectangle (F-058) first, so every other marker sits on top of the frame. It
+        // lives on the overlay — chrome, like the symmetry axes and snap markers — which also keeps
+        // it out of the F-043 PNG snapshot, since it is an affordance and not drawn glass.
+        drawPanelFrame(ctx, viewport.transform, panelRect, palette)
         drawOverlay(ctx, size, viewport.cursorScreen, palette)
         if (painting() && selectedPieces) {
           drawPieceSelection(ctx, viewport.transform, pieces, selectedPieces, palette)
@@ -548,6 +556,7 @@
     void symmetryCenter
     void symmetryDomain
     void previewReplicaShapes
+    void panelRect
     void printTiles
     void bomHighlightPieces?.size
     void bomHighlightSegments?.size

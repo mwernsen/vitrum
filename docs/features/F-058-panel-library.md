@@ -377,6 +377,46 @@ FR-8's "the other four destinations visibly disabled" is amended accordingly: th
 convention (never silently absent, never fake-clickable) still governs, but only
 destinations with an owning spec earn a placeholder.
 
+### Amendment (2026-08-16) — the panel rectangle is drawn on the canvas
+
+Fix ticket from user-test run [`docs/testing/runs/2026-08-16-a/`](../testing/runs/2026-08-16-a/SUMMARY.md)
+(F-058 finding 1, SUMMARY issue 2). `settings.panelSize` was set by FR-3's dialog and
+then invisible: its only readers were zoom-to-fit, the library card's size line and the
+dialog's own defaults. A user typed 300 × 400 and nothing on the canvas said so — which
+also made F-052's axes look like they anchored on nothing.
+
+- **`drawPanelFrame`** (`packages/ui/src/canvas/render.ts`) strokes the rectangle spanning
+  `(0, 0)` → `(width, height)` in world mm. Chrome, so token-sourced via `getComputedStyle`
+  per the F-003 canvas-token rule: a new `panelFrame` palette key reading the `--ink-500`
+  leaf. It gets its own key rather than reusing `construction` because the frame is a fixed
+  property of the document, not a user-placed guide, and the two should read differently.
+  **Solid** 1 px, where construction guides (F-012) and symmetry axes (F-052) are both
+  dashed — the dash pattern, not the colour, is what keeps the three apart at a glance.
+- **The world rect is a pure helper**, `panelRect(project)` in `canvas/scene.ts`, which
+  `documentBounds` now composes instead of inlining (alongside a new `contentBounds`).
+  `null` panel size ⇒ `null` rect ⇒ nothing drawn.
+- **It draws on the overlay layer, in front of the glass fills** — the call the ticket left
+  to judgement. Three reasons: (1) every other piece of canvas chrome (symmetry axes and
+  domain tint, snap glyphs, DRC markers, print tiles) already lives there, so the frame
+  behaves like what it is; (2) the overlay is excluded from the F-043 PNG snapshot, which
+  reads only the content canvas — a UI affordance must not end up in an exported image of
+  the design; (3) in front means a design that overruns the panel still shows the frame
+  crossing it, which is exactly the case worth seeing (the S3 `design-exceeds-panel`
+  finding is deliberately left to Mathieu, so the frame is currently the only signal).
+  It is drawn first within the overlay block, so markers and the crosshair sit on top.
+- **Design view only.** The frame is a drawing aid, so `AppShell` passes it as
+  `panelRect={viewMode === 'design' ? panelFrame : null}` — the other four modes are derived
+  readings, and chrome with no counterpart in the output would misrepresent them (the same
+  call `AppShell` already makes for symmetry chrome in the cartoon).
+- Out of scope, per the ticket and unchanged: content is **not** clipped to the frame, and
+  no border segments are seeded from the panel size.
+- Tests: `canvas/scene.test.ts` covers `panelRect` and the null case; a new
+  `canvas/render.test.ts` records the 2D-context calls (jsdom has no canvas backend) and
+  asserts the screen rect, the solid 1 px stroke, the token, and the no-panel/degenerate
+  no-ops. No E2E — canvas chrome has no assertable DOM, the same reason F-052's axes were
+  covered by unit tests plus a `dev:ui` look; confirmed visually at 31 % zoom on a
+  300 × 400 panel.
+
 ### Follow-ups (out of scope)
 
 - **~~The four rail placeholders have no roadmap ids.~~** Resolved by the 2026-08-14

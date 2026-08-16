@@ -42,7 +42,7 @@
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
-  import { documentBounds } from '../canvas/scene'
+  import { defaultSymmetryCenter, documentBounds, panelRect } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
   import type { OpenedImage } from '../document/host'
@@ -170,10 +170,11 @@
   const symmetry = new SymmetryController({
     getDoc: () => controller?.doc ?? createEmptyProject(),
     execute: (command) => controller?.execute(command),
-    // The world origin: the grid axes cross there and it is the predictable anchor a user
-    // expects a mirror/rotation to pivot about (Mathieu 2026-07-22). Editable once on-canvas
-    // axis handles land (follow-up).
-    defaultCenter: () => vec2(0, 0),
+    // The panel's centre, so "draw one half" puts the replicas on the glass. The original
+    // 2026-07-22 default was the world origin, which is the panel's top-left *corner* — every
+    // axis and spoke anchored off the panel (run 2026-08-16-a, F-052 finding 1). Editable from
+    // the Draw panel's centre fields; on-canvas handles are still a follow-up.
+    defaultCenter: () => (controller ? defaultSymmetryCenter(controller.doc) : vec2(0, 0)),
   })
   // Fold every pointer into the source sector before snapping (Decision §1 / FR-5): a click
   // anywhere authors geometry in the source, which then replicates live. No tool contract changes.
@@ -215,6 +216,11 @@
   const replicaSegments = $derived<readonly import('@vitrum/model').Segment[]>(
     controller ? controller.replicaNetwork() : [],
   )
+
+  // The panel rectangle the canvas frames the drawing with (F-058): the size the new-panel dialog
+  // asked for, finally visible. `null` on a document with no panel size, and only in the design
+  // view — it is a drawing aid, so it stays out of the four derived readings.
+  const panelFrame = $derived<BBox | null>(controller ? panelRect(controller.doc) : null)
 
   // Bounds frame the full design (source + replicas), so zoom-to-fit sees the whole rosette.
   const bounds = $derived.by<BBox | null>(() => {
@@ -1169,6 +1175,7 @@
           symmetryDomain={viewMode === 'cartoon' ? null : symmetryDomain}
           previewReplicaShapes={viewMode === 'cartoon' ? [] : previewReplicaShapes}
           {bounds}
+          panelRect={viewMode === 'design' ? panelFrame : null}
           {tools}
           {snap}
           {edit}
