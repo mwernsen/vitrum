@@ -90,6 +90,9 @@
           onchange={(value) => (units = value as LengthUnit)}
         />
       </div>
+      <!-- F-033: the size is the finished panel, not the drawn centreline. Say so once, here, where
+           the number is typed — the checks and the canvas frame both measure it that way. -->
+      <p class="note">Outside dimensions of the finished panel, once it is leaded or foiled.</p>
     </fieldset>
 
     <fieldset class="technique">

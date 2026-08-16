@@ -1,21 +1,30 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 
 import { editorWindow } from './editor'
 
-import { isolatedAppData } from './appdata'
+import { baseEnv, isolatedAppData } from './appdata'
+
+/**
+ * A 300 × 400 mm order whose border is drawn to exactly 300 × 400 — the came centreline, so the panel
+ * assembles to 305 × 405 mm. Opened from disk because no amount of clicking on a canvas hits an exact
+ * millimetre; the same scene is the `fit-drawn-to-size` golden fixture in `packages/drc`.
+ */
+const DRAWN_TO_SIZE = fileURLToPath(new URL('./fixtures/drawn-to-size.vitrum', import.meta.url))
 
 let app: ElectronApplication
 let runId = 0
 
-test.beforeEach(async () => {
+function launchEnv(): Record<string, string> {
   const autosavePath = join(tmpdir(), `vitrum-e2e-fit-${process.pid}-${runId++}.vitrum`)
-  app = await electron.launch({
-    args: ['.'],
-    env: { ...process.env, ...isolatedAppData(), VITRUM_AUTOSAVE_PATH: autosavePath },
-  })
+  return { ...baseEnv(), ...isolatedAppData(), VITRUM_AUTOSAVE_PATH: autosavePath }
+}
+
+test.beforeEach(async () => {
+  app = await electron.launch({ args: ['.'], env: launchEnv() })
   // F-058: the app opens on the launch screen; step into the editor. Its new-panel defaults order a
   // 300 × 400 mm panel, which is exactly the reference this rule checks against.
   await editorWindow(app)
@@ -54,8 +63,11 @@ test('flags a design larger than the ordered panel and clears it', async () => {
   const queue = window.getByLabel('Violations')
   const row = queue.getByText('Exceeds panel')
   await expect(row).toBeVisible()
-  // The message states what was measured against what was ordered.
+  // The message states what was measured against what was ordered — and since 2026-08-16 what it
+  // measures is the *assembled* panel, drawn extent plus the perimeter came.
   await expect(queue).toContainText('the ordered 300 × 400 mm panel')
+  await expect(queue).toContainText('assembles to')
+  await expect(queue).toContainText('of came on each side')
 
   // Undo the border — one gesture is one undo entry — and re-run: nothing is left to overrun.
   await window.keyboard.press('Control+k')
@@ -69,4 +81,25 @@ test('flags a design larger than the ordered panel and clears it', async () => {
   // which makes a name-based button query ambiguous once the queue has rows.
   await window.getByRole('button', { name: 'Re-run' }).click()
   await expect(window.getByText('Exceeds panel')).toHaveCount(0)
+})
+
+// The 2026-08-16 meaning of `panelSize`, end to end: a border drawn to *exactly* the ordered
+// 300 × 400 mm used to pass clean, because the drawn centreline was compared with the order. The came
+// lands outside that line, so the finished panel is 305 × 405 mm and the rule now says so — as an
+// error, since no amount of moving it will make it fit the opening.
+test('measures the finished panel, so a design drawn to the ordered size is an error', async () => {
+  // This test opens a document rather than drawing one, so the editor from `beforeEach` is not used.
+  await app.evaluate(({ app }) => app.exit(0)).catch(() => {})
+  app = await electron.launch({ args: ['.', DRAWN_TO_SIZE], env: launchEnv() })
+  const window = await app.firstWindow()
+  await expect(window.getByTestId('document-chip')).toContainText('Panel fit')
+
+  await window.getByRole('button', { name: 'Check' }).click()
+  await window.getByRole('button', { name: 'Run checks' }).click()
+  const queue = window.getByLabel('Violations')
+  await expect(queue.getByText('Exceeds panel')).toBeVisible()
+  await expect(queue).toContainText(
+    'assembles to 305 × 405 mm — 5 mm wider and 5 mm taller than the ordered 300 × 400 mm panel ' +
+      '(drawn 300 × 400 mm plus 2.5 mm of came on each side)',
+  )
 })

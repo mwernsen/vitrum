@@ -1,3 +1,4 @@
+import { perimeterAllowance } from '@vitrum/core'
 import type { Project, Segment, SegmentGeometry } from '@vitrum/model'
 import { createEmptyProject, createSegment, reconcileProjectNodes } from '@vitrum/model'
 import type { BBox, Vec2 } from '@vitrum/geometry'
@@ -23,11 +24,26 @@ export function segmentToWorldPoints(geometry: SegmentGeometry): Vec2[] {
  * The panel's world-space rectangle: `(0, 0)` → `(width, height)` in mm, the frame the
  * new-panel dialog's size actually describes (F-058). `null` when the document carries no
  * panel size, in which case nothing frames the drawing.
+ *
+ * This is the **finished** panel — the outside of the assembled panel, came included (Mathieu,
+ * 2026-08-16, F-033). The line the user draws sits {@link panelInsetMm} inside it.
  */
 export function panelRect(project: Project): BBox | null {
   const panel = project.settings.panelSize
   if (!panel) return null
   return { min: vec2(0, 0), max: vec2(panel.width, panel.height) }
+}
+
+/**
+ * How far inside the finished panel the drawn border belongs, in mm: the technique's perimeter
+ * allowance (F-021). Zero for copper foil, which adds no width outside the drawn line, and zero
+ * whenever the came has no flange to speak of — in both cases the drawn border *is* the panel edge.
+ */
+export function panelInsetMm(project: Project): number {
+  const borderIds = Object.values(project.segments)
+    .filter((s) => s.role === 'border')
+    .map((s) => s.id)
+  return perimeterAllowance(project.technique, borderIds).mm
 }
 
 /** The world-space bounding box of a project's drawn segments alone. `null` when empty. */

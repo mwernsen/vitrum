@@ -177,5 +177,16 @@ model; DRC consuming these thresholds (F-031/F-032); reinforcement bars (F-032);
 in `TechniquePanel`/inspector commit per keystroke (extra undo entries) — could debounce/commit
 on blur.
 
+_Perimeter allowance (2026-08-16, for F-033):_ `packages/core/src/technique/allowance.ts` gained
+`perimeterAllowance(technique, borderSegmentIds)` — the outward twin of `edgeAllowanceMm`: how far
+the **finished** panel reaches outside the drawn came centreline, per side. Lead ⇒ half the
+perimeter came's flange (resolved on the `border`-role segments, widest wins, library default when
+no border is drawn), which is exactly the came band this feature already renders centred on the
+drawn line. Foil ⇒ zero: no perimeter came, and the cut-back plus solder bead land the finished edge
+back on the drawn line. No persisted parameter was added, so no schema migration. The U-came
+perimeter approximation this feature deferred now also shows here — a U came overhangs less than
+half its flange — and the estimate deliberately errs generous. See
+[F-033](F-033-drc-panel-fit.md)'s 2026-08-16 amendment.
+
 _Cockpit v2 (2026-07-30):_ the technique control moved from the bottom of the old Layers panel into the top-bar `TechniqueChip`. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.

@@ -15,7 +15,9 @@ import { fitScenes } from './test/fitScenes'
  * fixtures: each scene is checked in as a real `.vitrum` file, loaded through the persistence path
  * (serialize → migrate → detect → check) and compared to the builder. Because this pack's whole
  * reference is `settings.panelSize`, that also proves the ordered size survives save/load and still
- * grades the design after a cold reload.
+ * grades the design after a cold reload — including `fit-drawn-to-size`, the border drawn to exactly
+ * the ordered size, which is an error only because `panelSize` means the *finished* panel
+ * (2026-08-16) and the came lands outside the drawn line.
  */
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')

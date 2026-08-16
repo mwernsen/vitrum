@@ -249,17 +249,31 @@ export function drawGrid(
 }
 
 /**
+ * Screen separation (CSS px) below which the centreline target is not drawn: two hairlines closer
+ * than this just muddy the panel edge, and the distinction is unreadable anyway.
+ */
+const MIN_INSET_PX = 2
+
+/**
  * Draw the panel rectangle — the world-mm frame the new-panel dialog's size describes (F-058) —
  * as a quiet solid hairline. Chrome, so token-sourced: a mid-grey that is darker than every grid
  * tone but lighter and thinner than the lead network, and *solid* where construction guides
  * (F-012) and the symmetry axes (F-052) are dashed, so the three never read as the same thing.
  * Nothing is drawn without a panel size, and content is never clipped to it.
+ *
+ * Since 2026-08-16 the panel size is the **finished** panel (F-033), so the solid rectangle is the
+ * assembled outline — not a line the user draws on. `insetMm` is the perimeter came allowance
+ * (F-021's `perimeterAllowance`): when it is set, a finely dotted rectangle that far inside marks
+ * the came *centreline*, which is the line the user actually aims their border at. Same token, same
+ * weight, dotted rather than solid or dashed — the pair reads as one object ("the panel edge, and
+ * where to draw"), and 1 px dots stay distinct from the guides' `[4, 4]` and the axes' `[6, 5]`.
  */
 export function drawPanelFrame(
   ctx: CanvasRenderingContext2D | null,
   vp: Viewport,
   panel: BBox | null,
   palette: CanvasPalette,
+  insetMm = 0,
 ): void {
   if (!ctx || !panel) return
   const a = worldToScreen(vp, panel.min)
@@ -274,6 +288,13 @@ export function drawPanelFrame(
   ctx.lineWidth = 1
   ctx.setLineDash([])
   ctx.strokeRect(x, y, w, h)
+
+  const inset = insetMm * vp.scale
+  if (insetMm > 0 && inset >= MIN_INSET_PX && w - 2 * inset > 0 && h - 2 * inset > 0) {
+    ctx.setLineDash([1, 3])
+    ctx.strokeRect(x + inset, y + inset, w - 2 * inset, h - 2 * inset)
+    ctx.setLineDash([])
+  }
   ctx.restore()
 }
 

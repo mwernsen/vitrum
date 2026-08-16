@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   defaultSymmetryCenter,
   documentBounds,
+  panelInsetMm,
   panelRect,
   segmentToWorldPoints,
   stressScene,
@@ -51,6 +52,32 @@ describe('panelRect (F-058)', () => {
 
   it('is null without a panel size, so nothing is framed', () => {
     expect(panelRect(createEmptyProject())).toBeNull()
+  })
+})
+
+describe('panelInsetMm (F-033)', () => {
+  it('is half the default came flange — where the drawn border belongs inside the finished panel', () => {
+    // Default technique is lead with the H 5 mm profile (F-021 FR-5), centred on the drawn line.
+    expect(panelInsetMm(createEmptyProject())).toBeCloseTo(2.5)
+  })
+
+  it('follows the came fitted on the border segments', () => {
+    const base = createEmptyProject()
+    const border = { ...createSegment(line(vec2(0, 0), vec2(300, 0))), role: 'border' as const }
+    const project = {
+      ...base,
+      segments: { [border.id]: border },
+      technique: {
+        ...base.technique,
+        lead: { ...base.technique.lead, overrides: { [border.id]: { profileId: 'came-u-9' } } },
+      },
+    }
+    expect(panelInsetMm(project)).toBeCloseTo(4.5)
+  })
+
+  it('is zero for copper foil, where the drawn border is the panel edge', () => {
+    const base = createEmptyProject()
+    expect(panelInsetMm({ ...base, technique: { ...base.technique, kind: 'foil' } })).toBe(0)
   })
 })
 

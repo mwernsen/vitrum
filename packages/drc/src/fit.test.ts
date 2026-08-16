@@ -2,6 +2,7 @@ import { arc, line, vec2, type Vec2 } from '@vitrum/geometry'
 import {
   createEmptyProject,
   weldSegments,
+  type CameOverride,
   type Project,
   type ProjectSettings,
   type Segment,
@@ -22,7 +23,16 @@ import type { Violation } from './types'
  *
  * The reference frame throughout: the ordered panel is `settings.panelSize`, spanning
  * (0,0)→(width, height) in world mm, and world y grows downward, so y = 0 is the top edge.
+ *
+ * Since 2026-08-16 `panelSize` is the **finished** panel (Mathieu's decision, F-033 open question 1),
+ * so every expectation below is about the *assembled* extent: the drawn extent grown by the
+ * technique's perimeter came allowance. A default project is lead came with the H 5 mm profile
+ * (F-021 FR-5), whose flange is centred on the drawn line, so {@link ALLOWANCE} mm of came lands
+ * outside the drawn border on every side and a drawn border of _w_ assembles to _w_ + 5 mm.
  */
+
+/** The default project's perimeter allowance: half the H 5 mm came flange, per side. */
+const ALLOWANCE = 2.5
 
 type Draft = { geometry: SegmentGeometry; role: SegmentRole }
 
@@ -47,6 +57,30 @@ function rect(x: number, y: number, w: number, h: number, role: SegmentRole = 'b
 }
 
 const ORDERED_300_400 = { panelSize: { width: 300, height: 400 } }
+
+/** Swap the project's default came profile, which is the perimeter came until a border overrides it. */
+function withDefaultCame(project: Project, profileId: string): Project {
+  const lead = project.technique.lead
+  return {
+    ...project,
+    technique: { ...project.technique, lead: { ...lead, defaultProfileId: profileId } },
+  }
+}
+
+/** Fit a heavier (or lighter) came on every border segment — the standard perimeter-came case. */
+function withBorderCame(project: Project, profileId: string): Project {
+  const overrides: Record<string, CameOverride> = {}
+  for (const s of Object.values(project.segments)) {
+    if (s.role === 'border') overrides[s.id] = { profileId }
+  }
+  const lead = project.technique.lead
+  return { ...project, technique: { ...project.technique, lead: { ...lead, overrides } } }
+}
+
+/** The same design built as copper foil: no perimeter came at all. */
+function asFoil(project: Project): Project {
+  return { ...project, technique: { ...project.technique, kind: 'foil' } }
+}
 
 function check(project: Project): Violation[] {
   return [...runChecks(buildInput(project), FIT_RULES).violations]
@@ -75,15 +109,21 @@ describe('design-exceeds-panel: when it says nothing', () => {
   })
 
   it('is silent on a design inside the ordered panel', () => {
+    // Drawn 280 × 380 at (10, 10); assembles to 285 × 385 spanning (7.5, 7.5)→(292.5, 392.5).
     expect(check(projectFrom(rect(10, 10, 280, 380), ORDERED_300_400))).toEqual([])
   })
 
-  it('is silent on a design that exactly fills the ordered panel', () => {
-    expect(check(projectFrom(rect(0, 0, 300, 400), ORDERED_300_400))).toEqual([])
+  it('is silent on a design drawn to the ordered size less the came allowance', () => {
+    // The centreline a maker should aim at: inset by the came allowance on every side, so the
+    // assembled panel lands exactly on the ordered 300 × 400 mm rectangle.
+    const drawn = rect(ALLOWANCE, ALLOWANCE, 300 - 2 * ALLOWANCE, 400 - 2 * ALLOWANCE)
+    expect(check(projectFrom(drawn, ORDERED_300_400))).toEqual([])
   })
 
   it('is silent within the fit tolerance (snapping and rounding slop)', () => {
-    expect(check(projectFrom(rect(0, 0, 300.8, 400), ORDERED_300_400))).toEqual([])
+    // Assembles to 300.5 × 400.5 spanning (−0.5, −0.5)→(300.5, 400.5): half a millimetre out on
+    // every side, inside the 1 mm tolerance.
+    expect(check(projectFrom(rect(2, 2, 296, 396), ORDERED_300_400))).toEqual([])
   })
 
   it('is silent when only construction guides run off the panel', () => {
@@ -109,20 +149,35 @@ describe('design-exceeds-panel: when it says nothing', () => {
 describe('design-exceeds-panel: larger than the ordered glass', () => {
   it('flags a 400 mm design in a 300 mm panel as an error, naming the overrun', () => {
     // The finding this rule comes from, verbatim: "a user can draw a 400 mm design in a 300 mm
-    // panel and nothing says so until the cutting list".
+    // panel and nothing says so until the cutting list". Drawn 400 × 400 assembles to 405 × 405, so
+    // it now overruns the height too — which is the point of measuring the finished panel.
     const v = only(projectFrom(rect(0, 0, 400, 400), ORDERED_300_400))
     expect(v.ruleId).toBe('design-exceeds-panel')
     expect(v.title).toBe('Exceeds panel')
     expect(v.severity).toBe('error')
     expect(v.message).toBe(
-      'design is 400 × 400 mm — 100 mm wider than the ordered 300 × 400 mm panel',
+      'assembles to 405 × 405 mm — 105 mm wider and 5 mm taller than the ordered 300 × 400 mm ' +
+        'panel (drawn 400 × 400 mm plus 2.5 mm of came on each side)',
+    )
+  })
+
+  it('flags a design drawn to exactly the ordered size — the came makes it larger', () => {
+    // The regression this ticket exists for (Mathieu, 2026-08-16). Drawing a 300 × 400 border in a
+    // 300 × 400 panel passed clean while `panelSize` was compared with the drawn centreline; the
+    // finished panel is 305 × 405 mm and does not fit the opening.
+    const v = only(projectFrom(rect(0, 0, 300, 400), ORDERED_300_400))
+    expect(v.severity).toBe('error')
+    expect(v.message).toBe(
+      'assembles to 305 × 405 mm — 5 mm wider and 5 mm taller than the ordered 300 × 400 mm ' +
+        'panel (drawn 300 × 400 mm plus 2.5 mm of came on each side)',
     )
   })
 
   it('names both dimensions when both exceed the order', () => {
     const v = only(projectFrom(rect(0, 0, 420, 430), ORDERED_300_400))
     expect(v.message).toBe(
-      'design is 420 × 430 mm — 120 mm wider and 30 mm taller than the ordered 300 × 400 mm panel',
+      'assembles to 425 × 435 mm — 125 mm wider and 35 mm taller than the ordered 300 × 400 mm ' +
+        'panel (drawn 420 × 430 mm plus 2.5 mm of came on each side)',
     )
   })
 
@@ -130,13 +185,64 @@ describe('design-exceeds-panel: larger than the ordered glass', () => {
     // Centred on the panel: it overruns on all four sides but the point is the size, not the place.
     const v = only(projectFrom(rect(-50, -15, 400, 430), ORDERED_300_400))
     expect(v.severity).toBe('error')
-    expect(v.message).toContain('100 mm wider and 30 mm taller')
+    expect(v.message).toContain('105 mm wider and 35 mm taller')
   })
 
   it('reports fractional overruns to a tenth of a millimetre', () => {
-    const v = only(projectFrom(rect(0, 0, 301.4, 400), ORDERED_300_400))
+    // Drawn 296.4 × 395 assembles to 301.4 × 400: 1.4 mm too wide, exactly the ordered height.
+    const v = only(projectFrom(rect(0, 0, 296.4, 395), ORDERED_300_400))
     expect(v.message).toBe(
-      'design is 301.4 × 400 mm — 1.4 mm wider than the ordered 300 × 400 mm panel',
+      'assembles to 301.4 × 400 mm — 1.4 mm wider than the ordered 300 × 400 mm panel ' +
+        '(drawn 296.4 × 395 mm plus 2.5 mm of came on each side)',
+    )
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* The allowance itself: derived from the technique, never assumed              */
+/* -------------------------------------------------------------------------- */
+
+describe('design-exceeds-panel: the perimeter allowance comes from the technique (F-021)', () => {
+  /** The centreline that assembles exactly to the order under the default H 5 mm came. */
+  const toSize = rect(ALLOWANCE, ALLOWANCE, 300 - 2 * ALLOWANCE, 400 - 2 * ALLOWANCE)
+
+  it('grows with a heavier perimeter came fitted on the border', () => {
+    const base = projectFrom(toSize, ORDERED_300_400)
+    expect(check(base)).toEqual([])
+
+    // U 9 mm on the perimeter (the standard heavier-border case): 4.5 mm outside the drawn line
+    // instead of 2.5, so the same drawing assembles 4 mm too big in each direction.
+    const heavy = only(withBorderCame(base, 'came-u-9'))
+    expect(heavy.severity).toBe('error')
+    expect(heavy.message).toBe(
+      'assembles to 304 × 404 mm — 4 mm wider and 4 mm taller than the ordered 300 × 400 mm ' +
+        'panel (drawn 295 × 395 mm plus 4.5 mm of came on each side)',
+    )
+  })
+
+  it('follows the default came profile when no border came is fitted', () => {
+    // The same drawing, 8 mm smaller than the order on each axis: fine with H 5 mm came (2.5 mm
+    // per side), too big with H 12 mm (6 mm per side).
+    const drawn = rect(4, 4, 292, 392)
+    expect(check(projectFrom(drawn, ORDERED_300_400))).toEqual([])
+
+    const heavy = only(withDefaultCame(projectFrom(drawn, ORDERED_300_400), 'came-h-12'))
+    expect(heavy.message).toContain('assembles to 304 × 404 mm')
+    expect(heavy.message).toContain('plus 6 mm of came on each side')
+  })
+
+  it('adds nothing for copper foil, where the drawn size is the finished size', () => {
+    // Foil has no perimeter came: pieces are cut back half the piece gap and the edge is wrapped
+    // and soldered, so the finished edge lands back on the drawn line. The design that is an error
+    // in lead is silent in foil.
+    expect(check(asFoil(projectFrom(rect(0, 0, 300, 400), ORDERED_300_400)))).toEqual([])
+  })
+
+  it('says so in the message when a foiled panel is genuinely too big', () => {
+    const v = only(asFoil(projectFrom(rect(0, 0, 400, 400), ORDERED_300_400)))
+    expect(v.message).toBe(
+      'assembles to 400 × 400 mm — 100 mm wider than the ordered 300 × 400 mm panel ' +
+        '(drawn 400 × 400 mm; foiled edges add no width)',
     )
   })
 })
@@ -150,18 +256,19 @@ describe('design-exceeds-panel: fits but sits outside', () => {
     const v = only(projectFrom(rect(60, 10, 280, 380), ORDERED_300_400))
     expect(v.severity).toBe('warning')
     expect(v.message).toBe(
-      'design is 280 × 380 mm — it fits the ordered 300 × 400 mm panel but extends 40 mm past its right edge',
+      'assembles to 285 × 385 mm — it fits the ordered 300 × 400 mm panel but extends 42.5 mm ' +
+        'past its right edge (drawn 280 × 380 mm plus 2.5 mm of came on each side)',
     )
   })
 
   it('names every overrunning edge, in a stable order', () => {
     const v = only(projectFrom(rect(-20, -30, 280, 380), ORDERED_300_400))
-    expect(v.message).toContain('extends 20 mm past its left edge and 30 mm past its top edge')
+    expect(v.message).toContain('extends 22.5 mm past its left edge and 32.5 mm past its top edge')
   })
 
   it('names the bottom edge for an overrun past the panel height (world y grows downward)', () => {
     const v = only(projectFrom(rect(10, 60, 280, 380), ORDERED_300_400))
-    expect(v.message).toContain('40 mm past its bottom edge')
+    expect(v.message).toContain('42.5 mm past its bottom edge')
   })
 })
 
@@ -183,17 +290,32 @@ describe('design-exceeds-panel: what it points at', () => {
     expect(v.segmentIds).toEqual(leadIds)
   })
 
-  it('anchors the marker on the corner that sticks out furthest', () => {
+  it('names a segment drawn inside the panel whose came lands outside it', () => {
+    // A lead line 1 mm inside the right edge: the drawn line fits, the came on it does not.
+    const inside = rect(10, 10, 280, 380)
+    const nearEdge = seg(vec2(299, 100), vec2(299, 300), 'lead')
+    const project = projectFrom([...inside, nearEdge], ORDERED_300_400)
+    const v = only(project)
+    expect(v.severity).toBe('warning')
+    expect(v.message).toContain('1.5 mm past its right edge')
+    const leadIds = Object.values(project.segments)
+      .filter((s) => s.role === 'lead')
+      .map((s) => s.id)
+    expect(v.segmentIds).toEqual(leadIds)
+  })
+
+  it('anchors the marker on the corner of the assembled panel that sticks out furthest', () => {
     const v = only(projectFrom(rect(10, 60, 320, 380), ORDERED_300_400))
-    // Overruns right (330 − 300 = 30) and bottom (440 − 400 = 40): the bottom-right corner.
-    expect(v.at).toEqual(vec2(330, 440))
-    expect(v.distance).toBeCloseTo(40, 6)
+    // Assembles to (7.5, 57.5)→(332.5, 442.5): overruns right (32.5) and bottom (42.5), so the
+    // marker lands on the finished panel's bottom-right corner.
+    expect(v.at).toEqual(vec2(332.5, 442.5))
+    expect(v.distance).toBeCloseTo(42.5, 6)
   })
 
   it('anchors on the panel-side axis when only one axis overruns', () => {
     const v = only(projectFrom(rect(60, 10, 280, 380), ORDERED_300_400))
-    // Only the right edge overruns; the vertical anchor is the design's mid-height.
-    expect(v.at.x).toBeCloseTo(340, 6)
+    // Only the right edge overruns; the vertical anchor is the assembled panel's mid-height.
+    expect(v.at.x).toBeCloseTo(342.5, 6)
     expect(v.at.y).toBeCloseTo(200, 6)
   })
 
@@ -225,11 +347,12 @@ describe('design-exceeds-panel: measures where the glass actually reaches', () =
     expect(check(projectFrom(border, ORDERED_300_400))).toEqual([])
 
     const v = only(projectFrom([...border, bulge], ORDERED_300_400))
-    // 10 → 390: the arc's extremum, not its endpoints (which stop at x = 290).
+    // 10 → 390 drawn: the arc's extremum, not its endpoints (which stop at x = 290).
     expect(v.message).toBe(
-      'design is 380 × 380 mm — 80 mm wider than the ordered 300 × 400 mm panel',
+      'assembles to 385 × 385 mm — 85 mm wider than the ordered 300 × 400 mm panel ' +
+        '(drawn 380 × 380 mm plus 2.5 mm of came on each side)',
     )
-    expect(v.at).toEqual(vec2(390, 200))
+    expect(v.at).toEqual(vec2(392.5, 200))
   })
 })
 

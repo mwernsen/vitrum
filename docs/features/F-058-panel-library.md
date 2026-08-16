@@ -417,6 +417,25 @@ also made F-052's axes look like they anchored on nothing.
   covered by unit tests plus a `dev:ui` look; confirmed visually at 31 % zoom on a
   300 × 400 panel.
 
+### Amendment (2026-08-16) — the dialog's size is the finished panel
+
+Mathieu settled what FR-3's Width / Height actually mean (F-033 open question 1):
+`settings.panelSize` is the **finished** panel — the outside dimensions of the assembled
+panel, as a customer orders it and a glazier measures it — not the drawn lead centreline.
+Consequences for this feature's surfaces:
+
+- The size fieldset gained one line of helper text, "Outside dimensions of the finished
+  panel, once it is leaded or foiled", under the width/height row.
+- `drawPanelFrame`'s rectangle is now explicitly the **finished** outline, and it draws a
+  second, finely dotted rectangle inset by the perimeter came allowance — the centreline the
+  user aims their border at. Both live in the same call, same token, overlay layer, design
+  view only, for the reasons above.
+- The library card's size line is unchanged and still correct: it reports the finished size.
+- `panelRect`, `documentBounds` and `defaultSymmetryCenter` are unchanged and still correct;
+  the allowance is symmetric, so the panel centre does not move.
+
+See the amendment in [F-033](F-033-drc-panel-fit.md) for the allowance model and the DRC rule.
+
 ### Follow-ups (out of scope)
 
 - **~~The four rail placeholders have no roadmap ids.~~** Resolved by the 2026-08-14
