@@ -1,6 +1,7 @@
 import {
   applyToPoint,
   arc,
+  closestPoint,
   cubic,
   distance,
   line,
@@ -16,7 +17,7 @@ import { buildSnapScene, resolveSnap } from '../snap/snap'
 import { DEFAULT_SNAP_SETTINGS } from '../snap/types'
 
 import { canonicalizeToSource, canonicalizeToSourceSector, sectorFrame } from './canonicalize'
-import { expandNetwork, expandReplicas } from './expand'
+import { expandNetwork, expandReplicas, SELF_IMAGE_TOLERANCE } from './expand'
 import { geometryEnds, radialCount, symmetryTransforms, transformSymGeometry } from './transform'
 import type { NetworkSegment, SymmetrySetup } from './types'
 
@@ -51,6 +52,9 @@ describe('symmetryTransforms — multiplicity (FR-1)', () => {
 })
 
 describe('expandReplicas — multiplicity + rigidity', () => {
+  // In **general position** — the source is not fixed by any non-identity group element. Geometry
+  // sitting on an axis or other fixed line has a shorter orbit and so fewer replicas; that stated
+  // exception is exercised in "geometry fixed by the group" below.
   const source = [seg('L1', line(vec2(120, 100), vec2(140, 130)))]
 
   it('yields (elements − 1) × source replicas', () => {
@@ -216,6 +220,272 @@ describe('expandNetwork — geometry equivalence + seam coincidence (FR-2/FR-3)'
       const [inner] = geometryEnds(segment.geometry)
       expect(distance(inner, CENTER)).toBeLessThan(1e-9)
     }
+  })
+})
+
+/**
+ * Geometry **fixed by a group element** — a border running along a mirror axis, a diameter through
+ * a rotation centre — is left where it is by that element, so a naive expansion mints a second,
+ * coincident copy of it. Detection cannot survive that: two half-edges leave the same vertex at the
+ * same angle, the sweep pairs each with the other's twin, every traced cycle collapses to zero
+ * signed area, and the design yields **no pieces at all** (user-test run 2026-08-16-a, recorded as
+ * an F-052 follow-up and fixed 2026-08-16). These pin the fix — and, just as importantly, pin the
+ * cases where a replica must be *kept*.
+ */
+describe('expandReplicas — geometry fixed by the group is not duplicated', () => {
+  const AXIS_X = 0
+  /** A vertical mirror axis through x = 0. */
+  const vertical = setup({ mode: 'mirror', angle: Math.PI / 2, center: vec2(AXIS_X, 0) })
+
+  /** A closed polygon as welded network segments (consecutive spans share a node id). */
+  function closedPoly(prefix: string, points: readonly Vec2[]): NetworkSegment[] {
+    return points.map((p, i) => ({
+      id: `${prefix}${i}`,
+      geometry: line(p, points[(i + 1) % points.length]!),
+      role: 'lead' as const,
+      endpoints: [`${prefix}n${i}`, `${prefix}n${(i + 1) % points.length}`] as const,
+    }))
+  }
+
+  function detect(source: readonly NetworkSegment[], s: SymmetrySetup) {
+    const net = expandNetwork(source, s)
+    const { pieces, diagnostics } = detectPieces(net)
+    return {
+      net,
+      pieces: pieces.length,
+      duplicates: diagnostics.filter((d) => d.kind === 'duplicate-segment').length,
+      nearMisses: diagnostics.filter((d) => d.kind === 'near-miss').length,
+    }
+  }
+
+  /**
+   * An independent "same path, same extent" check for the properties below — deliberately sampled
+   * at different parameters than the production suppression, so the properties test the outcome
+   * rather than re-running the implementation.
+   */
+  function samePath(a: NetworkSegment, b: NetworkSegment, tol: number): boolean {
+    const along = (x: NetworkSegment, y: NetworkSegment): boolean =>
+      [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1].every(
+        (t) => closestPoint(y.geometry, pointAt(x.geometry, t)).distance <= tol + 1e-9,
+      )
+    return along(a, b) && along(b, a)
+  }
+
+  it('finds the pieces of a border whose seam runs along the mirror axis', () => {
+    // The reported case: half the design is drawn in the source sector and its right-hand border
+    // lies *on* the axis, so that one segment is its own mirror image. Expected: two pieces (the
+    // drawn half plus its reflection), welded along the seam.
+    const source = closedPoly('b', [
+      vec2(-80, 0),
+      vec2(AXIS_X, 0),
+      vec2(AXIS_X, 120),
+      vec2(-80, 120),
+    ])
+    const { net, pieces, duplicates } = detect(source, vertical)
+    expect(pieces).toBe(2)
+    expect(duplicates).toBe(0)
+    // The on-axis segment (b1, from (0,0) to (0,120)) contributes no replica; the other three do.
+    expect(net.map((s) => s.id)).not.toContain('b1~sym1')
+    expect(net).toHaveLength(7)
+  })
+
+  it('finds the piece of a closed shape symmetric about the axis', () => {
+    // Every side is mapped onto a side, so all four replicas are suppressed and the shape is
+    // exactly itself. Pre-fix this returned 0 pieces and 4 `duplicate-segment` diagnostics.
+    const source = closedPoly('b', [vec2(-50, 0), vec2(50, 0), vec2(50, 100), vec2(-50, 100)])
+    const { net, pieces, duplicates } = detect(source, vertical)
+    expect(pieces).toBe(1)
+    expect(duplicates).toBe(0)
+    expect(net).toHaveLength(4) // the source alone
+  })
+
+  it('suppresses a near-image, not just a pointwise-identical one', () => {
+    // Suppression is tolerance-based at F-020's weld tolerance, not exact: a shape drawn a hair off
+    // the axis reflects to a copy the detector cannot tell apart from the source, and degenerates
+    // the same way. Includes exactly half the tolerance — the decisive case, where the source and
+    // its image are `weld` apart.
+    for (const off of [0.001, 0.004, SELF_IMAGE_TOLERANCE / 2]) {
+      const source = closedPoly('b', [
+        vec2(-50 + off, 0),
+        vec2(50 + off, 0),
+        vec2(50 + off, 100),
+        vec2(-50 + off, 100),
+      ])
+      const { pieces, duplicates, net } = detect(source, vertical)
+      expect({ off, pieces, duplicates, segments: net.length }).toEqual({
+        off,
+        pieces: 1,
+        duplicates: 0,
+        segments: 4,
+      })
+    }
+  })
+
+  it('keeps both copies once detection can tell them apart', () => {
+    // Past the weld tolerance the two copies are genuinely distinct geometry: detection does not
+    // weld their endpoints, so nothing degenerates, and F-020's near-miss rule is the right place
+    // to complain. Suppressing here would silently delete a replica the user can see.
+    const off = 0.006 // source and image 0.012 mm apart — beyond the 0.01 mm weld
+    const source = closedPoly('b', [
+      vec2(-50 + off, 0),
+      vec2(50 + off, 0),
+      vec2(50 + off, 100),
+      vec2(-50 + off, 100),
+    ])
+    const { net, pieces, nearMisses } = detect(source, vertical)
+    expect(net).toHaveLength(8) // every replica kept
+    expect(pieces).toBeGreaterThan(0)
+    expect(nearMisses).toBeGreaterThan(0)
+  })
+
+  it('keeps the replica of a segment with only one endpoint on the axis', () => {
+    // A shared endpoint is not a fixed segment: the two spans leave the axis in different
+    // directions, so both must survive. Apex on the axis → the shape and its mirror, two pieces.
+    const source = closedPoly('t', [vec2(AXIS_X, 0), vec2(60, 30), vec2(30, 80)])
+    const { net, pieces, duplicates } = detect(source, vertical)
+    expect(net).toHaveLength(6)
+    expect(pieces).toBe(2)
+    expect(duplicates).toBe(0)
+  })
+
+  it('keeps the replicas of a shape that crosses the axis asymmetrically', () => {
+    const source = closedPoly('x', [vec2(-20, 0), vec2(50, 10), vec2(40, 70), vec2(-30, 50)])
+    const { net, duplicates } = detect(source, vertical)
+    expect(net).toHaveLength(8)
+    expect(duplicates).toBe(0)
+  })
+
+  it('keeps a replica that only partially overlaps its source', () => {
+    // A chord crossing the axis off-centre: its image runs along the same line but over a different
+    // extent, so it is a genuine second segment. Containment has to hold *both* ways to suppress.
+    const source = [seg('c', line(vec2(-30, 40), vec2(50, 40)))]
+    const net = expandNetwork(source, vertical)
+    expect(net).toHaveLength(2)
+    expect(samePath(net[0]!, net[1]!, SELF_IMAGE_TOLERANCE)).toBe(false)
+  })
+
+  it('collapses a diameter through the centre under even-fold radial symmetry', () => {
+    // Rotating a full diameter by π maps it onto itself, and the 90°/270° images coincide with each
+    // other — so 4-fold symmetry of a diameter is two crossed diameters, not four stacked ones.
+    const s = setup({ mode: 'radial', count: 4, angle: 0, center: vec2(0, 0) })
+    const replicas = expandReplicas([seg('d', line(vec2(-50, 0), vec2(50, 0)))], s)
+    expect(replicas.map((r) => r.id)).toEqual(['d~sym1'])
+  })
+
+  it('collapses a spoke lying on the mirror axis under radial + mirror', () => {
+    // D₆ acting on a spoke that lies along the mirror axis gives 6 spokes, not 12.
+    const s = setup({ mode: 'radial', count: 6, angle: 0, mirror: true, center: vec2(0, 0) })
+    const net = expandNetwork([seg('sp', line(vec2(0, 0), vec2(60, 0)))], s)
+    expect(net).toHaveLength(6)
+  })
+
+  it('keeps every replica of a wedge that only touches the centre', () => {
+    // The radial control: a wedge fixed by nothing still tiles the full rosette.
+    const s = setup({ mode: 'radial', count: 6, angle: 0, center: vec2(0, 0) })
+    const { net, pieces, duplicates } = detect(
+      closedPoly('w', [vec2(0, 0), vec2(60, 0), vec2(52, 30)]),
+      s,
+    )
+    expect(net).toHaveLength(18)
+    expect(pieces).toBe(6)
+    expect(duplicates).toBe(0)
+  })
+
+  it('finds the piece of a box centred on the radial centre', () => {
+    // Fixed by the π rotation *and* by the 90° pair, so the whole shape is its own orbit.
+    const s = setup({ mode: 'radial', count: 4, angle: 0, center: vec2(0, 0) })
+    const source = closedPoly('b', [vec2(-50, -50), vec2(50, -50), vec2(50, 50), vec2(-50, 50)])
+    const { net, pieces } = detect(source, s)
+    expect(net).toHaveLength(4)
+    expect(pieces).toBe(1)
+  })
+
+  /**
+   * Properties over networks deliberately biased towards fixed geometry: a lattice centred on the
+   * symmetry centre and axis angles that are multiples of 45°, so on-axis and through-centre
+   * segments come up often rather than never.
+   */
+  const arbSetup = fc
+    .record({
+      mode: fc.constantFrom('mirror' as const, 'double-mirror' as const, 'radial' as const),
+      angleDeg: fc.constantFrom(0, 45, 90, 135, 30),
+      count: fc.integer({ min: 2, max: 6 }),
+      mirror: fc.boolean(),
+    })
+    .map((r): SymmetrySetup => ({
+      mode: r.mode,
+      center: vec2(0, 0),
+      angle: (r.angleDeg * Math.PI) / 180,
+      count: r.count,
+      mirror: r.mirror,
+    }))
+
+  const arbSource = fc
+    .uniqueArray(
+      fc.record({
+        ax: fc.integer({ min: -3, max: 3 }),
+        ay: fc.integer({ min: -3, max: 3 }),
+        bx: fc.integer({ min: -3, max: 3 }),
+        by: fc.integer({ min: -3, max: 3 }),
+      }),
+      { minLength: 1, maxLength: 4, selector: (r) => JSON.stringify(r) },
+    )
+    .map((rs) => rs.filter((r) => r.ax !== r.bx || r.ay !== r.by))
+    .filter((rs) => rs.length > 0)
+    .map((rs) =>
+      rs.map((r, i) => seg(`L${i}`, line(vec2(r.ax * 20, r.ay * 20), vec2(r.bx * 20, r.by * 20)))),
+    )
+
+  it('leaves no full duplicate anywhere in the expanded network', () => {
+    fc.assert(
+      fc.property(arbSetup, arbSource, (s, source) => {
+        // Skip sources that already duplicate themselves — expansion is not asked to fix those.
+        for (let i = 0; i < source.length; i++) {
+          for (let j = i + 1; j < source.length; j++) {
+            fc.pre(!samePath(source[i]!, source[j]!, SELF_IMAGE_TOLERANCE))
+          }
+        }
+        const net = expandNetwork(source, s)
+        for (let i = 0; i < net.length; i++) {
+          for (let j = i + 1; j < net.length; j++) {
+            expect(samePath(net[i]!, net[j]!, SELF_IMAGE_TOLERANCE)).toBe(false)
+          }
+        }
+      }),
+      { numRuns: 300 },
+    )
+  })
+
+  it('loses no geometry: every group image still lies on the expanded network', () => {
+    // The safety half of suppression. A dropped replica must be redundant, never missing: pushing
+    // any source segment through any group element has to land on a segment that is still there.
+    fc.assert(
+      fc.property(arbSetup, arbSource, (s, source) => {
+        const net = expandNetwork(source, s)
+        for (const t of symmetryTransforms(s)) {
+          for (const src of source) {
+            const image = seg('image', transformSymGeometry(t, src.geometry))
+            expect(net.some((n) => samePath(image, n, SELF_IMAGE_TOLERANCE))).toBe(true)
+          }
+        }
+      }),
+      { numRuns: 300 },
+    )
+  })
+
+  it('stays independent of source order with suppression in play', () => {
+    fc.assert(
+      fc.property(arbSetup, arbSource, (s, source) => {
+        const forward = expandReplicas(source, s)
+          .map((r) => r.id)
+          .sort()
+        const reversed = expandReplicas([...source].reverse(), s)
+          .map((r) => r.id)
+          .sort()
+        expect(reversed).toEqual(forward)
+      }),
+      { numRuns: 300 },
+    )
   })
 })
 

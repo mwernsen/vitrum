@@ -197,3 +197,26 @@ visual/bench checks listed below).
 lets glass assignment (F-023) inherit across a split (both fragments point at the parent) and a
 merge (the merged piece points at its larger contributor) without a second identity system. Purely
 additive — `detectPieces`/`PieceDetector` now populate `lineage`; no existing caller changed.
+
+**Known limitation found from F-052 (2026-08-16) — duplicate edges defeat the face trace.** No code
+change here; recorded so the next person does not re-derive it. Two segments tracing the same path
+over the same extent, closer together than `weldTolerance`, make `buildGraph` intern their endpoints
+to the same vertices (correctly — they _are_ the same points), so a vertex carries two outgoing
+half-edges at the same departing angle. `traceCycles`' sweep (`next(he) = the edge clockwise from
+twin(he)`) then pairs each copy with the other's twin, and every cycle it traces there closes with
+zero signed area, so it falls through both the `> AREA_EPS` and `< -AREA_EPS` arms and is dropped.
+The visible effect is severe and silent: a rectangle plus an exact copy of its four sides yields
+`pieces = 0` — the whole shape disappears — accompanied only by 4 `duplicate-segment` diagnostics.
+
+- F-052's on-axis symmetry bug was one trigger for this, and was fixed **upstream** in
+  `expandReplicas` (a segment fixed by a group element no longer gets a coincident image emitted),
+  leaving `pieces/` untouched. See the F-052 "Geometry on an axis is not replicated onto itself"
+  note for the measurements.
+- The hand-drawn trigger remains: draw the same line twice and detection loses the piece. Worth its
+  own ticket. Two candidate fixes: keep only one edge per (vertex pair + path) group in `buildGraph`
+  — surgical, but the survivor has to be chosen by segment id, not input order, to preserve FR-2
+  determinism; or promote `duplicate-segment` to a blocking DRC error so the user is told to remove
+  it. The first is preferable: losing the piece silently is worse than the duplicate itself.
+- Partial collinear overlap is a milder relative of the same thing: two rectangles sharing part of a
+  bottom edge detect as 2 pieces where 3 regions exist. Untouched by the F-052 fix (a partial overlap
+  is genuine second geometry, so suppression correctly leaves it alone).
