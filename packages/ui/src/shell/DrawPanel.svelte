@@ -316,7 +316,11 @@
             <button class="ghost" onclick={() => symmetry.bake()}>Bake symmetry</button>
           </div>
         {/if}
-        <span class="hint">Draw one sector and mirror it live across the panel.</span>
+        <span class="hint">
+          Draw one sector and mirror it live across the panel. For a design with two symmetries — a
+          mirrored border around a rotated centre — draw the first, bake it, then switch mode and
+          draw the second.
+        </span>
       {:else}
         <span class="hint">Coming with F-052</span>
       {/if}

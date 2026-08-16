@@ -334,3 +334,37 @@ this file steers every future feature.
   exposed through the preload, and a browser host must degrade to `file.name`.
 - (F-058, 2026-08-06) `{@const}` must be the immediate child of a block: two consts for one `{#each}`
   row both belong directly under `{#each}`, not nested inside the row's markup.
+- (F-058, 2026-08-16) Canvas chrome belongs on the **overlay** canvas, never the content canvas:
+  F-043's `toPngBytes` reads only `contentCanvas`, so anything drawn there lands in the exported
+  PNG. Content layer = the design; overlay = affordances.
+- (F-052, 2026-08-16) A `type="number"` input reports `''` for anything it cannot parse, and
+  `Number('')` is `0` — a numeric field that commits on `oninput` must reject the empty string, or
+  a half-typed value snaps the value to zero.
+- (F-052/F-058, 2026-08-16) "Document defaults at the origin" is a trap once panels are laid out
+  `(0,0)`→`(w,h)`: the origin is a **corner**, not a centre. Seed pivots and anchors from
+  `panelRect` (`canvas/scene.ts`), falling back to the content bbox, then the origin.
+- (F-052/F-023, 2026-08-16) A "these two pieces are the same piece" relation is cheapest as an exact
+  combinatorial orbit over derived segment ids (`~symK` plus the group's composition table), not
+  geometric matching. Expose it in the same `Record<current, ancestor>` shape as F-020's lineage so
+  `resolveGeneration` composes instead of forking, and put symmetry ahead of edit lineage — or a
+  replica keeps the colour its source had before it was repainted.
+- (F-052, 2026-08-16) Composing a coordinate fold *in front of* the F-012 resolver silently breaks
+  the direction-sensitive snap kinds (angle) and puts every guide and marker in the wrong space.
+  Fold *after*: resolve in the sector the cursor is in with the anchors and constraint mapped into
+  it, then apply the group element's inverse. Keep `ResolvedPoint.snap` in display space and
+  `world` in document space.
+- (F-052, 2026-08-16) Anything reaching `segmentsFromDrafts` must be bit-identical to weld (`vecKey`
+  is exact equality) — after any isometry round-trip, settle the point back onto the stored
+  coordinate by reference, or a 1e-13 mm rounding becomes a duplicate node.
+- (F-052, 2026-08-16, testing) A snap-behaviour E2E is only a regression test if the axis angle is
+  **not** a multiple of 22.5°: reflecting the 45° ray fan across such an axis maps it onto itself,
+  so buggy and correct code agree. Verify a new test fails on pre-fix code before believing it.
+- (F-033, 2026-08-16) A rule pack whose charter is new gets its own file, spec and ROADMAP row;
+  `registry.ts` documents appending a pack as the extension path, and each pack's tests scope to
+  its own `*_RULES`, so a new pack never perturbs another's counts.
+- (F-033, 2026-08-16) Grade severity on a distinction that means something (larger-than-ordered vs
+  merely-outside) rather than a magnitude threshold — it needs one fewer tunable, and the two
+  grades tell the user *which* fix applies.
+- (F-033, 2026-08-16, testing) `getByRole('button', { name: 'Check' })` goes ambiguous once the DRC
+  queue has rows (a violation message contains "check hanging hardware"); don't re-click a rail
+  button while its own panel is showing.

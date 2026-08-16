@@ -298,4 +298,21 @@ describe('DrawPanel — live symmetry (F-052)', () => {
     expect(Object.keys(ctrl.doc.segments)).toHaveLength(1)
     expect(ctrl.doc.symmetry.mode).toBe('radial')
   })
+
+  // The symmetry setup is document-wide (F-052 Decision §2), so a design with a mirrored border
+  // around a rotated centre is built by baking between stages. That worked from day one but read
+  // as "unsupported" in user testing (run 2026-08-16-a, F-052 finding 4), so the hint says it.
+  it('tells the user how to combine two symmetries', async () => {
+    const { viewport, ctrl } = setup()
+    const { SymmetryController } = await import('../tools/symmetry.svelte')
+    const { vec2 } = await import('@vitrum/geometry')
+    const symmetry = new SymmetryController({
+      getDoc: () => ctrl.doc,
+      execute: (c) => ctrl.execute(c),
+      defaultCenter: () => vec2(50, 50),
+    })
+    render(DrawPanel, { viewport, symmetry })
+
+    expect(screen.getByText(/bake it, then switch mode/i)).toBeInTheDocument()
+  })
 })
