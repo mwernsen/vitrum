@@ -37,7 +37,10 @@ Diafane doesn't have.
    maps back to the source) is DEFERRED to a follow-up ticket. Source-confinement is
    achieved by **canonicalizing pointers into source space at the existing F-011
    `PointerResolver` / F-012 `SnapController` controller seam** — no change to the
-   tool contracts or to `ResolvedPoint` / `ResolveContext`.
+   tool contracts or to `ResolvedPoint` / `ResolveContext`. _(The seam still holds, but
+   the fold's **position** in it changed on 2026-08-16 — snapping now happens before the
+   fold, in the cursor's sector. See "Snapping happens in the cursor's sector" in the
+   implementation notes.)_
 2. **Replicas are pure derived output; the source is the only stored truth.**
    `Project.symmetry` (`@vitrum/model`) holds **setup only** — mode, center, primary
    axis angle, radial count, and the radial-mirror flag — mirroring how
@@ -232,9 +235,81 @@ unit round-trip in inches, unparseable input ignored), and `e2e/symmetry.spec.ts
 the centre reads 150 / 200 on the dialog's default 300 × 400 panel before drawing. Confirmed
 in `dev:ui`: the mirror axis crosses the panel centre and follows the field as it is typed.
 
-Still open and **not** touched here — filed in the run as needing Mathieu's decision first:
-glass inheritance across replicas (issue 3), nested-symmetry / bake-staging discoverability
-(issue 4), a named "rotate 180°" mode (the run's [Q]), and a `design-exceeds-panel` DRC rule.
+Still open after this ticket: nested-symmetry / bake-staging discoverability (run issue 5) and
+a named "rotate 180°" mode (the run's [Q]). The run's other two findings shipped alongside this
+one — see the sector-snapping section below, and "Glass inherits across replicas".
+
+### Snapping happens in the cursor's sector (2026-08-16, supersedes part of Decision §1)
+
+Reported by Mathieu while drawing and diagnosed in
+[docs/testing/runs/2026-08-16-a/F-052.md](../testing/runs/2026-08-16-a/F-052.md) finding 2
+(run summary issue 3): with symmetry on, starting a line and moving the cursor across the
+axis made the preview flip between 45° angles instead of following the cursor, and every
+snap marker appeared in the source sector rather than under the cursor.
+
+Decision §1's "one-line composition at the resolver seam"
+(`snap.resolver(symmetry.canonicalize(world), ctx)`) confines pointers correctly but
+**measures snapping in the wrong space**. Two halves, both in the shell:
+
+- the snap index held source segments only, so with the cursor in a replica sector there
+  was no geometry under it — the only kinds that could fire were the two needing no
+  targets, grid and angle;
+- angle snap is direction-sensitive. It fans 8 rays at 45° from the gesture's last anchor
+  and captures by perpendicular distance; the point reaching it had already been folded, so
+  near the axis it barely moved (several rays inside the radius at once) and crossing the
+  axis reversed its direction of travel, sweeping back over those rays with each winning in
+  turn. With an axis at a multiple of 22.5° the reflected ray fan maps onto itself and the
+  two orders agree — which is why the default 90° axis hid it until a real design didn't.
+
+**What replaced it: snap in the sector the cursor is in, then fold the winner back.** The
+seam is unchanged in kind — still one composition in `AppShell`, still no tool or
+`ResolvedPoint` change — but the fold now happens _after_ the resolve:
+
+- `canonicalizeToSourceSector` (`@vitrum/core/symmetry/canonicalize.ts`) returns the folded
+  point **plus the sector index**; `sectorFrame(setup, k)` returns that sector's group
+  element and its exact inverse (a new `invert` in `@vitrum/geometry`, so nobody re-derives
+  affine inverses by hand). The index is found by asking which group element carries the
+  folded point back onto the original, which is exact for every mode and needs no per-mode
+  inverse chain.
+- `SymmetryController.sectorResolver(inner)` maps the gesture's anchors — and any angular
+  constraint's origin and reference directions — into sector `k` before calling the F-012
+  resolver at the **unfolded** cursor, then folds only the resolved position back. So the
+  rays fan from the point the user clicked, which is the start of the stroke they can see.
+- `snap.updateScene(shownSegments, replicaSegments)`: the derived replicas are snap targets
+  now, so a point picked in a replica sector snaps to the linework the user sees there. They
+  stay out of the **editing** scene (`buildEditResolver`) — a dragged node must never snap to
+  its own live mirror image, which follows the drag and carries a derived id the exclude list
+  cannot name.
+- `ResolvedPoint.snap` is deliberately left in **sector** coordinates: it is what the overlay
+  draws, and the marker belongs under the cursor. Only `world` folds, so FR-5 still holds —
+  a gesture never authors geometry into a replica sector.
+
+This is exact, not a compromise: replicas are rigid images, so a snap onto sector `k`'s copy
+of an endpoint folds back onto that endpoint. Asserted as a property over random networks,
+setups, endpoints and sectors, driving the real snap engine over the real expanded network
+(`symmetry.test.ts`, within 1e-9 mm). Because welding keys on **exact** equality (`vecKey`),
+an endpoint snap taken in a replica sector is additionally settled onto the stored source
+coordinate by reference when it is within 1e-6 mm of a gesture anchor or a document node —
+otherwise F-012 FR-1's bit-identical weld would quietly become a duplicate node a nanometre
+away.
+
+Accepted costs (Mathieu, 2026-08-16): a grid-snapped point yields off-grid _source_
+coordinates when the axis is not a multiple of 45° through a grid node — the design is right
+where the user drew it, the stored numbers are untidy. Likewise a 45° stroke drawn in a
+replica sector is stored as its reflection, which is only a round angle in the sector it was
+drawn in; that is what the user asked for.
+
+Verified: the E2E `symmetry.spec.ts` "drawing in a replica sector follows the cursor, not a
+45° artefact" draws a stroke in a replica sector with the axis at 36° (deliberately not a
+multiple of 22.5°) and asserts the replica under the cursor runs from the click to the
+release. Measured 0.5 px out with the fix, 6.3 px with the old order — the test fails on
+pre-fix code. Snap markers and alignment guides were confirmed in `dev:ui` to render at the
+cursor in a replica sector (grid, on-curve and endpoint all seen), including the new ability
+to snap **to** replica linework.
+
+Net-new dev surface: the debug palette gained an "Output ends" readout (the output network's
+endpoints, capped at 8 segments) — the E2E needs to see the replica, since with symmetry on
+the line under the cursor is not the stored segment.
 
 ## Follow-ups (out of scope for v1)
 
@@ -243,6 +318,10 @@ glass inheritance across replicas (issue 3), nested-symmetry / bake-staging disc
   canonicalization seam already folds pointers into source space — the follow-up adds the
   inverse mapping for hit-testing/selecting a replica and re-authoring the corresponding
   source geometry.
+- **Editing drags do not snap to replicas.** Drawing does (2026-08-16); an edit drag keeps a
+  source-only scene, because the replicas of the segment being dragged move with it and their
+  derived ids cannot be named in the exclude list. Excluding a dragged segment's own images
+  would let a node drag snap to the _other_ sectors' linework, which is the natural increment.
 - **On-canvas axis/center dragging.** Axes render as guides and are editable from the Draw
   panel (centre x/y since 2026-08-16, angle, fold count, mirror) and seeded to the panel
   centre; direct drag of the center/axis handles on the canvas (and snapping draw points

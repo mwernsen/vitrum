@@ -227,15 +227,18 @@ export {
 } from './solar'
 export {
   canonicalizeToSource,
+  canonicalizeToSourceSector,
   expandNetwork,
   expandReplicas,
   geometryEnds,
   noSymmetry,
   radialCount,
   reflection,
+  sectorFrame,
   symmetryTransforms,
   transformSymGeometry,
   type NetworkSegment,
+  type SourceFold,
   type SymGeometry,
   type SymmetryMode,
   type SymmetrySetup,

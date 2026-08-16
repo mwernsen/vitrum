@@ -63,10 +63,19 @@ export class SnapController {
     this.#viewport = viewport
   }
 
-  /** Rebuild the spatial index for a new set of snap targets (call when segments change). */
-  updateScene(segments: readonly Segment[]): void {
+  /**
+   * Rebuild the spatial index for a new set of snap targets (call when segments change).
+   *
+   * `derived` holds read-only geometry that is snappable but not editable — the F-052 symmetry
+   * replicas. It joins the **drawing** scene, so a point picked in a replica sector can snap to the
+   * replica linework the user sees there (and the shell folds the winner back to source), but stays
+   * out of the editing scene {@link buildEditResolver} builds: a dragged node must never snap to its
+   * own live mirror image, which follows the drag and carries a derived id the exclude list can't
+   * name.
+   */
+  updateScene(segments: readonly Segment[], derived: readonly Segment[] = []): void {
     this.#segments = segments
-    this.#scene = buildSnapScene(segments.map((s) => ({ geometry: s.geometry })))
+    this.#scene = buildSnapScene([...segments, ...derived].map((s) => ({ geometry: s.geometry })))
   }
 
   /**

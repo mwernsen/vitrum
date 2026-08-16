@@ -176,9 +176,10 @@
     // the Draw panel's centre fields; on-canvas handles are still a follow-up.
     defaultCenter: () => (controller ? defaultSymmetryCenter(controller.doc) : vec2(0, 0)),
   })
-  // Fold every pointer into the source sector before snapping (Decision §1 / FR-5): a click
-  // anywhere authors geometry in the source, which then replicates live. No tool contract changes.
-  tools.resolver = (world, ctx) => snap.resolver(symmetry.canonicalize(world), ctx)
+  // Snap in the sector the cursor is in, then fold the winner into the source sector (Decision §1 /
+  // FR-5): a click anywhere authors geometry in the source, which then replicates live, but the
+  // angles and geometry it snaps to are the ones under the cursor. No tool contract changes.
+  tools.resolver = symmetry.sectorResolver(snap.resolver)
 
   // Selection + editing (F-013). Selection lives outside the document; the edit controller
   // drives the inert `select` tool (click/marquee, node & handle drag, transforms).
@@ -259,9 +260,10 @@
     return { w: view.getUint32(16) || 1, h: view.getUint32(20) || 1 }
   }
 
-  // Rebuild the snap spatial index whenever the visible network changes. Snapping stays over the
-  // *source* only (replicas are read-only), so editing is confined to the source sector.
-  $effect(() => snap.updateScene(shownSegments))
+  // Rebuild the snap spatial index whenever the visible network changes. The derived symmetry
+  // replicas are snap targets too — a point picked in a replica sector snaps to the linework the user
+  // sees there and folds back to source (F-052) — but they stay out of the editing scene.
+  $effect(() => snap.updateScene(shownSegments, replicaSegments))
 
   // Piece detection (F-020). Feeds both the inspector (always) and the dev overlay (when its
   // toggle is on). Reads `controller.doc` inside `detect()`, so it re-runs on edits. Capped so

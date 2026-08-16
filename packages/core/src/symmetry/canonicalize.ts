@@ -1,6 +1,14 @@
-import { applyToPoint, sub, type Vec2 } from '@vitrum/geometry'
+import {
+  IDENTITY,
+  applyToPoint,
+  distanceSq,
+  invert,
+  sub,
+  type Transform2D,
+  type Vec2,
+} from '@vitrum/geometry'
 
-import { radialCount, reflection } from './transform'
+import { radialCount, reflection, symmetryTransforms } from './transform'
 import type { SymmetrySetup } from './types'
 
 /**
@@ -46,6 +54,67 @@ export function canonicalizeToSource(world: Vec2, setup: SymmetrySetup | undefin
     default:
       return world
   }
+}
+
+/** A world point folded into the source domain, plus which sector it was folded *from*. */
+export interface SourceFold {
+  /** The folded point, in the source fundamental domain — exactly {@link canonicalizeToSource}. */
+  readonly point: Vec2
+  /**
+   * Index into {@link symmetryTransforms} of the group element that carries {@link point} back onto
+   * the original world point: the sector the pointer was in. `0` is the source sector itself, so a
+   * point already inside the fundamental domain reports `0`.
+   */
+  readonly sector: number
+}
+
+/**
+ * {@link canonicalizeToSource} plus the **sector index** it folded from (F-052, fixing the
+ * 2026-08-16-a snapping finding). Knowing the sector lets the shell evaluate snapping in the sector
+ * the cursor is actually in — where the geometry the user sees and the angles they mean live — and
+ * then fold the winning point back to source with {@link sectorFrame}'s inverse. Folding *first*
+ * measured direction-sensitive snaps (angle) against a reflected point, which is what made a stroke
+ * crossing the axis flip between 45° rays.
+ *
+ * The sector is found by asking which group element maps the folded point back onto the original —
+ * the property callers depend on — rather than re-deriving each mode's inverse chain, so it is exact
+ * for every mode. Identity is first, so points fixed by several elements (on an axis, at the center)
+ * resolve deterministically to the lowest index; any of them folds back identically anyway.
+ */
+export function canonicalizeToSourceSector(
+  world: Vec2,
+  setup: SymmetrySetup | undefined,
+): SourceFold {
+  const point = canonicalizeToSource(world, setup)
+  if (!setup || setup.mode === 'none') return { point, sector: 0 }
+  const transforms = symmetryTransforms(setup)
+  let sector = 0
+  let best = Infinity
+  for (let k = 0; k < transforms.length; k++) {
+    const d = distanceSq(applyToPoint(transforms[k]!, point), world)
+    if (d < best) {
+      best = d
+      sector = k
+    }
+  }
+  return { point, sector }
+}
+
+/**
+ * The frame of one sector: `toSector` places source geometry into sector `k` (it *is* the group
+ * element, the same one {@link symmetryTransforms} hands the replica expansion), and `toSource` is
+ * its exact inverse — the fold that turns a point picked in that sector back into the source
+ * coordinate the document stores. Both are the identity for the source sector or with symmetry off.
+ */
+export function sectorFrame(
+  setup: SymmetrySetup | undefined,
+  sector: number,
+): { toSector: Transform2D; toSource: Transform2D } {
+  if (!setup || setup.mode === 'none' || sector === 0) {
+    return { toSector: IDENTITY, toSource: IDENTITY }
+  }
+  const toSector = symmetryTransforms(setup)[sector] ?? IDENTITY
+  return { toSector, toSource: invert(toSector) }
 }
 
 /**
