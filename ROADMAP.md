@@ -87,6 +87,7 @@ intentionally lighter; they must be expanded and re-approved before implementati
 | [F-030](docs/features/F-030-drc-framework.md)   | DRC framework & violations UI       | F-020, F-021 |
 | [F-031](docs/features/F-031-drc-cuttability.md) | DRC rule pack: cuttability          | F-030        |
 | [F-032](docs/features/F-032-drc-structural.md)  | DRC rule pack: structural integrity | F-030, F-023 |
+| [F-033](docs/features/F-033-drc-panel-fit.md)   | DRC rule pack: panel fit            | F-030, F-058 |
 
 ### Phase 4 — Production outputs
 
@@ -154,6 +155,7 @@ graph LR
   F021 --> F030[F-030 DRC framework]
   F030 --> F031[F-031 DRC cuttability]
   F030 --> F032[F-032 DRC structural]
+  F030 --> F033[F-033 DRC panel fit]
   F023 --> F040[F-040 Numbering/cartoon]
   F040 --> F041[F-041 1:1 print]
   F040 --> F042[F-042 Cutting list/BOM]

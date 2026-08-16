@@ -7,8 +7,8 @@ import type { Vec2 } from '@vitrum/geometry'
  * that inspect the document plus its derived data and emit located, severity-graded, explained
  * {@link Violation}s. This module is pure data + free functions — no DOM, no Svelte, no worker
  * plumbing — so a full run is unit- and golden-file-testable and can be lifted onto a worker
- * unchanged (FR-1). The topology (ERC) rule pack ships here; cuttability (F-031) and structural
- * (F-032) packs plug into the same registry with no engine change.
+ * unchanged (FR-1). The topology (ERC) rule pack ships here; the cuttability (F-031), structural
+ * (F-032) and panel-fit (F-033) packs plug into the same registry with no engine change.
  */
 
 export type { Severity }
@@ -35,6 +35,8 @@ export type RuleId =
   | 'panel-needs-reinforcement'
   | 'panel-weight'
   | 'tiny-edge-contact'
+  // Panel fit pack — F-033
+  | 'design-exceeds-panel'
 
 /**
  * The document + derived data a rule inspects. Everything here is plain, structured-cloneable

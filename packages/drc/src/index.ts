@@ -5,8 +5,8 @@
  * no DOM, no Svelte, no worker plumbing, so a full run is unit- and golden-file-testable and lifts
  * onto a worker unchanged. `packages/ui` runs it off the main thread and renders the results.
  *
- * Ships the topology (ERC) rule pack; the cuttability (F-031) and structural (F-032) packs plug
- * into the same registry.
+ * Ships the topology (ERC) rule pack; the cuttability (F-031), structural (F-032) and panel-fit
+ * (F-033) packs plug into the same registry.
  */
 
 export { runChecks } from './run'
@@ -14,6 +14,7 @@ export { RULES, RULES_BY_ID } from './registry'
 export { TOPOLOGY_RULES } from './rules/topology'
 export { CUTTABILITY_RULES } from './rules/cuttability'
 export { STRUCTURAL_RULES } from './rules/structural'
+export { FIT_RULES } from './rules/fit'
 export { panelWeight, type PanelWeight } from './rules/weight'
 export { resolveThreshold } from './thresholds'
 export { quickFixCommand } from './quickfix'
