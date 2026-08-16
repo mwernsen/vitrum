@@ -1,4 +1,4 @@
-export { pieceKey, resolveGeneration } from './assignment'
+export { pieceKey, resolveGeneration, type GenerationResolution } from './assignment'
 export { detectPieces, PieceDetector, type PlanarGraph } from './detect'
 export { buildGraph, type GraphEdge } from './graph'
 export { contentId, matchIds, matchIdsWithLineage, type LineageResult } from './identity'

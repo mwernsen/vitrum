@@ -16,10 +16,14 @@ import { SvelteMap } from 'svelte/reactivity'
  * changed) inherits its value from its lineage ancestor, so the value stays attached to the surviving
  * piece; a genuinely new piece has no ancestor and resolves to nothing. The "previous generation"
  * base only advances when geometry actually changed (gated by the caller's generation token).
+ *
+ * What is carried forward is **provenance** (which stored entry a surviving piece reads), not the
+ * resolved value — so clearing an entry takes effect immediately rather than being inherited back
+ * from the previous generation (see F-023's 2026-08-16 fix note).
  */
 class Pipeline {
-  #prev: Map<PieceId, string> = new Map()
-  #last: Map<PieceId, string> = new Map()
+  #prev: ReadonlyMap<PieceId, PieceId> = new Map()
+  #last: ReadonlyMap<PieceId, PieceId> = new Map()
 
   resolve(
     pieces: readonly Piece[],
@@ -28,8 +32,9 @@ class Pipeline {
     advance: boolean,
   ): Map<PieceId, string> {
     if (advance) this.#prev = this.#last
-    this.#last = resolveGeneration(pieces, lineage, stored, this.#prev)
-    return this.#last
+    const { effective, origins } = resolveGeneration(pieces, lineage, stored, this.#prev)
+    this.#last = origins
+    return effective
   }
 
   reset(): void {

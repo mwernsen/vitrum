@@ -7,8 +7,11 @@ import { SvelteMap } from 'svelte/reactivity'
  * explicitly painted (keyed by piece content id); this controller turns that plus the detector's
  * lineage into the **effective** glass of every live piece — the value the renderer, the inspector
  * and the status bar read. Inheritance across splits/merges is resolved live (FR-2) by threading the
- * previous generation's resolved map through {@link resolveGeneration}; it is not written back to the
+ * previous generation's **provenance** through {@link resolveGeneration}; it is not written back to the
  * document on every edit (the save-time normaliser materialises it — see the document controller).
+ * Carrying provenance rather than resolved values keeps the document authoritative for the value, so
+ * clearing an entry — or undoing a paint — takes effect at once instead of on the next geometry edit
+ * (fix of 2026-08-16; see the F-023 spec).
  *
  * Under live symmetry (F-052) it also resolves each replica piece's colour from the piece it
  * repeats, using the generation's symmetry orbits — so painting the source sector colours the whole
@@ -24,10 +27,10 @@ export class AssignmentController {
   /** The glass the paint tool assigns on click, or null when none is chosen. */
   selectedGlassId = $state<GlassId | null>(null)
 
-  /** The previous *generation's* resolved map — the base inheritance resolves against. */
-  #prevGen: Map<PieceId, GlassId> = new SvelteMap()
-  /** This generation's resolved map (becomes `#prevGen` when the generation changes). */
-  #lastGen: Map<PieceId, GlassId> = new SvelteMap()
+  /** The previous *generation's* provenance — the base inheritance resolves against. */
+  #prevOrigins: ReadonlyMap<PieceId, PieceId> = new SvelteMap()
+  /** This generation's provenance (becomes `#prevOrigins` when the generation changes). */
+  #lastOrigins: ReadonlyMap<PieceId, PieceId> = new SvelteMap()
   /** Identity of the current detection generation; advancing it is what carries inheritance. */
   #token: unknown = undefined
   #primed = false
@@ -58,7 +61,7 @@ export class AssignmentController {
     if (!this.#primed || detection !== this.#token) {
       this.#primed = true
       this.#token = detection
-      this.#prevGen = this.#lastGen
+      this.#prevOrigins = this.#lastOrigins
     }
     this.#stored = stored
     this.#symLineage = detection?.symLineage ?? {}
@@ -68,14 +71,15 @@ export class AssignmentController {
       if (list) list.push(replica)
       else this.#replicasBySource[source] = [replica]
     }
-    this.#lastGen = resolveGeneration(pieces, lineage, stored, this.#prevGen, this.#symLineage)
-    this.effective = this.#lastGen
+    const resolved = resolveGeneration(pieces, lineage, stored, this.#prevOrigins, this.#symLineage)
+    this.#lastOrigins = resolved.origins
+    this.effective = resolved.effective
   }
 
   /** Discard carried-forward state (on loading a different document). */
   reset(): void {
-    this.#prevGen = new SvelteMap()
-    this.#lastGen = new SvelteMap()
+    this.#prevOrigins = new SvelteMap()
+    this.#lastOrigins = new SvelteMap()
     this.#token = undefined
     this.#primed = false
     this.#symLineage = {}
@@ -91,6 +95,16 @@ export class AssignmentController {
 
   setSelectedGlass(id: GlassId | null): void {
     this.selectedGlassId = id
+  }
+
+  /**
+   * True when this piece's colour comes from its own stored entry rather than being inherited from an
+   * ancestor's. Unassigning the piece clears a direct colour outright; an inherited one is stored on an
+   * ancestor key that other heirs read, so it cannot be cleared piece-by-piece yet — see F-023's
+   * follow-up on persisting inheritance eagerly.
+   */
+  isDirect(key: PieceId): boolean {
+    return this.#lastOrigins.get(key) === key
   }
 
   // --- Symmetry orbits (F-052) ----------------------------------------------
