@@ -378,8 +378,91 @@ is recorded here.
   a rectangle, one paint click, readiness reads "N of N painted", then save and reopen with the colour
   intact.
 
+### Geometry on an axis is not replicated onto itself (2026-08-16)
+
+Closes the follow-up recorded above while building glass orbits. Mathieu hit it reproducing a real
+Art Deco transom whose border runs along the symmetry axis: the design silently produced nothing,
+with no diagnostic explaining why.
+
+**The mechanism, as measured.** A segment lying on a mirror axis (or a diameter through a rotation
+centre) is _fixed_ by that group element, so `expandReplicas` minted a second segment with the same
+geometry and a different derived id. The damage is in the **face trace**, not in clustering or
+winding: `buildGraph` interned the duplicate's endpoints to the same vertices — correctly, they
+_are_ the same points — so a vertex ended up with two outgoing half-edges at the same departing
+angle. The angular sweep's `next(he) = the edge clockwise from twin(he)` then pairs each copy with
+the other's twin, and every cycle it traces there closes with zero signed area, so it is dropped by
+both the `> AREA_EPS` and `< -AREA_EPS` arms. Measured on a rectangle symmetric about a vertical
+axis: 8 network segments, 5 graph vertices, 10 edges, every vertex of degree 4 — and `traceCycles`
+returning **0 ccw and 0 cw cycles**, hence 0 pieces plus 4 `duplicate-segment` diagnostics. When
+only the seam edge is on the axis (a half-panel), the two big faces still trace but one is lost:
+2 pieces where 3 regions exist, and 1 where 2 were expected once the axis is a hair off.
+
+**Fixed at expansion, not in the detector.** `expandReplicas` now drops any candidate replica that
+merely repeats a segment the network already has — its own source, another source, or an
+earlier-ranked replica (`dropSelfImages` in `packages/core/src/symmetry/expand.ts`). This was the
+preferred seam and it holds: the expanded network is meant to be the honest full network, and a
+self-image edge appearing twice is not honest. `packages/core/src/pieces/` is **untouched**.
+
+- **Suppression is tolerance-based, at F-020's weld tolerance** (`SELF_IMAGE_TOLERANCE = 0.01`, the
+  local constant matching `DETECT_DEFAULTS.weldTolerance`), not exact equality. The reason is
+  precisely the degeneracy above: it needs the two copies' endpoints to _cluster into one vertex_,
+  which happens exactly when they are within the weld tolerance. So border drawn 0.004 mm off the
+  axis is the same bug and is suppressed; a copy 0.012 mm away is genuinely distinct geometry that
+  detection resolves into (thin) faces and F-020's `near-miss` rule is the right place to complain
+  about — suppressing it would delete a replica the user can see. Tying the two tolerances together
+  is what makes expansion and detection agree about what "the same segment" means.
+- **The comparison is full-duplicate, in either direction:** every sample of A lies on B _and_ every
+  sample of B lies on A (the shape of F-020's `duplicate-segment` check, so the two agree). One-way
+  containment is a partial overlap — a chord crossing the axis off-centre reflects onto the same
+  line over a different extent — and those replicas stay.
+- **Acceptance order depends only on ids** (sources first, then replicas by derived id), so the
+  surviving set is independent of the input segment order, as `expandReplicas` already promised.
+- A hair of slack (1e-9 mm) on the tolerance comparison keeps the decisive case — geometry drawn
+  `weld / 2` off the axis, whose image is exactly `weld` away — from being settled by floating-point
+  noise, which would otherwise suppress some of a shape's replicas and keep others.
+
+**Multiplicity: a stated exception, not a loosened assertion.** FR-1's ×2 / ×4 / ×N / ×2N holds for
+geometry **in general position**. Geometry fixed by a non-identity group element has a shorter orbit
+and so fewer replicas — that is the group acting, not a lost replica. The existing exact-count tests
+all use general-position sources and are unchanged; they now carry a comment saying so, and the new
+block asserts the exception explicitly (a diameter under 4-fold radial yields 1 replica not 3; a
+spoke on the mirror axis under D₆ gives 6 segments not 12; a shape symmetric about the axis gives
+none). The safety half is a property: **no geometry is lost** — pushing any source segment through
+any group element still lands on a segment that is in the expanded network.
+
+**Tests.** `packages/core/src/symmetry/symmetry.test.ts`, new block "geometry fixed by the group is
+not duplicated": the reported case (half-panel with its seam on the axis → 2 pieces, no spurious
+diagnostics), a fully symmetric shape (→ 1 piece), the near-miss sweep including exactly
+`weld / 2`, the keep-both case past the tolerance, and the partial cases the task called out — one
+endpoint on the axis, crossing the axis, partial collinear overlap, plus the radial analogues
+(diameter through the centre, spoke along the mirror axis, wedge touching only the centre, box
+centred on the centre). Three fast-check properties: no full duplicate survives anywhere in the
+expanded network, no group image is lost, and the result is independent of source order.
+**7 of these fail on pre-fix code** (verified by reverting), 0 after. E2E:
+`apps/desktop/e2e/symmetry.spec.ts` "a border seam lying on the mirror axis still yields pieces" —
+draw a rectangle, put a vertical axis on its right edge (2 pieces; **1** pre-fix), then slide the
+axis to its centre line (1 piece and 0 diagnostics; 2 slivers and 4 `duplicate-segment` diagnostics
+pre-fix).
+
+**Known cost, worth Mathieu's eye.** A piece bounded by an axis-fixed segment no longer inherits
+glass from a sibling sector: `pieceOrbits` shifts each boundary segment's sector index through the
+group, and a suppressed replica means the real face references the source segment where the shift
+predicts `~symK`, so the signatures do not match and the orbit simply does not group. It fails safe
+(no inheritance, never a wrong pairing — the shifted key sets are disjoint), and it is strictly
+better than before, when there were no pieces to inherit anything. Recorded as a follow-up below.
+
 ## Follow-ups (out of scope for v1)
 
+- **An axis-fixed boundary breaks glass orbit inheritance.** Since replicas of axis-fixed segments
+  are suppressed (2026-08-16), a piece whose boundary includes one references the _source_ segment in
+  every sector, so `pieceOrbits`' sector-shift signature no longer matches and that orbit does not
+  share colour. Teaching `signatureOf` that a fixed segment's sector index is invariant would close
+  it; it needs `expandReplicas` to report _which_ images it suppressed, so it is a real (small)
+  design step rather than a patch.
+- **Duplicate edges still defeat detection generally (F-020, pre-existing).** The symmetry trigger is
+  gone, but drawing the same line twice by hand still yields 0 pieces for the whole shape — measured:
+  a rectangle plus an exact copy of all four sides gives `pieces = 0` with 4 `duplicate-segment`
+  diagnostics, with symmetry off. See the F-020 follow-up.
 - **Edit anywhere (deferred, agreed §1).** Editing a replica and mapping the change back
   to the source. v1 confines editing to the source sector; replicas are read-only. The
   canonicalization seam already folds pointers into source space — the follow-up adds the
@@ -416,10 +499,8 @@ Discovered while wiring glass inheritance (2026-08-16), all out of scope for tha
 - **Per-piece texture placement (F-053)** is keyed by content id too, so a texture set on a replica is
   a local override that the orbit does not share. Same seam (`setPieceTextureTransforms`) if it should
   follow the source.
-- **Geometry drawn exactly on a mirror axis degenerates.** A closed shape symmetric about the axis
-  reflects onto itself, so the expanded network carries duplicate segments and detection returns _no_
-  pieces for it (found while building the orbit tests; pre-existing, unrelated to glass). Worth a
-  `duplicate-segment` DRC surface or a de-duplication pass in `expandReplicas`.
+- ~~**Geometry drawn exactly on a mirror axis degenerates.**~~ Fixed 2026-08-16 — see "Geometry on
+  an axis is not replicated onto itself" below.
 
 _Cockpit v2 (2026-07-30):_ the symmetry controls moved from the Layers panel into the **Draw** dock section. See the "Cockpit v2 rework" section of
 [F-001](F-001-architecture.md) for the full shell IA.

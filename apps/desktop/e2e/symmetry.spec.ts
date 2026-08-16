@@ -159,3 +159,73 @@ test('drawing in a replica sector follows the cursor, not a 45° artefact', asyn
   // … and ends where they released, rather than on a 45° ray reflected out of source space.
   expect(Math.hypot(replicaEnd.x - endMm.x, replicaEnd.y - endMm.y)).toBeLessThan(tol)
 })
+
+// Regression, F-052 follow-up fixed 2026-08-16: geometry sitting on the mirror axis is its own
+// image, so expansion used to mint a coincident duplicate of it, and piece detection — whose
+// half-edge sweep then pairs the two identical half-edges with each other's twin — traced only
+// zero-area cycles there, losing pieces and in the fully symmetric case returning **none at all**.
+// That is the shape of a real Art Deco transom: draw the half-panel, its seam edge lies on the axis.
+test('a border seam lying on the mirror axis still yields pieces', async () => {
+  const window = await app.firstWindow()
+  const canvas = window.getByRole('main', { name: 'Design canvas' })
+  await expect(canvas).toBeVisible()
+  const box = (await canvas.boundingBox())!
+  const at = (x: number, y: number): [number, number] => [box.x + x, box.y + y]
+
+  const palette = window.getByRole('dialog', { name: 'Debug commands' })
+  const openPalette = async () => {
+    await window.keyboard.press('Control+k')
+    await expect(palette).toBeVisible()
+  }
+  const closePalette = async () => {
+    await window.keyboard.press('Control+k')
+    await expect(palette).toBeHidden()
+    await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  }
+
+  // Draw the half-panel first, with symmetry off, so nothing is folded: one closed rectangle.
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
+  await window.getByRole('button', { name: 'Rectangle (R)' }).click()
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await window.mouse.click(...at(140, 130))
+  await window.mouse.click(...at(300, 320))
+
+  await openPalette()
+  await expect(palette.getByTestId('segment-count')).toHaveText('Segments: 4')
+  await expect(palette.getByTestId('piece-count')).toHaveText('Pieces: 1')
+
+  // The rectangle's right-hand edge, read from the app's own mm readout. Grid snap is on, so the
+  // corners land on grid nodes and the two-decimal readout is the exact value.
+  const ends = (await palette.getByTestId('output-ends').textContent()) ?? ''
+  const xs = [...ends.matchAll(/(-?[\d.]+),-?[\d.]+/g)].map((m) => Number(m[1]))
+  expect(xs).toHaveLength(8) // 4 segments × 2 endpoints
+  const rightEdge = Math.max(...xs)
+  await closePalette()
+
+  // Now put a vertical mirror axis exactly on that edge, so one segment is its own image. Mode
+  // first: switching symmetry on seeds the centre to the panel centre, which would overwrite this.
+  await window.getByRole('button', { name: 'Mirror (1 axis)' }).click()
+  await window.getByLabel('Symmetry axis angle in degrees').fill('90')
+  await window.getByLabel('Symmetry centre x').fill(String(rightEdge))
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+
+  // The drawn half plus its reflection, welded along the seam — two pieces, and no stored geometry
+  // added (the replicas are still derived from the same 4 source segments). Measured: 2 with the
+  // fix, 1 before it — the reflected half was silently lost to the doubled seam edge.
+  await openPalette()
+  await expect(palette.getByTestId('segment-count')).toHaveText('Segments: 4')
+  await expect(palette.getByTestId('piece-count')).toHaveText('Pieces: 2')
+
+  // Now the sharpest form of the same fault: slide the axis to the rectangle's vertical middle, so
+  // *every* side is its own image. The shape is then exactly itself — one piece, and a clean bill of
+  // health. Measured: 1 piece and 0 diagnostics with the fix; before it, 2 slivers where there is
+  // one shape plus 4 spurious `duplicate-segment` diagnostics (and 0 pieces at all when the axis
+  // lands exactly on the centre line, which is the "my design produces nothing" the user hit).
+  await closePalette()
+  await window.getByLabel('Symmetry centre x').fill(String((Math.min(...xs) + rightEdge) / 2))
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+
+  await openPalette()
+  await expect(palette.getByTestId('piece-count')).toHaveText('Pieces: 1')
+  await expect(palette.getByTestId('diagnostic-count')).toHaveText('Diagnostics: 0')
+})
