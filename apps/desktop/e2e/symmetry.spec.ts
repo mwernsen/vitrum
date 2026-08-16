@@ -79,3 +79,76 @@ test('6-fold radial: draw one line → 6 replicas, undo removes all, then bake',
   await palette.getByRole('button', { name: 'Undo' }).click()
   await expect(count).toHaveText('Segments: 0')
 })
+
+// Regression, user-test run 2026-08-16-a finding 2 (F-052 FR-5): drawing with the cursor in a
+// replica sector used to snap in *folded* source space, so a stroke crossing the axis flipped
+// between 45° rays instead of following the cursor. Snapping now happens in the sector the cursor is
+// in and only the winner folds back, so the line the user sees — the replica under their cursor —
+// runs from the point they clicked to the point they released.
+test('drawing in a replica sector follows the cursor, not a 45° artefact', async () => {
+  const window = await app.firstWindow()
+  const canvas = window.getByRole('main', { name: 'Design canvas' })
+  await expect(canvas).toBeVisible()
+  const box = (await canvas.boundingBox())!
+  const at = (p: { x: number; y: number }): [number, number] => [box.x + p.x, box.y + p.y]
+  const dock = window.getByRole('complementary', { name: 'Panel dock' })
+
+  /** The status bar's raw cursor readout, in mm — the app's own answer for "where is the pointer". */
+  const cursorMm = async (): Promise<{ x: number; y: number }> => {
+    const text = (await window.getByLabel('Cursor position').textContent()) ?? ''
+    const m = /X\s+(-?[\d.]+)\s*mm\s+Y\s+(-?[\d.]+)\s*mm/.exec(text)
+    if (!m) throw new Error(`unreadable cursor readout: ${text}`)
+    return { x: Number(m[1]), y: Number(m[2]) }
+  }
+
+  // Mirror symmetry with the axis at 36°: deliberately **not** a multiple of 22.5°, so reflecting
+  // the 45° ray fan does not map it onto itself. That is exactly the case the old fold-then-snap
+  // order got wrong — with an axis at 0/45/90° the two orders happen to agree.
+  await window.getByRole('button', { name: 'Draw', exact: true }).click()
+  await window.getByRole('button', { name: 'Mirror (1 axis)' }).click()
+  await window.getByLabel('Symmetry axis angle in degrees').fill('36')
+  await window.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  // Grid snap off: it fires within the same radius as angle snap and would mask the difference.
+  await dock.getByRole('button', { name: 'Grid', exact: true }).click()
+
+  // A stroke wholly inside a replica sector (with the axis through the panel, that is what the
+  // cursor is in for most of the panel), at ~22° off every 45° ray so no angle snap may fire —
+  // while its *reflection* lands ~5° off one, which is what the old order snapped to.
+  const start = { x: Math.round(box.width * 0.72), y: Math.round(box.height * 0.18) }
+  const end = { x: start.x + 65, y: start.y + 26 }
+
+  await window.mouse.move(...at(start))
+  const startMm = await cursorMm()
+  await window.keyboard.press('l')
+  await window.mouse.click(...at(start))
+  await window.mouse.move(...at(end))
+  const endMm = await cursorMm()
+  await window.mouse.dblclick(...at(end))
+
+  // Screen px → mm, so the tolerance below is two pixels whatever the zoom is. Measured: the fix
+  // lands within 0.5 px of the cursor, the fold-then-snap order was 6.3 px out.
+  const spanPx = Math.hypot(end.x - start.x, end.y - start.y)
+  const mmPerPx = Math.hypot(endMm.x - startMm.x, endMm.y - startMm.y) / spanPx
+  const tol = 2 * mmPerPx
+
+  await window.keyboard.press('Control+k')
+  const palette = window.getByRole('dialog', { name: 'Debug commands' })
+  await expect(palette).toBeVisible()
+  await expect(palette.getByTestId('segment-count')).toHaveText('Segments: 1')
+
+  // `outputNetwork()` lists the source first, then the replicas — so entry 1 is the mirror image,
+  // the line the user was actually looking at while drawing.
+  const ends = (await palette.getByTestId('output-ends').textContent()) ?? ''
+  const points = [...ends.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({
+    x: Number(m[1]),
+    y: Number(m[2]),
+  }))
+  expect(points).toHaveLength(4) // 2 segments × 2 endpoints
+  const [replicaStart, replicaEnd] = [points[2]!, points[3]!]
+
+  // The replica starts where the user clicked (so the click really was in a replica sector — if it
+  // had been in the source, the *source* segment would be the one under the cursor) …
+  expect(Math.hypot(replicaStart.x - startMm.x, replicaStart.y - startMm.y)).toBeLessThan(tol)
+  // … and ends where they released, rather than on a 45° ray reflected out of source space.
+  expect(Math.hypot(replicaEnd.x - endMm.x, replicaEnd.y - endMm.y)).toBeLessThan(tol)
+})

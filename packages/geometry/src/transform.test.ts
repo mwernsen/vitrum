@@ -6,6 +6,7 @@ import {
   compose,
   determinant,
   IDENTITY,
+  invert,
   rotation,
   scaling,
   transformCurve,
@@ -44,6 +45,23 @@ describe('basic transforms', () => {
   it('reports the determinant (area scale, sign under reflection)', () => {
     expect(determinant(scaling(2, 3))).toBeCloseTo(6)
     expect(determinant(scaling(-1, 1))).toBeCloseTo(-1)
+  })
+
+  it('inverts a transform, round-tripping any point', () => {
+    const t = compose(translation(10, -4), rotation(0.7), scaling(2, 3))
+    const p = vec2(3, 5)
+    const back = applyToPoint(invert(t), applyToPoint(t, p))
+    expect(distance(back, p)).toBeLessThan(1e-12)
+    expect(invert(IDENTITY)).toEqual(IDENTITY)
+    // An isometry's inverse is exact enough to reproduce the point to the last few bits — F-052
+    // folds a snapped replica point back to source through one of these.
+    const iso = compose(translation(-30, 12), rotation(-1.1, vec2(4, 4)))
+    const round = applyToPoint(invert(iso), applyToPoint(iso, p))
+    expect(distance(round, p)).toBeLessThan(1e-12)
+  })
+
+  it('refuses to invert a singular transform', () => {
+    expect(() => invert(scaling(0, 1))).toThrow(/singular/)
   })
 })
 

@@ -1,9 +1,21 @@
-import { arc, cubic, distance, line, pointAt, vec2, type Vec2 } from '@vitrum/geometry'
+import {
+  applyToPoint,
+  arc,
+  cubic,
+  distance,
+  line,
+  pointAt,
+  vec2,
+  type Vec2,
+} from '@vitrum/geometry'
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 import { detectPieces } from '../pieces/detect'
+import { buildSnapScene, resolveSnap } from '../snap/snap'
+import { DEFAULT_SNAP_SETTINGS } from '../snap/types'
 
-import { canonicalizeToSource } from './canonicalize'
+import { canonicalizeToSource, canonicalizeToSourceSector, sectorFrame } from './canonicalize'
 import { expandNetwork, expandReplicas } from './expand'
 import { geometryEnds, radialCount, symmetryTransforms, transformSymGeometry } from './transform'
 import type { NetworkSegment, SymmetrySetup } from './types'
@@ -204,5 +216,149 @@ describe('expandNetwork — geometry equivalence + seam coincidence (FR-2/FR-3)'
       const [inner] = geometryEnds(segment.geometry)
       expect(distance(inner, CENTER)).toBeLessThan(1e-9)
     }
+  })
+})
+
+/**
+ * The sector seam behind "snap where the cursor is, fold the winner back" (the 2026-08-16-a
+ * snapping finding). Folding first made angle snap measure a reflected point; these prove the
+ * sector index is right for every mode and that the fold back out of a sector is exact.
+ */
+describe('canonicalizeToSourceSector — sector index + frame', () => {
+  const arbSetup = fc
+    .record({
+      mode: fc.constantFrom('mirror' as const, 'double-mirror' as const, 'radial' as const),
+      cx: fc.integer({ min: -200, max: 200 }),
+      cy: fc.integer({ min: -200, max: 200 }),
+      angleDeg: fc.integer({ min: 0, max: 359 }),
+      count: fc.integer({ min: 2, max: 8 }),
+      mirror: fc.boolean(),
+    })
+    .map((r): SymmetrySetup => ({
+      mode: r.mode,
+      center: vec2(r.cx, r.cy),
+      angle: (r.angleDeg * Math.PI) / 180,
+      count: r.count,
+      mirror: r.mirror,
+    }))
+
+  const arbPoint = fc
+    .record({ x: fc.integer({ min: -400, max: 400 }), y: fc.integer({ min: -400, max: 400 }) })
+    .map((p) => vec2(p.x, p.y))
+
+  it('reports 0 for a point already in the source domain, and the identity frame with it', () => {
+    const s = setup({ mode: 'mirror', angle: Math.PI / 2 }) // source half is x ≤ 100
+    const inSource = vec2(80, 130)
+    const fold = canonicalizeToSourceSector(inSource, s)
+    expect(fold.sector).toBe(0)
+    expect(fold.point).toBe(inSource) // unchanged, by reference
+    const frame = sectorFrame(s, 0)
+    expect(applyToPoint(frame.toSource, inSource)).toEqual(inSource)
+  })
+
+  it('reports the sector whose group element carries the folded point back (all modes)', () => {
+    fc.assert(
+      fc.property(arbSetup, arbPoint, (s, p) => {
+        const { point, sector } = canonicalizeToSourceSector(p, s)
+        const { toSector, toSource } = sectorFrame(s, sector)
+        // The sector frame places the folded point back exactly where the pointer was …
+        expect(distance(applyToPoint(toSector, point), p)).toBeLessThan(1e-9)
+        // … and its inverse is the fold, so the two directions agree.
+        expect(distance(applyToPoint(toSource, p), point)).toBeLessThan(1e-9)
+      }),
+      { numRuns: 400 },
+    )
+  })
+
+  it('is inert with symmetry off', () => {
+    const p = vec2(37, 42)
+    const fold = canonicalizeToSourceSector(p, setup({ mode: 'none' }))
+    expect(fold).toEqual({ point: p, sector: 0 })
+  })
+})
+
+describe('snapping in a sector folds back to the exact source point', () => {
+  const arbSetup = fc
+    .record({
+      mode: fc.constantFrom('mirror' as const, 'double-mirror' as const, 'radial' as const),
+      angleDeg: fc.integer({ min: 0, max: 359 }),
+      count: fc.integer({ min: 2, max: 6 }),
+      mirror: fc.boolean(),
+    })
+    .map((r): SymmetrySetup => ({
+      mode: r.mode,
+      center: CENTER,
+      angle: (r.angleDeg * Math.PI) / 180,
+      count: r.count,
+      mirror: r.mirror,
+    }))
+
+  const arbLine = fc
+    .record({
+      ax: fc.integer({ min: -150, max: 150 }),
+      ay: fc.integer({ min: -150, max: 150 }),
+      bx: fc.integer({ min: -150, max: 150 }),
+      by: fc.integer({ min: -150, max: 150 }),
+    })
+    .map((r) => line(vec2(r.ax, r.ay), vec2(r.bx, r.by)))
+
+  /**
+   * The ticket's exactness property (FR-5, agreed 2026-08-16): a replica is a **rigid image** of the
+   * source, so snapping onto sector `k`'s copy of an endpoint and applying `k⁻¹` lands on the source
+   * endpoint itself — not near it. Drives the real snap engine over the real expanded network, so it
+   * is the shell's actual path minus the runes.
+   */
+  it('snapping onto a replica endpoint reproduces the source endpoint within 1e-9 mm', () => {
+    fc.assert(
+      fc.property(
+        arbSetup,
+        fc.array(arbLine, { minLength: 1, maxLength: 3 }),
+        fc.nat(),
+        fc.nat(),
+        fc.nat(),
+        fc.double({ min: 0, max: Math.PI * 2, noNaN: true }),
+        (s, lines, segPick, endPick, sectorPick, offsetDir) => {
+          const source = lines.map((g, i) => seg(`L${i}`, g))
+          const transforms = symmetryTransforms(s)
+          // A replica sector (never the source itself — that path is unchanged by the fix).
+          const sector = 1 + (sectorPick % (transforms.length - 1))
+          const target = source[segPick % source.length]!
+          const ends = geometryEnds(target.geometry)
+          const sourceEnd = ends[endPick % 2]!
+
+          // Where the cursor would be: just off that endpoint's image in the chosen sector.
+          const image = applyToPoint(transforms[sector]!, sourceEnd)
+          const radiusMm = 2
+          const cursor = vec2(
+            image.x + 0.4 * Math.cos(offsetDir),
+            image.y + 0.4 * Math.sin(offsetDir),
+          )
+
+          // Only meaningful when that image really is the nearest endpoint to the cursor: random
+          // networks can put two endpoints (or two sectors' copies) on top of each other.
+          const expanded = expandNetwork(source, s)
+          const candidates = expanded.flatMap((sg) => [...geometryEnds(sg.geometry)])
+          const nearest = candidates.reduce((best, c) =>
+            distance(c, cursor) < distance(best, cursor) ? c : best,
+          )
+          fc.pre(distance(nearest, image) < 1e-9)
+
+          const hit = resolveSnap(
+            buildSnapScene(expanded.map((sg) => ({ geometry: sg.geometry }))),
+            {
+              world: cursor,
+              radiusMm,
+              gridMm: null,
+              anchors: [],
+              settings: { ...DEFAULT_SNAP_SETTINGS, master: true },
+            },
+          )
+          expect(hit?.kind).toBe('endpoint')
+          const back = applyToPoint(sectorFrame(s, sector).toSource, hit!.world)
+          expect(distance(back, sourceEnd)).toBeLessThan(1e-9)
+        },
+      ),
+      { numRuns: 400 },
+    )
   })
 })

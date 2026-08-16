@@ -185,3 +185,17 @@ resolver is now the single place the two are reconciled and says so: `ResolvedPo
 the ray crossing also outranks a midpoint, since only it satisfies both the angle and the curve;
 endpoints and intersections still outrank everything, because landing on a real joint matters more
 than a round angle and it welds.
+
+_Snapping under live symmetry (2026-08-16):_ F-052 originally folded the pointer into the source
+sector **before** the resolver saw it. Two F-012 properties do not survive that: `snapAngle` is
+direction-sensitive (a folded point sweeps backwards past the 45° rays, so a stroke crossing the axis
+flipped between them), and `SnapHit.guides` come back in whatever space the query was in — so the
+markers rendered nowhere near the cursor. The order is now resolve-then-fold: the shell hands the
+resolver the **unfolded** cursor with the gesture's anchors and constraint mapped into the cursor's
+sector, and folds only the winning position back (see F-052's "Snapping happens in the cursor's
+sector"). Two consequences for this feature: `SnapController.updateScene` takes a second, **derived**
+target list — read-only geometry that joins the drawing scene but not the editing one — and
+`ResolvedPoint.snap` is documented as the _display_ coordinate, which is not necessarily the
+coordinate the document stores. FR-1's bit-identical weld is preserved across the fold by settling an
+endpoint snap onto the stored source coordinate by reference (`vecKey` welds on exact equality, so a
+1e-13 mm rounding would have become a duplicate node).

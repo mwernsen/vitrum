@@ -75,6 +75,26 @@ export function determinant(t: Transform2D): number {
 }
 
 /**
+ * The inverse transform: `invert(t)` undoes `t`, so `applyToPoint(invert(t), applyToPoint(t, p))`
+ * is `p`. Throws when `t` is singular (determinant 0 — a degenerate transform has no inverse).
+ * Callers that need to map a point *back* out of a transformed frame — F-052 folds a snapped
+ * replica point back to the source sector this way — should use this rather than re-deriving the
+ * inverse by hand, which is where sign errors live.
+ */
+export function invert(t: Transform2D): Transform2D {
+  const det = determinant(t)
+  if (det === 0) throw new Error('transform is singular and cannot be inverted')
+  // Negating a zero entry yields `-0`, which is mathematically identical but formats and compares
+  // badly downstream (the same reason exporters fold `-0` to `0`); settle it here.
+  const z = (n: number): number => (n === 0 ? 0 : n)
+  const a = z(t.d / det)
+  const b = z(-t.b / det)
+  const c = z(-t.c / det)
+  const d = z(t.a / det)
+  return { a, b, c, d, e: z(-(a * t.e + c * t.f)), f: z(-(b * t.e + d * t.f)) }
+}
+
+/**
  * True when `t`'s linear part is an orientation-preserving similarity — uniform scale +
  * rotation, no reflection or shear. This is exactly the class under which a circular arc
  * stays a circular arc ({@link transformShape} keeps it; otherwise it must be demoted to

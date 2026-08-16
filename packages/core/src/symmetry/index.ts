@@ -1,4 +1,9 @@
-export { canonicalizeToSource } from './canonicalize'
+export {
+  canonicalizeToSource,
+  canonicalizeToSourceSector,
+  sectorFrame,
+  type SourceFold,
+} from './canonicalize'
 export { expandNetwork, expandReplicas } from './expand'
 export {
   geometryEnds,

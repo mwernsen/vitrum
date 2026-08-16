@@ -156,6 +156,7 @@ export {
   applyToVector,
   compose,
   determinant,
+  invert,
   isSimilarity,
   rotation,
   scaling,

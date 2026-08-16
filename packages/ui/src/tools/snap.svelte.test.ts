@@ -72,6 +72,28 @@ describe('SnapController', () => {
     cleanup()
   })
 
+  it('snaps to derived read-only targets while keeping them out of the editing scene (F-052)', () => {
+    const cleanup = $effect.root(() => {
+      const vp = viewportAt1to1()
+      const snap = new SnapController(vp)
+      const source = createSegment(line(vec2(0, 0), vec2(100, 0)))
+      // A symmetry replica: snappable linework the user can see but not edit.
+      const replica = createSegment(line(vec2(0, 200), vec2(100, 200)))
+      snap.updateScene([source], [replica])
+      snap.setPointer('mouse', false)
+      snap.toggle('grid') // off, so only endpoints can win
+      flushSync()
+
+      // The drawing resolver reaches the replica endpoint …
+      expect(snap.resolver(vec2(2, 201), CTX).snap?.kind).toBe('endpoint')
+      expect(snap.resolver(vec2(2, 201), CTX).world).toEqual(vec2(0, 200))
+      // … while an edit drag never sees it: a dragged node must not snap to its own live mirror.
+      const editResolve = snap.buildEditResolver([])
+      expect(editResolve(vec2(2, 201)).snap).toBeUndefined()
+    })
+    cleanup()
+  })
+
   it('uses the wider radius for pen input', () => {
     const cleanup = $effect.root(() => {
       const vp = viewportAt1to1()
