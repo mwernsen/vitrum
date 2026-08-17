@@ -223,6 +223,19 @@ function buildMenu(): void {
       registerAccelerator: false,
       click: () => dispatch('redo'),
     },
+    // The clipboard roles are what make Cmd/Ctrl+X, C, V and A work in a text field at all.
+    // Chromium routes those keystrokes through the application menu, so an Edit menu built by hand
+    // without them leaves every input in the app unable to paste — reported on the glass name field,
+    // but it was app-wide (run 2026-08-16-b). `pnpm dev:ui` never showed it: browser Chromium owns
+    // its own shortcuts and needs no menu. Unlike the two items above these keep their registered
+    // accelerators, since the renderer does not implement clipboard handling itself.
+    { type: 'separator' },
+    { role: 'cut' },
+    { role: 'copy' },
+    { role: 'paste' },
+    ...(isMac ? [{ role: 'pasteAndMatchStyle' as const }] : []),
+    { role: 'delete' },
+    { role: 'selectAll' },
   ]
 
   const template: MenuItemConstructorOptions[] = [

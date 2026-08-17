@@ -134,3 +134,27 @@ test('glass library home: create on the launch screen, persist, and see it in th
   const palette = window.getByRole('region', { name: 'Glass palette' })
   await expect(palette.getByText('Launch-screen amber')).toBeVisible()
 })
+
+// Reported on the glass name field, but it was every text input in the app (run 2026-08-16-b):
+// Chromium routes Cmd/Ctrl+X, C, V through the *application menu*, so an Edit menu built by hand
+// without the clipboard roles left the whole app unable to paste. `pnpm dev:ui` cannot show it —
+// browser Chromium owns those shortcuts itself and needs no menu.
+//
+// This asserts the **menu registration**, not a keystroke, and that is deliberate: a
+// `keyboard.press('ControlOrMeta+V')` test was written first and passed with the fix reverted.
+// Playwright drives keys over CDP, which reaches Chromium's editing commands directly and never
+// consults the menu — so the keystroke version proves nothing about the bug. The menu's contents are
+// the thing that was wrong, so they are the thing to assert. Pasting itself stays a manual check.
+test('registers the clipboard roles on the Edit menu (paste in any text field)', async () => {
+  const editRoles = await app.evaluate(({ Menu }) => {
+    const edit = Menu.getApplicationMenu()?.items.find((item) => item.label === 'Edit')
+    return edit?.submenu?.items.map((item) => item.role ?? null) ?? []
+  })
+
+  // Electron lower-cases a role when it is read back off a built menu, so `selectAll` returns as
+  // `selectall`.
+  expect(editRoles).toContain('cut')
+  expect(editRoles).toContain('copy')
+  expect(editRoles).toContain('paste')
+  expect(editRoles).toContain('selectall')
+})
