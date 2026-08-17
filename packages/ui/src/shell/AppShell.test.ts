@@ -1,5 +1,5 @@
 import type { Panel } from '@vitrum/core'
-import { render, screen } from '@testing-library/svelte'
+import { render, screen, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
@@ -74,5 +74,54 @@ describe('AppShell', () => {
     expect(screen.queryByRole('region', { name: 'Bench outputs' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cutting list' }))
     expect(screen.getByRole('region', { name: 'Bench outputs' })).toBeInTheDocument()
+  })
+
+  // Run 2026-08-16-b: the render view is *about* per-piece appearance (F-053 texture placement), but
+  // reaching it meant opening the Draw dock and arming "Select pieces" — which nobody thinks to do in
+  // a view about how glass looks. Entering render arms it; an explicit choice always wins.
+  describe('render view arms the piece selector', () => {
+    const tools = () => screen.getByRole('toolbar', { name: 'Tools' })
+    const pressedTool = () =>
+      within(tools())
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.getAttribute('aria-label'))
+
+    it('arms piece-select on entering render and puts it back on leaving', async () => {
+      const user = userEvent.setup()
+      render(AppShell, { panel })
+      expect(pressedTool()).toEqual(['Select (Esc)'])
+
+      await user.click(screen.getByRole('tab', { name: 'Render' }))
+      expect(pressedTool()).toEqual(['Select pieces'])
+
+      await user.click(screen.getByRole('tab', { name: 'Design' }))
+      expect(pressedTool()).toEqual(['Select (Esc)'])
+    })
+
+    it('lets a drawing tool picked in render win, and keeps it on the way out', async () => {
+      const user = userEvent.setup()
+      render(AppShell, { panel })
+      await user.click(screen.getByRole('tab', { name: 'Render' }))
+
+      // The Draw dock stays open and usable in render; picking from it is a deliberate choice.
+      await user.click(within(tools()).getByRole('button', { name: 'Line (L)' }))
+      expect(pressedTool()).toEqual(['Line (L)'])
+
+      await user.click(screen.getByRole('tab', { name: 'Design' }))
+      expect(pressedTool()).toEqual(['Line (L)'])
+    })
+
+    it('does not stamp render "read-only" — glass and textures are edited in it', async () => {
+      const user = userEvent.setup()
+      render(AppShell, { panel })
+
+      await user.click(screen.getByRole('tab', { name: 'Cartoon' }))
+      expect(screen.getByRole('status')).toHaveTextContent('read-only')
+
+      await user.click(screen.getByRole('tab', { name: 'Render' }))
+      expect(screen.getByRole('status')).toHaveTextContent('Render — glass as it will look')
+      expect(screen.getByRole('status')).not.toHaveTextContent('read-only')
+    })
   })
 })

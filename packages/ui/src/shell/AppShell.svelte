@@ -937,17 +937,53 @@
   }
 
   /**
+   * True while the render view armed piece-select for the user rather than the user choosing it, so
+   * leaving the view can put the tool back and an explicit choice is never silently undone.
+   */
+  let renderArmedSelect = $state(false)
+
+  /**
    * Switch the reading on the stage. The selection is dropped with it: the derived views are
    * read-only, so a piece picked in the design view would otherwise hold the inspector on controls
    * that cannot act on what is being shown.
+   *
+   * The render view is the exception — it is editable, and its whole subject is how one piece looks
+   * (F-053 texture placement). Reaching that meant opening the *Draw* dock and arming "Select
+   * pieces", which nobody thinks to do in a view about appearance (run 2026-08-16-b), so entering
+   * render arms piece-select itself.
    */
   function setViewMode(mode: ViewMode): void {
     if (mode === viewMode) return
+    const leavingRender = viewMode === 'render'
     viewMode = mode
     paint.clearSelection()
     selection.clear()
     reinforce.selectedId = null
+
+    // Put the tool back on the way out, but only when we were the ones who armed it: a user who
+    // picked "Select pieces" (or paint) themselves keeps it.
+    if (leavingRender && renderArmedSelect) {
+      renderArmedSelect = false
+      if (paint.mode === 'select') paint.setMode('off')
+    }
+    // Arm it on the way in, unless the user already has a tool in hand — a drawing tool from the
+    // Draw dock, or paint mode. Those are deliberate choices and win over the default.
+    // `activeId` is `'select'` — the inert pan/zoom default — when no drawing tool is armed; it is
+    // never null, so testing it for falsiness would arm nothing.
+    if (mode === 'render' && paint.mode === 'off' && tools.activeId === 'select') {
+      paint.setMode('select')
+      renderArmedSelect = true
+    }
   }
+
+  // Stop claiming the tool the moment the user picks anything themselves — a drawing tool from the
+  // Draw dock (which stays open and usable in render), or any other paint mode. From then on the
+  // choice is theirs and leaving the view must not undo it, including if they re-pick "Select
+  // pieces" by hand.
+  $effect(() => {
+    if (renderArmedSelect && (tools.activeId !== 'select' || paint.mode !== 'select'))
+      renderArmedSelect = false
+  })
 
   /** The 1:1 tiled template, reached from the cartoon inspector and the Make section. */
   function openTemplate(): void {
@@ -1047,7 +1083,10 @@
       const sheets = nest.result?.glasses.reduce((n, g) => n + g.sheets.length, 0) ?? 0
       return sheets > 0 ? `${sheets} sheet${sheets === 1 ? '' : 's'}` : 'not nested yet'
     }
-    return 'read-only'
+    // Render is *not* read-only — glass can be painted and per-piece textures placed in it (F-053),
+    // and saying otherwise told users not to look for the piece selector (run 2026-08-16-b). Only
+    // the genuinely derived readings carry the marker; `Canvas.readOnlyView` agrees (cartoon, light).
+    return viewMode === 'cartoon' ? 'read-only' : ''
   })
 </script>
 
