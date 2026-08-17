@@ -80,10 +80,21 @@ export function panelSnapSegments(project: Project): readonly Segment[] {
   }))
 }
 
-/** The world-space bounding box of a project's drawn segments alone. `null` when empty. */
+/**
+ * The world-space bounding box of the segments that become the **finished panel** — lead and
+ * border, never `construction`. `null` when nothing is drawn.
+ *
+ * Construction guides are excluded on purpose, and it is not a nicety: F-012 stores a guide as a
+ * segment spanning ±100 m so it reads as an endless line at any zoom. Unioning that into a frame
+ * gives a 200 m box, which made the 1:1 template quote 873 252 tiles and the exported design sheet
+ * render the panel as a sub-pixel speck on an empty page (Mathieu's `deur001.vitrum`, run
+ * 2026-08-16-b). A guide is an aid for drawing, never part of the output — the same distinction
+ * F-032's `panelMetrics` and every export already make.
+ */
 export function contentBounds(project: Project): BBox | null {
   let box: BBox | null = null
   for (const segment of Object.values(project.segments)) {
+    if (segment.role === 'construction') continue
     const b = bboxOf(segment.geometry)
     box = box ? bboxUnion(box, b) : b
   }
@@ -91,9 +102,12 @@ export function contentBounds(project: Project): BBox | null {
 }
 
 /**
- * The world-space bounding box of everything drawable in a project: its segments and,
- * if set, the panel rectangle. `null` when there is nothing to frame (used by
- * zoom-to-fit to fall back to a default view).
+ * The world-space bounding box everything that frames the design should use: the finished-panel
+ * segments ({@link contentBounds}) and, if set, the panel rectangle. `null` when there is nothing to
+ * frame, in which case zoom-to-fit falls back to a default view.
+ *
+ * Feeds zoom-to-fit, the F-041 tile grid and the F-043 export scenes, so all four agree on what
+ * "the design" means — and none of them is thrown by a guide (see {@link contentBounds}).
  */
 export function documentBounds(project: Project): BBox | null {
   const content = contentBounds(project)

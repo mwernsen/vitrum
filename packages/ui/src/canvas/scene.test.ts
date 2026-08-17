@@ -3,6 +3,7 @@ import { arc, line, vec2 } from '@vitrum/geometry'
 import { describe, expect, it } from 'vitest'
 
 import {
+  contentBounds,
   defaultSymmetryCenter,
   documentBounds,
   panelInsetMm,
@@ -102,6 +103,52 @@ describe('defaultSymmetryCenter (F-052)', () => {
     const base = createEmptyProject({ panelSize: { width: 300, height: 400 } })
     const seg = createSegment(line(vec2(-500, -500), vec2(-400, -400)))
     expect(defaultSymmetryCenter({ ...base, segments: { [seg.id]: seg } })).toEqual(vec2(150, 200))
+  })
+})
+
+// Reproduces `deur001.vitrum` (Mathieu, run 2026-08-16-b): a 150 × 260 mm door light with three
+// F-012 guides, which are stored as ±100 m segments so they read as endless lines at any zoom.
+function guidedDoorPanel() {
+  const base = createEmptyProject({ panelSize: { width: 150, height: 260 } })
+  const border = createSegment(line(vec2(0, 0), vec2(150, 0)), 'border')
+  const lead = createSegment(line(vec2(20, 20), vec2(130, 240)))
+  const guideH = createSegment(line(vec2(-100010, 35), vec2(100010, 35)), 'construction')
+  const guideV = createSegment(line(vec2(0, -100010), vec2(0, 99990)), 'construction')
+  return {
+    ...base,
+    segments: {
+      [border.id]: border,
+      [lead.id]: lead,
+      [guideH.id]: guideH,
+      [guideV.id]: guideV,
+    },
+  }
+}
+
+describe('bounds ignore construction guides (run 2026-08-16-b)', () => {
+  it('frames the finished panel, not the ±100 m guides', () => {
+    const box = documentBounds(guidedDoorPanel())
+
+    // Without this, the box was 200 027 × 200 000 mm: 873 252 print tiles and an empty design sheet.
+    expect(box).toEqual({ min: vec2(0, 0), max: vec2(150, 260) })
+  })
+
+  it('leaves contentBounds to the lead and border alone', () => {
+    expect(contentBounds(guidedDoorPanel())).toEqual({ min: vec2(0, 0), max: vec2(150, 240) })
+  })
+
+  it('is null when only guides are drawn — there is no design to frame yet', () => {
+    const base = createEmptyProject()
+    const guide = createSegment(line(vec2(-100010, 35), vec2(100010, 35)), 'construction')
+    expect(documentBounds({ ...base, segments: { [guide.id]: guide } })).toBeNull()
+  })
+
+  it('keeps the symmetry pivot off a guide when there is no panel size', () => {
+    const base = createEmptyProject()
+    const lead = createSegment(line(vec2(10, 10), vec2(30, 50)))
+    const guide = createSegment(line(vec2(-100010, 35), vec2(100010, 35)), 'construction')
+    const project = { ...base, segments: { [lead.id]: lead, [guide.id]: guide } }
+    expect(defaultSymmetryCenter(project)).toEqual(vec2(20, 30))
   })
 })
 
