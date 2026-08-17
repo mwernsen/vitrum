@@ -1,6 +1,6 @@
 import { pieceKey, resolveGeneration, type DetectionResult, type Piece } from '@vitrum/core'
 import type { GlassId, PieceId } from '@vitrum/model'
-import { SvelteMap } from 'svelte/reactivity'
+import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
 /**
  * The reactive resolver for glass assignments (F-023). The document stores only the glass the user
@@ -26,6 +26,15 @@ export class AssignmentController {
   effective = $state<Map<PieceId, GlassId>>(new SvelteMap())
   /** The glass the paint tool assigns on click, or null when none is chosen. */
   selectedGlassId = $state<GlassId | null>(null)
+
+  /**
+   * Every glass id some live piece currently shows. Derived from {@link effective}, so it counts
+   * *effective* colour — a piece inheriting from an ancestor keeps that glass in use — and it follows
+   * an undo immediately. The palette uses it to offer removal only for glass the design no longer
+   * needs (run 2026-08-16-b): `removeGlass` drops the entry without touching `assignments`, so
+   * removing one still in use would leave a dangling reference.
+   */
+  usedGlassIds = $derived<ReadonlySet<GlassId>>(new SvelteSet(this.effective.values()))
 
   /** The previous *generation's* provenance — the base inheritance resolves against. */
   #prevOrigins: ReadonlyMap<PieceId, PieceId> = new SvelteMap()

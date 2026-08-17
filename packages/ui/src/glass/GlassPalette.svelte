@@ -7,6 +7,8 @@
     type TransparencyClass,
   } from '@vitrum/model'
 
+  import Trash2 from 'lucide-svelte/icons/trash-2'
+
   import Button from '../components/Button.svelte'
   import Card from '../components/Card.svelte'
   import IconButton from '../components/IconButton.svelte'
@@ -27,6 +29,11 @@
     /** The current project's glass catalog. Absent ⇒ only the library scope is shown. */
     project?: Glass[]
     projectActions?: GlassScopeActions
+    /**
+     * Glass ids some live piece currently shows (F-023 effective colour). Project rows outside this
+     * set get a remove button; absent ⇒ removal is not offered at all.
+     */
+    usedGlassIds?: ReadonlySet<string>
     /** Copy a library glass into the project by value (consume-by-value, FR-1). */
     onAddToProject?: (glass: Glass) => void
     /**
@@ -44,6 +51,7 @@
     onExport,
     project,
     projectActions,
+    usedGlassIds,
     onAddToProject,
     onSelect,
     selectedId = null,
@@ -65,6 +73,15 @@
     scope === 'project' && projectActions ? projectActions : libraryActions,
   )
   const shown = $derived(filterGlasses(activeGlasses, filter))
+
+  /**
+   * Whether this row offers "remove from project". Project scope only — the library is the user's
+   * own collection and is not scoped to one design — and only when no live piece shows the glass.
+   * Absent `usedGlassIds` means the caller cannot tell, so nothing is offered.
+   */
+  function removable(glass: Glass): boolean {
+    return scope === 'project' && usedGlassIds !== undefined && !usedGlassIds.has(glass.id)
+  }
 
   function cap(s: string): string {
     return s.charAt(0).toUpperCase() + s.slice(1)
@@ -192,6 +209,20 @@
                 onclick={() => onAddToProject(glass)}
               >
                 +
+              </IconButton>
+            {/if}
+            {#if removable(glass)}
+              <!-- Only for project glass no piece shows any more: experimenting leaves entries
+                   behind and nothing pruned them (run 2026-08-16-b). Glass in use has no remove
+                   button at all, rather than a disabled one — `removeGlass` would leave the
+                   assignment dangling, so it is not a thing to offer and then refuse. -->
+              <IconButton
+                size="sm"
+                variant="ghost"
+                label={`Remove ${glass.name} from project`}
+                onclick={() => activeActions.remove(glass.id)}
+              >
+                <Trash2 size={13} strokeWidth={1.7} />
               </IconButton>
             {/if}
           </Card>

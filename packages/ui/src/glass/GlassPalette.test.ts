@@ -147,6 +147,63 @@ describe('GlassPalette (F-022)', () => {
     expect(screen.queryByText('Ruby cathedral')).not.toBeInTheDocument()
   })
 
+  // Run 2026-08-16-b: experimenting leaves project glass behind and nothing pruned it. Removal is
+  // offered only where it is safe — `removeGlass` drops the catalog entry without touching
+  // `assignments`, so a glass still on a piece must not be removable.
+  describe('removing unused project glass', () => {
+    const project: Glass[] = [
+      g({ id: 'used', name: 'Painted amber' }),
+      g({ id: 'spare', name: 'Experiment teal' }),
+    ]
+
+    it('offers removal for project glass no piece shows, and removes it', async () => {
+      const user = userEvent.setup()
+      const projectActions = actions()
+      render(GlassPalette, {
+        library,
+        libraryActions: actions(),
+        project,
+        projectActions,
+        usedGlassIds: new Set(['used']),
+      })
+      await user.click(screen.getByRole('tab', { name: 'Project' }))
+
+      expect(
+        screen.queryByRole('button', { name: 'Remove Painted amber from project' }),
+      ).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Remove Experiment teal from project' }))
+      expect(projectActions.remove).toHaveBeenCalledWith('spare')
+    })
+
+    it('never offers it in the library scope — the library is not scoped to one design', () => {
+      render(GlassPalette, {
+        library,
+        libraryActions: actions(),
+        project,
+        projectActions: actions(),
+        usedGlassIds: new Set<string>(),
+      })
+      expect(
+        screen.queryByRole('button', { name: /Remove .* from project/ }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('offers nothing when usage is unknown, rather than guessing everything is unused', async () => {
+      const user = userEvent.setup()
+      render(GlassPalette, {
+        library,
+        libraryActions: actions(),
+        project,
+        projectActions: actions(),
+      })
+      await user.click(screen.getByRole('tab', { name: 'Project' }))
+      expect(
+        screen.queryByRole('button', { name: /Remove .* from project/ }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   it('selects a glass for painting instead of editing when onSelect is provided (F-023)', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()

@@ -129,6 +129,7 @@
     {libraryActions}
     project={execute ? projectGlasses : undefined}
     {projectActions}
+    usedGlassIds={assignments.usedGlassIds}
     onAddToProject={execute ? addToProject : undefined}
     onImport={() => void glassLibrary.importLibrary()}
     onExport={() => void glassLibrary.exportLibrary()}
