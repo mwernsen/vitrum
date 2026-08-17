@@ -42,7 +42,13 @@
 
   import CalibrationDialog from '../canvas/CalibrationDialog.svelte'
   import type { TechniqueRender } from '../canvas/render'
-  import { defaultSymmetryCenter, documentBounds, panelInsetMm, panelRect } from '../canvas/scene'
+  import {
+    defaultSymmetryCenter,
+    documentBounds,
+    panelInsetMm,
+    panelRect,
+    panelSnapSegments,
+  } from '../canvas/scene'
   import { ViewportController } from '../canvas/viewport.svelte'
   import type { DocumentController } from '../document/controller.svelte'
   import type { OpenedImage } from '../document/host'
@@ -265,8 +271,11 @@
 
   // Rebuild the snap spatial index whenever the visible network changes. The derived symmetry
   // replicas are snap targets too — a point picked in a replica sector snaps to the linework the user
-  // sees there and folds back to source (F-052) — but they stay out of the editing scene.
-  $effect(() => snap.updateScene(shownSegments, replicaSegments))
+  // sees there and folds back to source (F-052) — but they stay out of the editing scene. The panel
+  // frame's drawn-to rectangle joins them (run 2026-08-16-b): it is chrome, not geometry, so the
+  // border could not be placed on it by eye once the came allowance moved it off the grid.
+  const panelSnapTargets = $derived(controller ? panelSnapSegments(controller.doc) : [])
+  $effect(() => snap.updateScene(shownSegments, [...replicaSegments, ...panelSnapTargets]))
 
   // Piece detection (F-020). Feeds both the inspector (always) and the dev overlay (when its
   // toggle is on). Reads `controller.doc` inside `detect()`, so it re-runs on edits. Capped so
@@ -1301,6 +1310,7 @@
   </div>
   <StatusBar
     {viewport}
+    {snap}
     widthMm={panel.widthMm}
     heightMm={panel.heightMm}
     hint={toolHint}

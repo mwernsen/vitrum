@@ -46,6 +46,40 @@ export function panelInsetMm(project: Project): number {
   return perimeterAllowance(project.technique, borderIds).mm
 }
 
+/**
+ * The panel frame as **snap targets**: the four edges of the rectangle the user is meant to draw
+ * their border on — {@link panelRect} shrunk by {@link panelInsetMm} on every side, which is exactly
+ * the dotted rectangle `drawPanelFrame` renders.
+ *
+ * Chrome alone was not enough (Mathieu, run 2026-08-16-b): with a 5 mm came the target sits 2.5 mm
+ * inside the panel, so no grid multiple lands on it and the border could not be placed on it by eye.
+ * These are throwaway `Segment`s handed to `SnapController.updateScene`'s `derived` argument — they
+ * join the drawing scene, so endpoint / midpoint / on-curve / intersection all catch the frame, but
+ * they are never stored, never rendered from here, and never reach the editing scene.
+ *
+ * Only the drawn-to rectangle is offered, not the finished outline: it is the one the user aims at,
+ * and with a zero allowance (copper foil) the two coincide anyway, so this is always the right one.
+ * `null` when there is no panel size, or when the allowance would collapse the rectangle.
+ */
+export function panelSnapSegments(project: Project): readonly Segment[] {
+  const rect = panelRect(project)
+  if (!rect) return []
+  const inset = panelInsetMm(project)
+  const min = vec2(rect.min.x + inset, rect.min.y + inset)
+  const max = vec2(rect.max.x - inset, rect.max.y - inset)
+  if (max.x - min.x <= 0 || max.y - min.y <= 0) return []
+  const corners = [min, vec2(max.x, min.y), max, vec2(min.x, max.y)]
+  // Stable synthetic ids, not `createSegment`: these are rebuilt on every derive, and minting
+  // nanoids here would make the result differ run to run for no benefit — the snap scene reads
+  // geometry only. The `~panel` prefix cannot collide with a nanoid.
+  return corners.map((a, i) => ({
+    id: `~panel-edge-${i}`,
+    geometry: line(a, corners[(i + 1) % corners.length]!),
+    role: 'border' as const,
+    endpoints: [`~panel-node-${i}`, `~panel-node-${(i + 1) % corners.length}`] as const,
+  }))
+}
+
 /** The world-space bounding box of a project's drawn segments alone. `null` when empty. */
 export function contentBounds(project: Project): BBox | null {
   let box: BBox | null = null

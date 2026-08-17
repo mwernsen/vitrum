@@ -65,4 +65,33 @@ describe('StatusBar', () => {
       screen.queryByRole('button', { name: 'Calibrate physical size' }),
     ).not.toBeInTheDocument()
   })
+
+  // Run 2026-08-16-b: the readout has to be the coordinate the next click commits, or a snapped
+  // placement cannot be read back — which is how the panel-frame snap gets confirmed by eye.
+  describe('snapped coordinates', () => {
+    it('reports the snap position rather than the raw pointer, and names the snap', async () => {
+      const { SnapController } = await import('../tools/snap.svelte')
+      const viewport = new ViewportController()
+      viewport.resize(800, 600, 1)
+      viewport.setCursor({ x: 100, y: 60 })
+      const snap = new SnapController(viewport)
+      snap.hit = { kind: 'endpoint', world: { x: 2.5, y: 397.5 } }
+
+      render(StatusBar, { viewport, snap })
+
+      expect(screen.getByLabelText('Cursor position')).toHaveTextContent('X 2.5 mm Y 397.5 mm')
+      expect(screen.getByLabelText('Active snap')).toHaveTextContent('Endpoint')
+    })
+
+    it('falls back to the raw pointer once the snap releases', () => {
+      const viewport = new ViewportController()
+      viewport.resize(800, 600, 1)
+      viewport.setCursor({ x: 100, y: 60 })
+
+      render(StatusBar, { viewport, hint: 'Click to place the first point' })
+
+      expect(screen.queryByLabelText('Active snap')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Cursor position')).toHaveTextContent('mm')
+    })
+  })
 })

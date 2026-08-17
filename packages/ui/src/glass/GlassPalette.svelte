@@ -267,6 +267,11 @@
     flex: 1;
     min-height: 8rem;
     overflow-y: auto;
+    /* Rows keep their content height. A grid's default `align-content` resolves to `stretch`, so
+       with `flex: 1` giving this container more height than its rows need — a narrow filter, seven
+       results — the auto rows inflated and the cards drifted apart (run 2026-08-16-b). Leftover
+       space belongs at the bottom of the list, not between the items. */
+    align-content: start;
   }
 
   .grid :global(.card) {

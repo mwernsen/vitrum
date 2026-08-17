@@ -1,11 +1,18 @@
 <script lang="ts">
-  import { formatLength, type LengthUnit } from '@vitrum/core'
+  import { formatLength, type LengthUnit, type SnapKind } from '@vitrum/core'
   import Table from 'lucide-svelte/icons/table'
 
   import type { ViewportController } from '../canvas/viewport.svelte'
+  import type { SnapController } from '../tools/snap.svelte'
 
   interface Props {
     viewport: ViewportController
+    /**
+     * The snapping controller (F-012). When a snap is active its position is what the readout
+     * shows — the number the next click will actually commit, not where the mouse happens to be
+     * (run 2026-08-16-b). Absent ⇒ the raw cursor is shown.
+     */
+    snap?: SnapController
     /** Panel size in mm, shown in the active unit. */
     widthMm?: number
     heightMm?: number
@@ -19,6 +26,7 @@
 
   let {
     viewport,
+    snap,
     widthMm,
     heightMm,
     hint = '',
@@ -26,8 +34,22 @@
     drawerOpen = false,
   }: Props = $props()
 
+  /** Snap names as the Draw section's chips write them, so the two surfaces agree. */
+  const KIND_LABELS: Record<SnapKind, string> = {
+    endpoint: 'Endpoint',
+    intersection: 'Intersection',
+    midpoint: 'Midpoint',
+    'on-curve': 'On curve',
+    grid: 'Grid',
+    angle: 'Angle',
+  }
+
+  // A live snap wins over the raw pointer: the readout should be the coordinate the next click
+  // commits. `hit.world` is already in the space the marker is drawn in, so a snap taken in a
+  // symmetry replica sector reads under the cursor rather than in the source sector (F-052).
+  const snapped = $derived(snap?.hit ?? null)
   const coords = $derived.by(() => {
-    const world = viewport.cursorWorld
+    const world = snapped?.world ?? viewport.cursorWorld
     if (!world) return 'X —   Y —'
     const opts = { fractional: viewport.unit === 'in' }
     return `X ${formatLength(world.x, viewport.unit, opts)}   Y ${formatLength(world.y, viewport.unit, opts)}`
@@ -48,7 +70,13 @@
 <section class="statusbar" aria-label="Status bar">
   <div class="group">
     <span class="coords" aria-label="Cursor position">{coords}</span>
-    {#if hint}<span class="hint">{hint}</span>{/if}
+    {#if snapped}
+      <!-- Which snap produced the number above, so a snapped reading is never mistaken for a
+           coincidence of the pointer. -->
+      <span class="hint" aria-label="Active snap">{KIND_LABELS[snapped.kind]}</span>
+    {:else if hint}
+      <span class="hint">{hint}</span>
+    {/if}
   </div>
 
   <div class="group">

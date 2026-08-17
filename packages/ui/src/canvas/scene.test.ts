@@ -7,6 +7,7 @@ import {
   documentBounds,
   panelInsetMm,
   panelRect,
+  panelSnapSegments,
   segmentToWorldPoints,
   stressScene,
 } from './scene'
@@ -101,6 +102,52 @@ describe('defaultSymmetryCenter (F-052)', () => {
     const base = createEmptyProject({ panelSize: { width: 300, height: 400 } })
     const seg = createSegment(line(vec2(-500, -500), vec2(-400, -400)))
     expect(defaultSymmetryCenter({ ...base, segments: { [seg.id]: seg } })).toEqual(vec2(150, 200))
+  })
+})
+
+describe('panelSnapSegments (run 2026-08-16-b)', () => {
+  it('offers the drawn-to rectangle, inset by the came allowance', () => {
+    const project = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    const edges = panelSnapSegments(project)
+
+    // Default lead H 5 mm ⇒ 2.5 mm inset, so the target is 295 × 395 at (2.5, 2.5).
+    expect(edges).toHaveLength(4)
+    const corners = edges.map((e) => (e.geometry.kind === 'line' ? e.geometry.a : null))
+    expect(corners).toEqual([
+      vec2(2.5, 2.5),
+      vec2(297.5, 2.5),
+      vec2(297.5, 397.5),
+      vec2(2.5, 397.5),
+    ])
+    // A closed contour: every edge ends where the next begins.
+    for (const [i, edge] of edges.entries()) {
+      if (edge.geometry.kind !== 'line') throw new Error('expected lines')
+      const next = edges[(i + 1) % edges.length]!
+      if (next.geometry.kind !== 'line') throw new Error('expected lines')
+      expect(edge.geometry.b).toEqual(next.geometry.a)
+    }
+  })
+
+  it('coincides with the finished outline for copper foil, which adds no width', () => {
+    const base = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    const project = { ...base, technique: { ...base.technique, kind: 'foil' as const } }
+    const first = panelSnapSegments(project)[0]!
+
+    if (first.geometry.kind !== 'line') throw new Error('expected lines')
+    expect(first.geometry.a).toEqual(vec2(0, 0))
+  })
+
+  it('is stable across calls, so rebuilding the snap scene is not churn', () => {
+    const project = createEmptyProject({ panelSize: { width: 300, height: 400 } })
+    expect(panelSnapSegments(project)).toEqual(panelSnapSegments(project))
+  })
+
+  it('offers nothing without a panel size, or when the allowance swallows the panel', () => {
+    expect(panelSnapSegments(createEmptyProject())).toEqual([])
+    // 4 mm panel with 2.5 mm of came per side leaves nothing to draw on.
+    expect(panelSnapSegments(createEmptyProject({ panelSize: { width: 4, height: 400 } }))).toEqual(
+      [],
+    )
   })
 })
 
