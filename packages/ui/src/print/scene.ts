@@ -1,7 +1,7 @@
 import type { CutContour, LabelPlacement, Piece } from '@vitrum/core'
 import type { BBox, Vec2 } from '@vitrum/geometry'
-import type { Glass, GlassId, Segment } from '@vitrum/model'
-import type { LegendRow, NetworkLine, PrintScene, ScenePiece } from '@vitrum/paper'
+import type { Glass, GlassId, ReinforcementBar, Segment } from '@vitrum/model'
+import type { LegendRow, NetworkLine, PrintScene, SceneBar, ScenePiece } from '@vitrum/paper'
 
 import { segmentToWorldPoints } from '../canvas/scene'
 
@@ -29,6 +29,14 @@ export interface PrintSceneInput {
   readonly labelFor: (piece: Piece) => string | undefined
   /** Label anchor + inscribed radius for a piece (pole of inaccessibility, F-040). */
   readonly placementFor: (piece: Piece) => LabelPlacement | undefined
+  /**
+   * The finished panel rectangle (F-033), or null when the project has no panel size. Note this is
+   * the *assembled* outline, not the drawn border — the border sits the perimeter came allowance
+   * inside it, so the two are different rectangles and only this one is a batten line.
+   */
+  readonly panelFrame: BBox | null
+  /** Reinforcement bars (F-032), drawn as footprints for bench assembly. */
+  readonly reinforcements: readonly ReinforcementBar[]
   /** Legend rows (code → glass) already assembled by the shell (FR-4 parity with the on-screen one). */
   readonly legend: readonly LegendRow[]
 }
@@ -60,5 +68,19 @@ export function buildPrintScene(input: PrintSceneInput): PrintScene {
     }
   })
 
-  return { contentBounds: input.contentBounds, network, cutLines, pieces, legend: input.legend }
+  const reinforcements: SceneBar[] = input.reinforcements.map((bar) => ({
+    a: bar.a,
+    b: bar.b,
+    widthMm: bar.widthMm,
+  }))
+
+  return {
+    contentBounds: input.contentBounds,
+    network,
+    cutLines,
+    pieces,
+    panelFrame: input.panelFrame ?? undefined,
+    reinforcements,
+    legend: input.legend,
+  }
 }

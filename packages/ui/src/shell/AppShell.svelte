@@ -430,6 +430,8 @@
       glasses: projectGlasses,
       labelFor: (piece) => numbering.labelFor(piece),
       placementFor: (piece) => numbering.placements.get(pieceKey(piece)),
+      panelFrame,
+      reinforcements,
       legend: legendRows(),
     })
   }

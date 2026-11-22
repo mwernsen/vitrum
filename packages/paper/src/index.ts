@@ -63,6 +63,7 @@ export {
   type PrintInclude,
   type PrintOptions,
   type PrintScene,
+  type SceneBar,
   type ScenePiece,
 } from './scene'
 

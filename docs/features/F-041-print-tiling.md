@@ -172,6 +172,43 @@ document type inside the single Export dialog (top-bar Export button). The pure 
 `buildPrintDocument` pipeline is unchanged — the dialog composes it, and the canvas tile-grid preview
 is preserved (keyed on the export dialog's tiled type). See F-043 Implementation notes.
 
+### Update: bench-assembly overlays (2026-11-22, Mathieu)
+
+The tiled cartoon is the sheet a panel is **built on** — laid on a wooden platen, battens nailed to
+its edges, glass assembled on top — and it was missing the two marks that job needs. Scope was
+specced ("what to include … reinforcement bars") but neither shipped in the original delivery.
+
+- **Finished panel outline.** `PrintScene` gained an optional `panelFrame` (the F-033 _finished_
+  rectangle, came included). This is deliberately not the drawn border: the lead network is the came
+  centreline, so the assembled panel is `perimeterAllowance` (F-021) **larger** than the drawing on
+  every side, and the batten line was simply not on the sheet before. Previously the panel rectangle
+  only widened `contentBounds`, so the finished edge was implied by where the printing stopped —
+  unusable once tiles are taped with overlaps. Absent when the project has no panel size.
+- **Reinforcement bars.** `PrintScene` gained `reinforcements`, and each bar is drawn as its
+  true-width **footprint** (the band outlined, not filled, so lead lines and numbers under it stay
+  readable) rather than a bare centreline — the width is what tells you the clearance it needs
+  against the glass it crosses. The DXF `REBAR` layer already carried this geometry (F-043); only the
+  print was blind to it. On the overview map the bars are centrelines, since a band closes to a blob
+  at thumbnail scale.
+- **One bar shape across both pipelines.** `SceneBar` now lives in `scene.ts` and F-043's `ExportBar`
+  is an alias of it, so the print and export scenes cannot drift apart.
+- **Both are `PrintInclude` toggles** (`panelOutline`, `reinforcements`), default on, shown in the
+  Export dialog's tiled document type beside the existing include checkboxes.
+- **Dashed, not solid.** A mono print has no second channel: the canvas separates the panel frame
+  from the lead network with a quiet grey (`drawPanelFrame`), but grey prints as mush and a hairline
+  would read as one more cut line. The two overlays dash instead, at patterns far enough apart to
+  tell from each other and from the grey fold seams — long `[8, 4]` for the panel outline, short
+  `[3, 2]` for a bar.
+
+Tests: `compose.test.ts` gained an **assembly overlays** block (outline at the assembled size, both
+toggles off, no panel size, footprint-not-centreline, degenerate bars skipped, overview parity);
+`print/scene.test.ts` covers the builder mapping; `ExportDialog.test.ts` covers the two checkboxes;
+`print.spec.ts` asserts they reach the packaged build. All five gates green.
+
+**Still pending Mathieu:** the physical check above now also covers the new marks — confirm the
+dashed outline really lands at the finished size on taped-together sheets before trusting it for
+batten placement.
+
 **Follow-ups (out of scope)**
 
 - `@vitrum/paper` is ready for **F-042** (cutting list / BOM tables) and **F-043** (single-sheet /

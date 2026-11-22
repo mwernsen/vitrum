@@ -20,8 +20,26 @@ export interface PrintScene {
   readonly cutLines: readonly (readonly Vec2[])[]
   /** Detected pieces, for fills (render mode) and number placement. */
   readonly pieces: readonly ScenePiece[]
+  /**
+   * The **finished** panel rectangle (F-033) — the assembled outline, came included, which is the
+   * line battens get nailed to when the cartoon is laid on a bench. Absent when the project has no
+   * panel size, in which case there is no finished outline to draw.
+   */
+  readonly panelFrame?: BBox
+  /** Reinforcement bars (F-032), drawn as their true-width footprint so the bench layout is known. */
+  readonly reinforcements: readonly SceneBar[]
   /** Glass legend rows (code → glass), for the overview page. */
   readonly legend: readonly LegendRow[]
+}
+
+/**
+ * One reinforcement bar (F-032): a straight centreline plus the bar's width. Shared with the F-043
+ * export scene, whose `ExportBar` is an alias of this — one bar shape across both output pipelines.
+ */
+export interface SceneBar {
+  readonly a: Vec2
+  readonly b: Vec2
+  readonly widthMm: number
 }
 
 /** One flattened lead-line segment. `border` draws heavier; `construction` is normally excluded. */
@@ -66,6 +84,10 @@ export interface PrintInclude {
   readonly pageLabels: boolean
   readonly calibrationRuler: boolean
   readonly overviewMap: boolean
+  /** The finished panel outline (F-033) — the batten line for bench assembly. */
+  readonly panelOutline: boolean
+  /** Reinforcement bar footprints (F-032). */
+  readonly reinforcements: boolean
 }
 
 export interface PrintOptions {
@@ -96,4 +118,6 @@ export const DEFAULT_INCLUDE: PrintInclude = {
   pageLabels: true,
   calibrationRuler: true,
   overviewMap: true,
+  panelOutline: true,
+  reinforcements: true,
 }

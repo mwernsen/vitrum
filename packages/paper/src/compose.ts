@@ -1,5 +1,5 @@
 import type { BBox, Vec2 } from '@vitrum/geometry'
-import { vec2 } from '@vitrum/geometry'
+import { normalize, scale, sub, vec2 } from '@vitrum/geometry'
 
 import { clipPolygon, clipPolyline } from './clip'
 import { PageBuilder, type PageContent, type PdfDoc, type RectMm, type Stroke } from './page'
@@ -8,6 +8,7 @@ import {
   type LegendRow,
   type PrintOptions,
   type PrintScene,
+  type SceneBar,
   type ScenePiece,
 } from './scene'
 import { computeTiling, internalSeams, tileLabel, type Tile, type Tiling } from './tiling'
@@ -28,6 +29,18 @@ const PAPER = '#ffffff'
 const LEAD_MIN_MM = 0.4
 const BORDER_MM = 0.9
 const CUT_MM = 0.3
+const PANEL_MM = 0.4
+const BAR_MM = 0.3
+
+/**
+ * Reference lines are dashed because a mono print has no second channel to separate them by. The
+ * canvas can hold the finished panel outline apart from the lead network with a quiet grey (F-003's
+ * `drawPanelFrame`), but grey prints as mush and a hairline would read as one more cut line. So the
+ * two reference overlays dash, at patterns far enough apart to tell from each other and from the
+ * grey `FOLD` seams: a long dash for the panel outline, a short one for a bar's footprint.
+ */
+const PANEL_DASH_MM = [8, 4] as const
+const BAR_DASH_MM = [3, 2] as const
 
 /**
  * Build the full print document: an optional overview map page first, then one page per tile in
@@ -128,6 +141,15 @@ function drawSceneContent(
     }
   }
 
+  // Reference overlays, above the line work so they stay readable on a dense cartoon but below the
+  // numbers, which must never be obscured.
+  if (options.include.panelOutline && scene.panelFrame) {
+    drawPanelOutline(g, scene.panelFrame, wr, toPage)
+  }
+  if (options.include.reinforcements) {
+    for (const bar of scene.reinforcements) drawBar(g, bar, wr, toPage)
+  }
+
   if (options.include.numbers) {
     const inset: RectMm = {
       x: wr.x + 2,
@@ -137,6 +159,62 @@ function drawSceneContent(
     }
     for (const piece of scene.pieces) drawPieceNumber(g, piece, inset, toPage)
   }
+}
+
+/**
+ * Draw the **finished** panel outline (F-033): the assembled rectangle, came included. This is the
+ * line battens are nailed to when the cartoon goes on the bench, and it is not a line the user drew
+ * — the drawn border sits `perimeterAllowance` inside it (F-021), so without this the sheet gives no
+ * mark for the true panel edge.
+ */
+function drawPanelOutline(
+  g: PageBuilder,
+  panel: BBox,
+  wr: RectMm,
+  toPage: (p: Vec2) => Vec2,
+): void {
+  const corners = [
+    vec2(panel.min.x, panel.min.y),
+    vec2(panel.max.x, panel.min.y),
+    vec2(panel.max.x, panel.max.y),
+    vec2(panel.min.x, panel.max.y),
+  ]
+  const stroke: Stroke = { color: INK, widthMm: PANEL_MM, dashMm: PANEL_DASH_MM }
+  // Closed ring, clipped as a polyline so each run that re-enters the tile is drawn on its own.
+  for (const run of clipPolyline([...corners, corners[0]!], wr)) {
+    g.polyline(run.map(toPage), stroke)
+  }
+}
+
+/**
+ * Draw one reinforcement bar (F-032) as its **footprint** — the true-width band, outlined rather
+ * than filled so the lead lines and piece numbers underneath stay legible. The width is the point:
+ * a bar needs clearance against the glass it crosses, and the centreline alone would not show it.
+ */
+function drawBar(g: PageBuilder, bar: SceneBar, wr: RectMm, toPage: (p: Vec2) => Vec2): void {
+  const band = barFootprint(bar)
+  if (!band) return
+  const stroke: Stroke = { color: INK, widthMm: BAR_MM, dashMm: BAR_DASH_MM }
+  for (const run of clipPolyline([...band, band[0]!], wr)) {
+    g.polyline(run.map(toPage), stroke)
+  }
+}
+
+/**
+ * The four corners of a bar's band, in world mm. Null for a degenerate bar (zero length or zero
+ * width), which has no footprint to draw.
+ */
+function barFootprint(bar: SceneBar): readonly Vec2[] | null {
+  const axis = sub(bar.b, bar.a)
+  if (Math.hypot(axis.x, axis.y) < 1e-9 || bar.widthMm <= 0) return null
+  const dir = normalize(axis)
+  const offset = scale(vec2(-dir.y, dir.x), bar.widthMm / 2)
+  return [
+    vec2(bar.a.x + offset.x, bar.a.y + offset.y),
+    vec2(bar.b.x + offset.x, bar.b.y + offset.y),
+    vec2(bar.b.x - offset.x, bar.b.y - offset.y),
+    vec2(bar.a.x - offset.x, bar.a.y - offset.y),
+  ]
 }
 
 /** Draw one piece's number: inline at its pole when it fits, else with a short leader. */
@@ -324,7 +402,7 @@ function buildOverviewPage(scene: PrintScene, options: PrintOptions, tiling: Til
     w: tiling.contentWidthMm,
     h: Math.max(20, boxBottom - boxTop),
   }
-  drawOverviewThumbnail(page, scene, tiling, box)
+  drawOverviewThumbnail(page, scene, tiling, box, options.include.reinforcements)
 
   if (legendRows.length > 0) drawLegend(page, legendRows, m, boxBottom + 6)
   if (options.include.calibrationRuler) drawCalibrationRuler(page, tiling)
@@ -337,6 +415,7 @@ function drawOverviewThumbnail(
   scene: PrintScene,
   tiling: Tiling,
   box: RectMm,
+  showBars: boolean,
 ): void {
   const b = scene.contentBounds
   const panelW = Math.max(1e-6, b.max.x - b.min.x)
@@ -355,6 +434,11 @@ function drawOverviewThumbnail(
   for (const seg of scene.network) {
     if (seg.role === 'construction') continue
     page.polyline(seg.points.map(toBox), { color: INK, widthMm: 0.2 })
+  }
+
+  // Bars as centrelines only — at thumbnail scale a footprint band would close up into a blob.
+  for (const bar of showBars ? scene.reinforcements : []) {
+    page.polyline([bar.a, bar.b].map(toBox), { color: INK, widthMm: 0.3, dashMm: BAR_DASH_MM })
   }
 
   // Tile grid (step layout) + cell labels.

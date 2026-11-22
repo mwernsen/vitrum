@@ -324,6 +324,16 @@
           checked={print.includeOverviewMap}
           onchange={(c) => (print.includeOverviewMap = c)}
         />
+        <Checkbox
+          label="Finished panel outline"
+          checked={print.includePanelOutline}
+          onchange={(c) => (print.includePanelOutline = c)}
+        />
+        <Checkbox
+          label="Reinforcement bars"
+          checked={print.includeReinforcements}
+          onchange={(c) => (print.includeReinforcements = c)}
+        />
       </fieldset>
 
       <div class="summary" aria-live="polite">

@@ -20,6 +20,7 @@ const scene: PrintScene = {
       labelRadiusMm: 20,
     },
   ],
+  reinforcements: [],
   legend: [{ code: 'A', name: 'Blue', color: '#336699', count: 1 }],
 }
 

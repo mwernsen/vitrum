@@ -65,6 +65,21 @@ describe('ExportDialog (F-043, consolidated)', () => {
     expect(screen.getByText('Alignment marks')).toBeInTheDocument()
   })
 
+  it('offers the two assembly overlays on the tiled template, both on by default', async () => {
+    const p = props()
+    p.controller.docType = 'tiled'
+    render(ExportDialog, p)
+
+    const outline = screen.getByLabelText('Finished panel outline')
+    const bars = screen.getByLabelText('Reinforcement bars')
+    expect(outline).toBeChecked()
+    expect(bars).toBeChecked()
+
+    await fireEvent.click(outline)
+    expect(p.print.includePanelOutline).toBe(false)
+    expect(p.print.includeReinforcements).toBe(true)
+  })
+
   it('warns and disables export when tiled margins leave no printable area', () => {
     const p = props()
     p.controller.docType = 'tiled'

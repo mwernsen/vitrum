@@ -51,6 +51,8 @@ function input(overrides: Partial<PrintSceneInput> = {}): PrintSceneInput {
     glasses: { g1: glass } as Record<GlassId, Glass>,
     labelFor: () => 'A1',
     placementFor: () => ({ at: vec2(50, 50), radius: 12 }) as LabelPlacement,
+    panelFrame: null,
+    reinforcements: [],
     legend: [{ code: 'A', name: 'Ruby', color: '#cc3344', count: 1 }],
     ...overrides,
   }
@@ -98,5 +100,22 @@ describe('buildPrintScene', () => {
   it('passes the legend through', () => {
     const scene = buildPrintScene(input())
     expect(scene.legend[0]).toEqual({ code: 'A', name: 'Ruby', color: '#cc3344', count: 1 })
+  })
+
+  it('passes the finished panel frame through, and drops it when there is no panel size', () => {
+    const frame: BBox = { min: vec2(0, 0), max: vec2(300, 400) }
+    expect(buildPrintScene(input({ panelFrame: frame })).panelFrame).toEqual(frame)
+    expect(buildPrintScene(input({ panelFrame: null })).panelFrame).toBeUndefined()
+  })
+
+  it('carries reinforcement bars across as centreline + width', () => {
+    const scene = buildPrintScene(
+      input({
+        reinforcements: [
+          { id: 'r1', a: vec2(0, 200), b: vec2(300, 200), widthMm: 6, material: 'zinc' },
+        ] as unknown as PrintSceneInput['reinforcements'],
+      }),
+    )
+    expect(scene.reinforcements).toEqual([{ a: vec2(0, 200), b: vec2(300, 200), widthMm: 6 }])
   })
 })

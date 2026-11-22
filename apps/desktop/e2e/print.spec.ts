@@ -64,6 +64,11 @@ test('exports a 1:1 tiled PDF via the Export dialog', async () => {
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('What to export').selectOption('tiled')
   await expect(dialog).toContainText('tiles')
+
+  // The bench-assembly overlays reach the packaged build and default on: the finished panel
+  // outline is the batten line, the bars show what crosses the glass.
+  await expect(dialog.getByLabel('Finished panel outline')).toBeChecked()
+  await expect(dialog.getByLabel('Reinforcement bars')).toBeChecked()
   await dialog.getByRole('button', { name: 'Export' }).click()
 
   // The dialog closes on a successful export, and a valid PDF is written to the export path.

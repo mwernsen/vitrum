@@ -1,6 +1,6 @@
 import type { Arc, BBox, CubicBezier, Line, Vec2 } from '@vitrum/geometry'
 
-import type { LegendRow } from './scene'
+import type { LegendRow, SceneBar } from './scene'
 import type { Orientation, PaperSize } from './units'
 
 /**
@@ -56,12 +56,8 @@ export interface ExportPiece {
   readonly labelAt?: Vec2
 }
 
-/** One reinforcement bar (F-032): a straight centreline with a width. */
-export interface ExportBar {
-  readonly a: Vec2
-  readonly b: Vec2
-  readonly widthMm: number
-}
+/** One reinforcement bar (F-032): a straight centreline with a width. Shared with the print scene. */
+export type ExportBar = SceneBar
 
 // --- Options ----------------------------------------------------------------
 

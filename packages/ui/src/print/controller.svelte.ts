@@ -42,6 +42,8 @@ export class PrintController {
   includePageLabels = $state(true)
   includeCalibrationRuler = $state(true)
   includeOverviewMap = $state(true)
+  includePanelOutline = $state(true)
+  includeReinforcements = $state(true)
 
   /** Export progress + result, surfaced in the dialog footer. */
   exporting = $state(false)
@@ -76,6 +78,8 @@ export class PrintController {
         pageLabels: this.includePageLabels,
         calibrationRuler: this.includeCalibrationRuler,
         overviewMap: this.includeOverviewMap,
+        panelOutline: this.includePanelOutline,
+        reinforcements: this.includeReinforcements,
       },
       projectName,
     }
